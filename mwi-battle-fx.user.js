@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.8.3
+// @version      0.8.4
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -21,6 +21,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      *
 // @grant        unsafeWindow
+// @grant        GM_info
 // ==/UserScript==
 
 (function () {
@@ -2083,7 +2084,12 @@
         menu()
       })
     menuIds = [
-      toggle("enabled", "战斗动画“舞台”标签", () => Stage.ensureTab()),
+      GM_registerMenuCommand(`当前版本 v${GM_info?.script?.version || "?"}（点击检查素材）`, () => {
+        Assets.refresh(true)
+        const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ")
+        alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}`)
+      }),
+      toggle("enabled", "战斗动画（舞台 / 叠加层）", () => Stage.ensureTab()),
       GM_registerMenuCommand(`角色形象：${cfg.lookMode === "outfit" ? "按服装" : "按装备"}（点击切换）`, () => {
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"
         saveCfg()
@@ -2117,7 +2123,8 @@
   menu()
   Stage.start()
   setInterval(() => Live.ensure(), 1000)
-  Assets.refresh()
+  // always fetch a fresh manifest on page load: a cached one from an older release lacks the new art
+  Assets.refresh(true)
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
