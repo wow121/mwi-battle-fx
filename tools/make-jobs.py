@@ -4,6 +4,7 @@
 usage: make-jobs.py <raw_dir> <phase>
   phase "base": monster pose sheets + one background per location (normal tier)
   phase "tier": elite / nightmare variants of every finished base background
+  phase "vfx":  skill effect animations (4x2 frames on black, drawn additively in the stage)
 
 Each job is a line in <raw_dir>/jobs-<phase>.tsv: name \t prompt file \t reference png \t key color
 References come from <raw_dir>/ref (rasterized game sprites); finished sheets land in <raw_dir>/sheets.
@@ -115,6 +116,36 @@ Background: perfectly flat solid {bg} everywhere, no grid lines, no floor, no sh
 """
 
 
+# effect name -> what the 8 frames show
+VFX = {
+    "fire_orb": "a blazing fireball projectile flying to the RIGHT, with a flickering flame tail (a seamless loop)",
+    "ice_orb": "a sharp glowing ice spear / ice shard projectile flying to the RIGHT, with frost mist trailing (a seamless loop)",
+    "nature_orb": "a glowing green thorny seed / spore projectile flying to the RIGHT, with leaves and green sparks trailing (a seamless loop)",
+    "fire_burst": "a fiery explosion impact: a bright flash, expanding fireball, flying embers, fading smoke",
+    "water_burst": "a water and ice impact: a splash of water, ice crystals bursting outward, fading mist",
+    "nature_burst": "a nature magic impact: a burst of green energy, thorny vines and leaves bursting outward, fading spores",
+    "phys_hit": "a physical hit spark: a sharp white-yellow star flash, small sparks flying outward, fading",
+    "slash": "a sword slash: a bright white-blue crescent arc swept from top-left to bottom-right, then fading with sparkles",
+    "stab": "a piercing thrust: a narrow bright streak shooting to the RIGHT with a sharp spark burst at its tip, fading",
+    "smash": "a heavy ground smash seen from the side: an impact flash on the ground, a shockwave ring, cracks and dust and rocks flying up, fading",
+    "fire_pillar": "a column of fire erupting from the ground (seen from the side, bottom-anchored), rising tall, then dying down into embers",
+    "ice_spikes": "a cluster of jagged ice spikes erupting from the ground (seen from the side, bottom-anchored), then shattering into shards",
+    "poison_cloud": "a toxic green-purple poison cloud billowing outward from the ground, bubbling, then dissipating",
+    "heal": "a healing effect: a soft green light column rising from the ground with glowing plus-shaped sparkles floating up, fading",
+    "buff": "a power-up aura: golden rings rising from the ground around an empty center, golden sparkles floating up, fading",
+    "revive": "a resurrection: a holy white-gold light pillar descending from above onto the ground with feathers of light, fading",
+    "death": "a defeat effect: a puff of grey smoke with a small ghostly soul wisp rising up and fading away",
+}
+
+
+def vfx_prompt(desc):
+    return f"""Image: a game VFX ANIMATION SPRITE SHEET for a Slay-the-Spire-style 2D battle game, in a bright, clean, stylized hand-painted effect style (soft glows, bold shapes, no realism).
+Effect: {desc}.
+Layout: landscape 1536x1024, a 4-column x 2-row grid of 8 equal cells (each 384x512), the 8 frames of ONE animation in reading order (left to right, then the second row), each frame centered in its cell and fully inside it, consistent size and position across frames so they play back smoothly.
+Background: pure solid BLACK #000000 everywhere (the effect will be drawn with additive blending, so black means transparent). No characters, no creatures, no weapons held by anyone, no text, no labels, no grid lines, no borders.
+"""
+
+
 MONSTER_POSES = [
     "idle: neutral menacing stance",
     "attack wind-up: rearing back, gathering power",
@@ -137,6 +168,18 @@ Location: {desc}.
 Composition: landscape 1536x1024, camera at eye level looking from the side. A flat walkable ground strip runs across the bottom ~28% of the image where characters will stand (heroes on the left half, monsters on the right half). Keep the middle area uncluttered and a bit softer so characters stand out; put scenery and landmarks in the background and toward the left and right edges. No characters, no creatures, no text, no UI.
 """
             job(out, "bg_" + loc, prompt, os.path.join(REF, f"_zone_{loc}.png"), "none")
+    elif PHASE == "vfx":
+        for name, desc in VFX.items():
+            job(out, "fx_" + name, vfx_prompt(desc), "", "none")
+        circles = """Image: four MAGIC CIRCLE glyphs for a 2D battle game, in a bright, clean, stylized hand-painted effect style with soft glow.
+Layout: landscape 1536x1024 split into a 2-column x 2-row grid of 4 equal cells (each 768x512); in each cell one flat circular magic circle seen straight from above (a perfect circle with runes, rings and geometric patterns), centered and filling about 90% of the cell height:
+1. fire: orange-red flames motif
+2. water: icy blue snowflake motif
+3. nature: green leaves and vines motif
+4. holy: warm white-gold star motif
+Background: pure solid BLACK #000000 everywhere. No text, no labels, no grid lines, no borders.
+"""
+        job(out, "fx_circles", circles, "", "none")
     elif PHASE == "tier":
         for loc in LOCATIONS:
             base = os.path.join(SHEETS, f"bg_{loc}.png")

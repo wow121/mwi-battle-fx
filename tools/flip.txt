@@ -1,0 +1,1 @@
+# monsters whose generated sheet faces right instead of left (toward the heroes); one id per line
