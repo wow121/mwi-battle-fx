@@ -1,7 +1,7 @@
 # monster poses drawn facing right instead of left (toward the heroes); absolute, relative to the generated sheet
 # "<monster>" mirrors every pose, "<monster>:<pose>[,<pose>]" only those poses
 # (the lab's gallery exports this same format: paste its lines here)
-magnetic_golem:idle,windup
+magnetic_golem:idle,windup,hurt
 stalactite_golem:idle,cast
 cyclops:hurt
 veyes:hurt
