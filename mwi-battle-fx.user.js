@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.5.1
+// @version      0.5.2
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -161,7 +161,7 @@
         const e = map[k]
         const u = units[side][i]
         if (!u || !e) continue
-        const c = { side, i, dHP: 0, dMP: 0, hp: u.hp, maxHp: u.maxHp, acted: false, prevAbility: u.ability, died: false, revived: false }
+        const c = { side, i, dHP: 0, dMP: 0, hp: u.hp, maxHp: u.maxHp, acted: false, struck: false, prevAbility: u.ability, died: false, revived: false }
         if (typeof e.cHP === "number") {
           c.dHP = e.cHP - u.hp
           c.died = u.hp > 0 && e.cHP <= 0
@@ -172,13 +172,15 @@
           c.dMP = e.cMP - u.mp
           u.mp = e.cMP
         }
-        // any "...Counter" field that ticks up marks the unit that just acted (used when present)
-        for (const key of Object.keys(e)) {
-          if (!/counter/i.test(key) || typeof e[key] !== "number") continue
-          if (u.counters[key] !== undefined && e[key] > u.counters[key]) c.acted = true
-          u.counters[key] = e[key]
-        }
+        // atkCounter ticks when the unit acts (attack or cast), dmgCounter when it is hit (a hit without
+        // HP loss is a miss / zero damage)
+        const tick = key => typeof e[key] === "number" && u.counters[key] !== undefined && e[key] > u.counters[key]
+        c.acted = tick("atkCounter")
+        c.struck = tick("dmgCounter")
+        for (const key of ["atkCounter", "dmgCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
+        // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
+        else if (e.isAutoAtk) u.ability = null
         changes.push(c)
       }
     }
@@ -191,8 +193,11 @@
   // {actor: {side,i}|null, ab, effect: damage|heal|buff|regen, style, element, targets: [change]}
   function resolve(changes) {
     const actions = []
-    const casters = changes.filter(c => c.dMP < 0 && c.prevAbility)
-    const hurt = changes.filter(c => c.dHP < 0)
+    // with action counters a cast is "acted while an ability was prepared"; without them, an MP drop
+    const countersKnown = changes.some(c => units[c.side][c.i]?.counters?.atkCounter !== undefined)
+    const casters = changes.filter(c => c.prevAbility && (countersKnown ? c.acted : c.dMP < 0))
+    // misses (struck without HP loss) travel with the hits so they still get a "MISS"
+    const hurt = changes.filter(c => c.dHP < 0 || (c.struck && c.dHP === 0))
     const healed = changes.filter(c => c.dHP > 0)
     const used = new Set()
 
@@ -216,7 +221,6 @@
     // One update is one combat event. When both sides lose HP in it and nobody cast, one side attacked and
     // the other was hurt by thorns / retribution; without action counters we cannot tell which, so neither
     // side gets an attack animation. A caster that loses HP in its own cast was hit by retaliation too.
-    const countersKnown = changes.some(c => Object.keys(units[c.side][c.i]?.counters || {}).length)
     const loose = hurt.filter(h => !used.has(h))
     const mutual = loose.some(h => h.side === "p") && loose.some(h => h.side === "m")
     const casterKeys = new Set(casters.map(c => c.side + c.i))
@@ -224,9 +228,10 @@
     for (const t of hurt) {
       if (used.has(t)) continue
       const foes = units[other(t.side)]
-      const acted = changes.filter(c => c.side === other(t.side) && c.acted)
-      let src = acted.length === 1 ? acted[0].i : -1
-      const reflect = src < 0 && (casterKeys.has(t.side + t.i) || (!countersKnown && mutual))
+      const acted = changes.filter(c => c.side === other(t.side) && c.acted && !casterKeys.has(c.side + c.i))
+      let src = acted.length ? acted[0].i : -1
+      // hurt while acting and no enemy acted: thorns / retribution bounced its own attack back
+      const reflect = src < 0 && (casterKeys.has(t.side + t.i) || (countersKnown ? t.acted : mutual))
       // last resort: a lone enemy must be the attacker (never when counters exist: no tick means no action)
       if (src < 0 && !reflect && !countersKnown) {
         const alive = foes.map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
@@ -1199,7 +1204,7 @@
       const n = document.createElement("div")
       n.className = "bfx-num"
       n.textContent = text
-      n.style.color = kind === "heal" ? "#7dffa5" : a.side === "p" ? "#ffb0a8" : "#fff"
+      n.style.color = kind === "heal" ? "#7dffa5" : kind === "miss" ? "#c8d2e8" : a.side === "p" ? "#ffb0a8" : "#fff"
       n.style.fontSize = 16 * cfg.scale * (kind === "big" ? 1.25 : 1) + "px"
       worldEl.appendChild(n)
       const x = a.x + (Math.random() - 0.5) * a.s * 0.5
@@ -1249,6 +1254,12 @@
     function impact(a, t, style, element, big) {
       const color = ELEMENT_COLOR[element] || ELEMENT_COLOR.physical
       const m = mid(a)
+      if (t && !t.dHP) {
+        // miss / zero damage: a quick sidestep instead of a flinch
+        a.hit.animate([{ transform: "none" }, { transform: `translateX(${-a.dir * a.s * 0.18}px) translateY(-6%)`, offset: 0.35 }, { transform: "none" }], { duration: 320, easing: "ease-out" })
+        number(a, "MISS", "miss")
+        return
+      }
       if (!t?.died) setPose(a, "hurt", 420)
       a.hit.animate(
         [
