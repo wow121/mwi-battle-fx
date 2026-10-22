@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.8.0
+// @version      0.8.1
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -9,8 +9,8 @@
 // @match        https://www.milkywayidlecn.com/*
 // @match        https://milkywayidlecn.com/*
 // @run-at       document-start
-// @updateURL    https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main/mwi-battle-fx.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main/mwi-battle-fx.user.js
+// @updateURL    https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/mwi-battle-fx.user.js
+// @downloadURL  https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/mwi-battle-fx.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
@@ -18,6 +18,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setClipboard
 // @connect      cdn.jsdelivr.net
+// @connect      raw.githubusercontent.com
 // @connect      *
 // @grant        unsafeWindow
 // ==/UserScript==
@@ -29,6 +30,8 @@
   // ---------- settings ----------
   const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
+  // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
+  const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
   const cfg = { ...DEFAULTS, ...GM_getValue("battle_fx_cfg_v1", {}) }
   const saveCfg = () => GM_setValue("battle_fx_cfg_v1", cfg)
 
@@ -310,25 +313,31 @@
     function refresh(force) {
       if (loading || (!force && manifest && Date.now() - fetchedAt < 1800e3)) return
       loading = true
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: base() + "/assets/manifest.json?t=" + Math.floor(Date.now() / 600e3),
-        timeout: 20000,
-        onload: r => {
-          loading = false
-          try {
-            manifest = JSON.parse(r.responseText)
-            fetchedAt = Date.now()
-            GM_setValue("battle_fx_manifest_v1", manifest)
-            GM_setValue("battle_fx_manifest_at_v1", fetchedAt)
-            listeners.forEach(f => f())
-          } catch (e) {
-            if (cfg.debug) console.warn("[战斗动画] manifest", e)
-          }
-        },
-        onerror: () => (loading = false),
-        ontimeout: () => (loading = false),
-      })
+      const urls = cfg.assetBase ? [base() + "/assets/manifest.json"] : MANIFEST_URLS
+      const next = k => {
+        if (k >= urls.length) return (loading = false)
+        GM_xmlhttpRequest({
+          method: "GET",
+          url: urls[k] + "?t=" + Math.floor(Date.now() / 300e3),
+          timeout: 15000,
+          onload: r => {
+            try {
+              manifest = JSON.parse(r.responseText)
+              fetchedAt = Date.now()
+              loading = false
+              GM_setValue("battle_fx_manifest_v1", manifest)
+              GM_setValue("battle_fx_manifest_at_v1", fetchedAt)
+              listeners.forEach(f => f())
+            } catch (e) {
+              if (cfg.debug) console.warn("[战斗动画] manifest", urls[k], e)
+              next(k + 1)
+            }
+          },
+          onerror: () => next(k + 1),
+          ontimeout: () => next(k + 1),
+        })
+      }
+      next(0)
     }
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art

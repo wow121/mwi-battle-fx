@@ -8,7 +8,7 @@
 - 角色形象可在油猴菜单里切换"按装备 / 按服装"；还没有立绘的形象用通用职业立绘代替，
   菜单"导出待生成形象"可导出清单补生成。
 
-安装：[mwi-battle-fx.user.js](https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main/mwi-battle-fx.user.js)
+安装：[mwi-battle-fx.user.js](https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/mwi-battle-fx.user.js)（访问不了 GitHub 时用 jsDelivr 的固定版本地址）
 
 ## 素材生成（tools/）
 

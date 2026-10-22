@@ -23,24 +23,12 @@ EOF
 git add assets/manifest.json
 git commit -q -m "Pin assets to $REV$TRAILER"
 git push -q
-# jsDelivr may still resolve @main to the previous commit right after the push. Purging too often gets
-# throttled (~30 min), so purge once, poll, and re-purge at most every 30 s, three times in all.
-purge() { for f in mwi-battle-fx.user.js assets/manifest.json; do curl -s "https://purge.jsdelivr.net/gh/wow121/mwi-battle-fx@main/$f" >/dev/null; done; }
-VER=$(grep -m1 -oP '@version\s+\K\S+' mwi-battle-fx.user.js)
-fresh() {
-  curl -s "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main/assets/manifest.json" | grep -q "\"rev\":\"$REV\"" &&
-    curl -s "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main/mwi-battle-fx.user.js" | grep -q "@version *$VER"
-}
-ok=""
-for round in 1 2 3; do
+# The userscript reads its manifest (and updates itself) from raw.githubusercontent.com, which follows the
+# push within ~5 min; art is fetched from jsDelivr at the pinned commit, so no CDN purge is needed.
+for try in $(seq 1 30); do
+  curl -s "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json" | grep -q "\"rev\":\"$REV\"" && break
   timeout 10 tail -f /dev/null || true
-  purge
-  for poll in 1 2 3 4 5 6; do
-    if fresh; then ok=1; break 2; fi
-    timeout 5 tail -f /dev/null || true
-  done
 done
-[ -n "$ok" ] || echo "WARNING: CDN still serves the old @main; pinned URL: https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@$(git rev-parse --short HEAD)/mwi-battle-fx.user.js"
 # Syncthing's watcher misses some git object files; rescan so the Windows checkout stays intact
 KEY=$(grep -oP '(?<=<apikey>)[^<]+' ~/.local/state/syncthing/config.xml)
 curl -s -X POST -H "X-API-Key: $KEY" "http://127.0.0.1:8384/rest/db/scan?folder=9cdkn-uyw3k&sub=mwi-battle-fx" >/dev/null
