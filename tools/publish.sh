@@ -23,8 +23,16 @@ EOF
 git add assets/manifest.json
 git commit -q -m "Pin assets to $REV$TRAILER"
 git push -q
-for f in mwi-battle-fx.user.js assets/manifest.json; do
-  curl -s "https://purge.jsdelivr.net/gh/wow121/mwi-battle-fx@main/$f" >/dev/null
+# jsDelivr may still resolve @main to the previous commit right after the push: purge until the
+# manifest it serves carries the new rev (up to ~1 min)
+for try in $(seq 1 12); do
+  for f in mwi-battle-fx.user.js assets/manifest.json; do
+    curl -s "https://purge.jsdelivr.net/gh/wow121/mwi-battle-fx@main/$f" >/dev/null
+  done
+  if curl -s "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main/assets/manifest.json" | grep -q "\"rev\":\"$REV\""; then
+    break
+  fi
+  timeout 5 tail -f /dev/null || true
 done
 # Syncthing's watcher misses some git object files; rescan so the Windows checkout stays intact
 KEY=$(grep -oP '(?<=<apikey>)[^<]+' ~/.local/state/syncthing/config.xml)
