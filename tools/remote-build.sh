@@ -23,11 +23,11 @@ fi
 ls jobs-*.tsv >>"$TMP/list"
 touch "$TMP/stamp"
 tar -cf "$TMP/in.tar" -T "$TMP/list"
-cp "$REPO/tools/build-assets.py" "$TMP/"
+cp "$REPO/tools/build-assets.py" "$REPO/tools/flip.txt" "$TMP/"
 echo "shipping $(grep -c png "$TMP/list") sheets"
 
 ssh "${SSHO[@]}" "$HOST" "mkdir $WIN 2>nul & mkdir $WIN\\sheets 2>nul & exit 0"
-scp -q "${SSHO[@]}" "$TMP/in.tar" "$TMP/build-assets.py" "$HOST:C:/Users/ruixi/fs-mine/mwi-art/"
+scp -q "${SSHO[@]}" "$TMP/in.tar" "$TMP/build-assets.py" "$TMP/flip.txt" "$HOST:C:/Users/ruixi/fs-mine/mwi-art/"
 ssh "${SSHO[@]}" "$HOST" "cd /d $WIN && tar -xf in.tar && python build-assets.py . . && tar -cf assets.tar assets"
 scp -q "${SSHO[@]}" "$HOST:C:/Users/ruixi/fs-mine/mwi-art/assets.tar" "$TMP/"
 mkdir -p "$REPO/assets"

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.4.1
+// @version      0.5.0
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -212,19 +212,28 @@
       actions.push({ actor: { side: c.side, i: c.i }, ab, effect, style: ab.style || u.style, element: ab.kind === "damage" ? ab.element : u.element, targets })
     }
 
-    // auto attacks (and damage whose source is unclear, e.g. DoT ticks)
+    // auto attacks (and damage whose source is unclear, e.g. DoT ticks or retaliation)
+    // One update is one combat event. When both sides lose HP in it and nobody cast, one side attacked and
+    // the other was hurt by thorns / retribution; without action counters we cannot tell which, so neither
+    // side gets an attack animation. A caster that loses HP in its own cast was hit by retaliation too.
+    const countersKnown = changes.some(c => Object.keys(units[c.side][c.i]?.counters || {}).length)
+    const loose = hurt.filter(h => !used.has(h))
+    const mutual = loose.some(h => h.side === "p") && loose.some(h => h.side === "m")
+    const casterKeys = new Set(casters.map(c => c.side + c.i))
     const bySrc = new Map()
     for (const t of hurt) {
       if (used.has(t)) continue
       const foes = units[other(t.side)]
       const acted = changes.filter(c => c.side === other(t.side) && c.acted)
       let src = acted.length === 1 ? acted[0].i : -1
-      if (src < 0) {
+      const reflect = src < 0 && (casterKeys.has(t.side + t.i) || (!countersKnown && mutual))
+      // last resort: a lone enemy must be the attacker (never when counters exist: no tick means no action)
+      if (src < 0 && !reflect && !countersKnown) {
         const alive = foes.map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
         if (alive.length === 1) src = alive[0]
       }
       if (src < 0) {
-        actions.push({ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [t] })
+        actions.push({ actor: null, ab: null, effect: "damage", style: reflect ? "reflect" : "dot", element: "physical", targets: [t] })
         continue
       }
       const key = other(t.side) + src
@@ -438,11 +447,12 @@
     const SVGNS = "http://www.w3.org/2000/svg"
     const actors = { p: [], m: [] }
     const fx = [] // canvas effects {t0, dur, draw(ctx, p, now), done}
-    let stageEl, canvas, ctx, banner, waitEl, bgEl
+    let stageEl, worldEl, canvas, ctx, banner, waitEl, bgEl
     let bgKey = ""
     let tabBtn, panel, indicator
     let active = false
     let restore = [] // [element, prop, value] to undo when leaving our tab
+    let boxObserver = null
     let SW = 0
     let SH = 0
     let dpr = 1
@@ -457,9 +467,11 @@
       st.id = "bfx-css"
       st.textContent = `
 .bfx-panel{padding:6px 4px;font:12px/1.2 sans-serif;color:#dfe6ff}
-.bfx-stage{position:relative;width:100%;min-height:200px;overflow:hidden;resize:vertical;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:
+/* isolate: our z-indexes stay inside the stage, so game popups and tooltips are never covered */
+.bfx-stage{position:relative;isolation:isolate;z-index:0;width:100%;min-height:200px;overflow:hidden;resize:vertical;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:
  radial-gradient(ellipse 60% 30% at 50% 100%,rgba(120,140,255,.18),transparent),
  linear-gradient(180deg,#141b38 0%,#22305e 48%,#3a3a62 64%,#2b2742 65%,#1e1b30 100%)}
+.bfx-world{position:absolute;inset:0}
 .bfx-bg{position:absolute;inset:0;background:center 85%/cover no-repeat;opacity:0;transition:opacity .6s}
 .bfx-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),transparent 30%,transparent 70%,rgba(0,0,0,.35))}
 /* frames are the 512px pose cell plus a 96px margin all round: scale up so the cell fills the actor box */
@@ -467,7 +479,8 @@
 .bfx-art .bfx-shadow{bottom:2%;height:10%;width:56%}
 .bfx-hpt{position:absolute;left:0;right:0;top:-1px;font-size:9px;line-height:5px;text-align:center;text-shadow:0 0 2px #000,0 0 2px #000}
 .bfx-stage>*{pointer-events:none}
-.bfx-stage canvas{position:absolute;inset:0;width:100%;height:100%;z-index:5000}
+/* effects are light on black: screen-blend the whole canvas so black is see-through over the scene */
+.bfx-stage canvas{position:absolute;inset:0;width:100%;height:100%;z-index:5000;mix-blend-mode:screen}
 .bfx-actor{position:absolute;transform:translate(-50%,-100%)}
 .bfx-shadow{position:absolute;left:50%;bottom:-6%;width:72%;height:16%;transform:translateX(-50%);border-radius:50%;background:radial-gradient(rgba(0,0,0,.55),transparent 70%)}
 .bfx-move,.bfx-pose,.bfx-hit,.bfx-idle,.bfx-sprite{position:absolute;inset:0;transform-origin:50% 100%}
@@ -554,7 +567,14 @@
         restore.push([el, prop, el.style[prop]])
         el.style[prop] = val
       }
-      for (const c of panel.parentElement.children) if (c !== panel) set(c, "display", "none")
+      const box = panel.parentElement
+      const hideGamePanels = () => {
+        for (const c of box.children) if (c !== panel && c.style.display !== "none") set(c, "display", "none")
+      }
+      hideGamePanels()
+      // the game may re-create or re-show its panels (e.g. on a new wave) while ours is open
+      boxObserver = new MutationObserver(hideGamePanels)
+      boxObserver.observe(box, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] })
       for (const b of tabBtn.parentElement.querySelectorAll(".Mui-selected")) {
         b.classList.remove("Mui-selected")
         restore.push([b, "class", "Mui-selected"])
@@ -569,6 +589,8 @@
     }
     function deactivate() {
       active = false
+      boxObserver?.disconnect()
+      boxObserver = null
       for (const [el, prop, val] of restore.reverse()) {
         if (prop === "class") el.classList.add(val)
         else el.style[prop] = val
@@ -590,8 +612,10 @@
     }
     function mount() {
       if (!stageEl || !panel.contains(stageEl)) {
-        panel.innerHTML = '<div class="bfx-stage"><div class="bfx-bg"></div><canvas></canvas><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div></div>'
+        // the stage box never moves; everything that shakes lives in .bfx-world inside it
+        panel.innerHTML = '<div class="bfx-stage"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div></div>'
         stageEl = panel.querySelector(".bfx-stage")
+        worldEl = stageEl.querySelector(".bfx-world")
         bgEl = stageEl.querySelector(".bfx-bg")
         stageEl.style.height = cfg.stageH + "px"
         canvas = stageEl.querySelector("canvas")
@@ -617,6 +641,7 @@
       units.p.forEach((u, i) => Looks.assign(u, i))
       rebuild(true)
       setBackground()
+      preloadFx()
       for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), units[side][a.i]?.hp <= 0 && die(a, true)))
       Assets.refresh()
     }
@@ -772,7 +797,7 @@
         poseTimer: 0,
       }
       refreshSprite(a)
-      stageEl.appendChild(el)
+      worldEl.appendChild(el)
       return a
     }
     function rebuild(all) {
@@ -940,13 +965,65 @@
       )
     }
     // rotating magic circle on the ground
-    function circleFx(a, color, dur) {
+    // ----- generated effect sheets: 4x2 frames on black, drawn additively (black = transparent) -----
+    const fxImgs = {}
+    function fxImg(name) {
+      if (!Assets.has("fx", name)) return null
+      let im = fxImgs[name]
+      if (!im) {
+        im = fxImgs[name] = new Image()
+        im.src = Assets.url("fx/" + name + ".webp")
+      }
+      return im.complete && im.naturalWidth ? im : null
+    }
+    function preloadFx() {
+      for (const n of ["fire_orb", "ice_orb", "nature_orb", "fire_burst", "water_burst", "nature_burst", "phys_hit", "slash", "stab", "smash", "fire_pillar", "ice_spikes", "poison_cloud", "heal", "buff", "revive", "death", "circles"]) fxImg(n)
+    }
+    function drawFrame(c, im, f, w, h, anchor) {
+      const fw = im.naturalWidth / 4
+      const fh = im.naturalHeight / 2
+      c.drawImage(im, (f % 4) * fw, Math.floor(f / 4) * fh, fw, fh, -w / 2, anchor === "bottom" ? -h : -h / 2, w, h)
+    }
+    // plays an effect once at (x, y), h px tall; false when the art is not available (callers fall back)
+    function sprite(name, x, y, h, { dur = 560, anchor = "center", flip = false, rot = 0, delay = 0, alpha = 1 } = {}) {
+      const im = fxImg(name)
+      if (!im) return false
+      const w = (h * im.naturalWidth) / 4 / (im.naturalHeight / 2)
+      addFx(
+        dur,
+        (c, p) => {
+          c.globalCompositeOperation = "lighter"
+          c.globalAlpha = alpha
+          c.translate(x, y)
+          if (rot) c.rotate(rot)
+          if (flip) c.scale(-1, 1)
+          drawFrame(c, im, Math.min(7, Math.floor(p * 8)), w, h, anchor)
+        },
+        delay,
+      )
+      return true
+    }
+    const BURST = { fire: "fire_burst", water: "water_burst", nature: "nature_burst" }
+    const ORB = { fire: "fire_orb", water: "ice_orb", nature: "nature_orb" }
+    const CIRCLE = { fire: 0, water: 1, nature: 2 }
+
+    function circleFx(a, color, dur, element) {
       const r = a.s * 0.55
+      const im = fxImg("circles")
       addFx(dur, (c, p, t) => {
         c.globalCompositeOperation = "lighter"
         c.globalAlpha = p < 0.15 ? p / 0.15 : 1 - Math.max(0, p - 0.6) / 0.4
         c.translate(a.x, a.y)
         c.scale(1, 0.32)
+        if (im) {
+          // 2x2 sheet of round glyphs: fire, water, nature, holy
+          const k = CIRCLE[element] ?? 3
+          const cw = im.naturalWidth / 2
+          const ch = im.naturalHeight / 2
+          c.rotate(t / 900)
+          c.drawImage(im, (k % 2) * cw + (cw - ch) / 2, Math.floor(k / 2) * ch, ch, ch, -r * 0.95, -r * 0.95, r * 1.9, r * 1.9)
+          return
+        }
         c.rotate(t / 260)
         c.strokeStyle = color
         c.shadowColor = color
@@ -986,14 +1063,23 @@
       )
     }
     // projectile from a to b; arc lifts the middle of the path; onHit fires on arrival
-    function projectile(from, to, { kind, color, dur, arc = 0, size = 1 }, onHit) {
+    function projectile(from, to, { kind, color, dur, arc = 0, size = 1, art }, onHit) {
       const trail = []
+      const im = art && fxImg(art)
       const f = addFx(dur, (c, p) => {
         const e = kind === "meteor" ? p * p : p
         const x = from.x + (to.x - from.x) * e
         const y = from.y + (to.y - from.y) * e - arc * 4 * e * (1 - e)
         const ang = Math.atan2(to.y - from.y - arc * 4 * (1 - 2 * e), to.x - from.x)
         c.globalCompositeOperation = "lighter"
+        if (im) {
+          // looping projectile sheet, drawn flying along the path
+          const h = 70 * cfg.scale * size
+          c.translate(x, y)
+          c.rotate(ang)
+          drawFrame(c, im, Math.floor(p * dur / 60) % 8, (h * im.naturalWidth) / 4 / (im.naturalHeight / 2), h, "center")
+          return
+        }
         c.shadowColor = color
         c.shadowBlur = 12
         if (kind === "arrow") {
@@ -1099,9 +1185,10 @@
         delay,
       )
     }
+    // shakes the scene inside the stage (slightly zoomed so its edges never show); the stage box stays put
     function shake(amp = 5, dur = 260) {
-      stageEl.animate(
-        [0, 1, 2, 3, 4, 5].map(k => ({ transform: k === 5 ? "none" : `translate(${(Math.random() - 0.5) * amp * 2}px,${(Math.random() - 0.5) * amp}px)` })),
+      worldEl.animate(
+        [0, 1, 2, 3, 4, 5].map(k => ({ transform: k === 5 ? "none" : `translate(${(Math.random() - 0.5) * amp * 2}px,${(Math.random() - 0.5) * amp}px) scale(1.03)` })),
         { duration: dur },
       )
     }
@@ -1113,7 +1200,7 @@
       n.textContent = text
       n.style.color = kind === "heal" ? "#7dffa5" : a.side === "p" ? "#ffb0a8" : "#fff"
       n.style.fontSize = 16 * cfg.scale * (kind === "big" ? 1.25 : 1) + "px"
-      stageEl.appendChild(n)
+      worldEl.appendChild(n)
       const x = a.x + (Math.random() - 0.5) * a.s * 0.5
       const y = a.y - a.s * 0.85
       const tr = (dy, s) => `translate(${x}px,${y + dy}px) translate(-50%,-50%) scale(${s})`
@@ -1143,7 +1230,7 @@
         { duration: 1300 },
       )
     }
-    function castPose(a, color, dur) {
+    function castPose(a, color, dur, element) {
       setPose(a, "cast", dur + 260)
       a.pose.animate(
         [
@@ -1153,7 +1240,7 @@
         ],
         { duration: dur + 200, easing: "ease-in-out" },
       )
-      circleFx(a, color, dur + 300)
+      circleFx(a, color, dur + 300, element)
       burst(a.x, a.y - a.s * 0.2, { n: 10, color, speed: 60, gravity: -120, life: dur + 200, size: 2.5, spread: 1.6 })
     }
 
@@ -1172,8 +1259,10 @@
       )
       a.spriteEl.animate([{ filter: "brightness(3) saturate(0)" }, { filter: "none" }], { duration: 180 })
       if (style === "dot") burst(m.x, m.y, { n: 8, color: "#b77cff", speed: 70, gravity: -60, life: 500, size: 2.5 })
-      else burst(m.x, m.y, { n: big ? 22 : 14, color, speed: big ? 200 : 150, life: 480 })
-      if (style === "smash") {
+      else if (style === "reflect") burst(m.x, m.y, { n: 12, color: "#ff9a3c", speed: 170, gravity: 0, life: 360, size: 2, shape: "shard" })
+      else if (!sprite(BURST[element] || "phys_hit", m.x, m.y, a.s * (big ? 1.1 : 0.85), { dur: 520, flip: a.dir > 0 }))
+        burst(m.x, m.y, { n: big ? 22 : 14, color, speed: big ? 200 : 150, life: 480 })
+      if (style === "smash" && !sprite("smash", a.x, a.y + a.s * 0.05, a.s * 0.9, { dur: 560, anchor: "bottom" })) {
         ringFx(a.x, a.y, a.s * 0.1, a.s * 0.8, "#fff", 380, 0.3, 4)
         burst(a.x, a.y, { n: 12, color: "#c9b38a", angle: -Math.PI / 2, spread: 2.6, speed: 120, gravity: 300, life: 500, size: 3 })
       }
@@ -1188,7 +1277,7 @@
       a.dead = true
       a.el.classList.add("bfx-dead")
       const m = mid(a)
-      if (!quiet) burst(m.x, m.y, { n: 18, color: "#ddd", speed: 90, gravity: -80, life: 800, size: 3 })
+      if (!quiet && !sprite("death", m.x, m.y - a.s * 0.15, a.s * 1.1, { dur: 1000 })) burst(m.x, m.y, { n: 18, color: "#ddd", speed: 90, gravity: -80, life: 800, size: 3 })
       if (a.art) {
         // the generated "defeated" frame; monsters then fade out like in Slay the Spire
         setPose(a, "dead")
@@ -1226,7 +1315,7 @@
       a.deathAnim?.cancel()
       a.deathAnim = null
       if (a.art) a.img.src = frameUrl(a, "idle")
-      if (!quiet) {
+      if (!quiet && !sprite("revive", a.x, a.y, a.s * 2, { dur: 1100, anchor: "bottom" })) {
         pillarFx(a.x, a.y, a.s * 0.9, a.s * 2.2, "#fff6c0", 900)
         burst(a.x, a.y - a.s * 0.3, { n: 18, color: "#fff6c0", speed: 80, gravity: -140, life: 900, size: 2.5 })
       }
@@ -1259,7 +1348,7 @@
         return
       }
       if (!src) {
-        for (const { t, a } of tg) impact(a, t, "dot", act.element)
+        for (const { t, a } of tg) impact(a, t, act.style, act.element)
         return
       }
       refreshSprite(src)
@@ -1280,16 +1369,22 @@
     function magic(src, tg, element, aoe, quick) {
       const color = ELEMENT_COLOR[element] || ELEMENT_COLOR.physical
       const castT = quick ? 120 : 360
-      castPose(src, color, castT)
+      castPose(src, color, castT, element)
       later(castT, () => {
         if (!aoe) {
-          for (const { t, a } of tg) projectile(mid(src), mid(a), { kind: "orb", color, dur: 380, arc: Math.min(40, SH * 0.12) }, () => impact(a, t, "magic", element, true))
+          for (const { t, a } of tg) projectile(mid(src), mid(a), { kind: "orb", color, dur: 380, arc: Math.min(40, SH * 0.12), art: ORB[element] }, () => impact(a, t, "magic", element, true))
           return
         }
         tg.forEach(({ t, a }, n) => {
           const m = mid(a)
           const d = n * 90
-          if (element === "fire") {
+          if (element === "fire" && sprite("fire_pillar", a.x, a.y, a.s * 1.6, { dur: 760, anchor: "bottom", delay: d })) {
+            later(d + 160, () => impact(a, t, "magic", element, true))
+          } else if (element === "water" && sprite("ice_spikes", a.x, a.y, a.s * 1.2, { dur: 640, anchor: "bottom", delay: d })) {
+            later(d + 140, () => impact(a, t, "magic", element))
+          } else if (element === "nature" && sprite("poison_cloud", a.x, a.y, a.s * 1.3, { dur: 900, anchor: "bottom", delay: d })) {
+            later(d + 220, () => impact(a, t, "magic", element))
+          } else if (element === "fire") {
             later(d, () => projectile({ x: m.x - a.dir * a.s * 0.9, y: -20 }, m, { kind: "meteor", color, dur: 320, size: 1.3 }, () => impact(a, t, "magic", element, true)))
           } else if (element === "water") {
             spikesFx(a, color, d)
@@ -1298,7 +1393,7 @@
             burst(m.x, m.y, { n: 26, color, speed: 50, gravity: -30, life: 900, size: 4, delay: d })
             later(d + 200, () => impact(a, t, "magic", element))
           } else {
-            later(d, () => projectile(mid(src), m, { kind: "orb", color, dur: 360, arc: 30 }, () => impact(a, t, "magic", element)))
+            later(d, () => projectile(mid(src), m, { kind: "orb", color, dur: 360, arc: 30, art: ORB[element] }, () => impact(a, t, "magic", element)))
           }
         })
       })
@@ -1377,11 +1472,11 @@
         later(strike, () => {
           for (const { t, a } of tg) {
             const m = mid(a)
-            if (style === "stab") thrustFx(m.x, m.y, src.dir, color, a.s * 0.6)
-            else if (style === "slash" && !aoe) slashFx(m.x, m.y, a.s * 0.5, src.dir, isSkill ? color : "#e8f0ff")
+            if (style === "stab") sprite("stab", m.x - src.dir * a.s * 0.15, m.y, a.s * 0.75, { dur: 300, flip: src.dir < 0 }) || thrustFx(m.x, m.y, src.dir, color, a.s * 0.6)
+            else if (style === "slash" && !aoe) sprite("slash", m.x, m.y, a.s * 1.05, { dur: 320, flip: src.dir < 0 }) || slashFx(m.x, m.y, a.s * 0.5, src.dir, isSkill ? color : "#e8f0ff")
             impact(a, t, style, element, isSkill)
           }
-          if (aoe && style === "slash") slashFx(cx, cy - lead.s * 0.5, lead.s * 1.2, src.dir, color, 1.1)
+          if (aoe && style === "slash") sprite("slash", cx, cy - lead.s * 0.5, lead.s * 1.9, { dur: 360, flip: src.dir < 0 }) || slashFx(cx, cy - lead.s * 0.5, lead.s * 1.2, src.dir, color, 1.1)
           if (style === "smash") shake(isSkill ? 8 : 5)
         })
       })
@@ -1391,11 +1486,11 @@
     function heal(src, tg, quick) {
       const color = ELEMENT_COLOR.heal
       const castT = quick ? 100 : 300
-      castPose(src, color, castT)
+      castPose(src, color, castT, "heal")
       later(castT, () => {
         const list = tg.length ? tg : [{ a: src, t: null }]
         list.forEach(({ t, a }, n) => {
-          pillarFx(a.x, a.y, a.s * 0.8, a.s * 1.6, color, 700, n * 80)
+          if (!sprite("heal", a.x, a.y, a.s * 1.5, { dur: 900, anchor: "bottom", delay: n * 80 })) pillarFx(a.x, a.y, a.s * 0.8, a.s * 1.6, color, 700, n * 80)
           burst(a.x, a.y - a.s * 0.3, { n: 12, color, speed: 50, gravity: -160, life: 900, size: 3, shape: "plus", delay: n * 80 })
           if (t) {
             later(n * 80 + 150, () => {
@@ -1412,10 +1507,11 @@
     function buff(src, ab, quick) {
       const color = ELEMENT_COLOR.buff
       const castT = quick ? 80 : 240
-      castPose(src, color, castT)
+      castPose(src, color, castT, "buff")
       const allies = ab?.target === "allAllies" ? actors[src.side].filter(a => !a.dead) : [src]
       later(castT, () =>
         allies.forEach((a, n) => {
+          if (sprite("buff", a.x, a.y, a.s * 1.4, { dur: 800, anchor: "bottom", delay: n * 60 })) return
           ringFx(a.x, a.y, a.s * 0.2, a.s * 0.75, color, 600, 0.3, 3, n * 60)
           pillarFx(a.x, a.y, a.s * 0.7, a.s * 1.4, color, 600, n * 60)
           burst(a.x, a.y - a.s * 0.2, { n: 10, color, speed: 40, gravity: -150, life: 800, size: 2.5, delay: n * 60 })

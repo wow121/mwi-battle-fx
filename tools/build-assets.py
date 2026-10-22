@@ -5,7 +5,7 @@ usage: <raw_dir>/venv/bin/python build-assets.py <raw_dir> <repo_dir>   (needs P
   p_<look>.png           -> assets/p/<look>/<pose>.webp      (3x2 pose sheet, keyed)
   bg_<loc>[__tier].png   -> assets/bg/<loc>[__tier].webp
   fx_<effect>.png        -> assets/fx/<effect>.webp          (4x2 animation frames on black, drawn additively)
-tools/flip.txt lists monsters (one per line) whose generated sheet faces the wrong way; they are mirrored.
+tools/flip.txt lists monster poses the generator drew facing the wrong way; they are mirrored.
 Each pose frame is its 512px cell plus a MARGIN on every side, so weapons and swings that cross the
 cell edge survive; pieces of neighbouring poses are dropped by assigning connected blobs to cells.
 Already-built outputs newer than their sheet are skipped.
@@ -26,10 +26,14 @@ KEY_RGB = {"green": (0, 255, 0), "magenta": (255, 0, 255)}
 CELL = 512
 MARGIN = 96  # px of the sheet around each cell; the userscript draws frames at (CELL + 2*MARGIN)/CELL size
 OUT = 400  # output frame size in px
-FLIP = set()
+FLIP = {}  # monster -> set of poses to mirror
 _flip = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip.txt")
 if os.path.exists(_flip):
-    FLIP = {l.split("#")[0].strip() for l in open(_flip)} - {""}
+    for line in open(_flip):
+        line = line.split("#")[0].strip()
+        if line:
+            mid, _, poses = line.partition(":")
+            FLIP[mid] = set(poses.split(",")) if poses else set(POSES)
 
 keys = {}
 for f in os.listdir(RAW):
@@ -79,10 +83,11 @@ def dilate(m, r):
     return out
 
 
-def cut_sheet(src, outdir, key, flip=False):
+def cut_sheet(src, outdir, key, flip=frozenset()):
     os.makedirs(outdir, exist_ok=True)
     marker = os.path.join(outdir, ".flipped")
-    if fresh(os.path.join(outdir, POSES[-1] + ".webp"), src) and os.path.exists(marker) == flip:
+    done = open(marker).read() if os.path.exists(marker) else ""
+    if fresh(os.path.join(outdir, POSES[-1] + ".webp"), src) and done == ",".join(sorted(flip)):
         return
     rgb = np.asarray(Image.open(src).convert("RGB")).astype(np.int16)
     H, W = rgb.shape[:2]
@@ -127,11 +132,11 @@ def cut_sheet(src, outdir, key, flip=False):
         part[..., 3] = np.where(full[y0:y1, x0:x1], part[..., 3], 0)
         frame[y0 - (y - MARGIN) : y1 - (y - MARGIN), x0 - (x - MARGIN) : x1 - (x - MARGIN)] = part
         im = Image.fromarray(frame, "RGBA").resize((OUT, OUT), Image.LANCZOS)
-        if flip:
+        if pose in flip:
             im = im.transpose(Image.FLIP_LEFT_RIGHT)
         im.save(os.path.join(outdir, pose + ".webp"), quality=85, method=4)
     if flip:
-        open(marker, "w").close()
+        open(marker, "w").write(",".join(sorted(flip)))
     elif os.path.exists(marker):
         os.remove(marker)
 
@@ -142,7 +147,7 @@ for f in sorted(os.listdir(SHEETS)):
         continue
     name, src = f[:-4], os.path.join(SHEETS, f)
     if name.startswith("m_"):
-        cut_sheet(src, os.path.join(ASSETS, "m", name[2:]), keys.get(name, "green"), name[2:] in FLIP)
+        cut_sheet(src, os.path.join(ASSETS, "m", name[2:]), keys.get(name, "green"), frozenset(FLIP.get(name[2:], ())))
         manifest["m"].append(name[2:])
     elif name.startswith("p_"):
         cut_sheet(src, os.path.join(ASSETS, "p", name[2:]), keys.get(name, "green"))

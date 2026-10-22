@@ -29,5 +29,6 @@ one() {
 }
 export -f one
 export RAW
-cut -f1-3 "$JOBS" | xargs -P "$PAR" -L 1 bash -c 'one "$0" "$1" "$2"'
+# whole lines, split on tabs (the refs column may be empty)
+cut -f1-3 "$JOBS" | xargs -d '\n' -P "$PAR" -I{} bash -c 'IFS=$'"'"'\t'"'"' read -r n p r <<<"$1"; one "$n" "$p" "$r"' _ {}
 echo "done $(ls "$RAW/sheets" | wc -l) sheets"

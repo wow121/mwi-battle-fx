@@ -1,1 +1,5 @@
-# monsters whose generated sheet faces right instead of left (toward the heroes); one id per line
+# monster poses drawn facing right instead of left (toward the heroes)
+# "<monster>" mirrors every pose, "<monster>:<pose>[,<pose>]" only those poses
+magnetic_golem:idle,cast
+stalactite_golem:idle,cast
+nom_nom:idle,cast
