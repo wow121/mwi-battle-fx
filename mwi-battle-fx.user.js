@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.5.0
+// @version      0.5.1
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -301,7 +301,7 @@
     const listeners = []
     const base = () => (cfg.assetBase || DEFAULT_ASSET_BASE).replace(/\/+$/, "")
     function refresh(force) {
-      if (loading || (!force && manifest && Date.now() - fetchedAt < 3 * 3600e3)) return
+      if (loading || (!force && manifest && Date.now() - fetchedAt < 1800e3)) return
       loading = true
       GM_xmlhttpRequest({
         method: "GET",
@@ -324,7 +324,8 @@
       })
     }
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
-    const url = path => base() + "/assets/" + path
+    // files come from the commit the manifest was published at, so the CDN can never serve stale art
+    const url = path => (manifest?.rev && !cfg.assetBase ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
     return { refresh, has, url, onChange: f => listeners.push(f) }
   })()
 
