@@ -167,5 +167,7 @@ for f in sorted(os.listdir(SHEETS)):
             im = Image.open(src).convert("RGB")
             im.resize((1024, round(im.height * 1024 / im.width)), Image.LANCZOS).save(out, quality=82, method=4)
         manifest["fx"].append(name[3:])
+# shipped mirroring, so the userscript's gallery can show and edit absolute flips
+manifest["flips"] = {k: sorted(v) for k, v in sorted(FLIP.items())}
 json.dump(manifest, open(os.path.join(ASSETS, "manifest.json"), "w"), separators=(",", ":"))
 print({k: len(v) for k, v in manifest.items() if isinstance(v, list)})

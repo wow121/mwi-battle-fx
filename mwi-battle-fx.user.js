@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.8.1
+// @version      0.8.2
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -342,7 +342,7 @@
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
     const url = path => (manifest?.rev && !cfg.assetBase ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
-    return { refresh, has, url, list: kind => manifest?.[kind] || [], onChange: f => listeners.push(f) }
+    return { refresh, has, url, list: kind => manifest?.[kind] || [], flips: () => manifest?.flips || {}, onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -459,20 +459,33 @@
     return { onMessage, assign, exportMissing, me }
   })()
 
-  // ---------- pose flips picked in the lab's gallery (per viewer, on top of the shipped flips) ----------
+  // ---------- pose flips picked in the lab's gallery ----------
+  // Stored as the wanted mirroring of the generated sheet (absolute), like tools/flip.txt; the manifest
+  // says what the published frames already have, and only the difference is mirrored on screen. Once a
+  // pick is published it matches the manifest and stops doing anything by itself.
   const Flips = (() => {
-    const f = GM_getValue("battle_fx_flips_v1", {}) // monster id -> [poses]
-    const has = (art, pose) => !!art && art.startsWith("m/") && (f[art.slice(2)] || []).includes(pose)
+    const want = GM_getValue("battle_fx_flips_v2", {}) // monster id -> [poses], only monsters touched here
+    const shipped = id => Assets.flips()[id] || []
+    const wanted = id => want[id] || shipped(id)
+    const has = (art, pose) => {
+      if (!art?.startsWith("m/")) return false
+      const id = art.slice(2)
+      return want[id] ? wanted(id).includes(pose) !== shipped(id).includes(pose) : false
+    }
     function toggle(id, pose, on) {
-      const set = new Set(f[id] || [])
+      const set = new Set(wanted(id))
       if (on) set.add(pose)
       else set.delete(pose)
-      if (set.size) f[id] = [...set]
-      else delete f[id]
-      GM_setValue("battle_fx_flips_v1", f)
+      want[id] = [...set]
+      GM_setValue("battle_fx_flips_v2", want)
     }
-    const text = () => Object.entries(f).map(([id, ps]) => id + ":" + ps.join(",")).join("\n")
-    return { has, toggle, text, of: id => f[id] || [] }
+    // lines for tools/flip.txt: every monster whose wanted flips differ from what is published
+    const text = () =>
+      Object.keys(want)
+        .filter(id => wanted(id).slice().sort().join() !== shipped(id).slice().sort().join())
+        .map(id => id + ":" + wanted(id).join(","))
+        .join("\n")
+    return { has, toggle, text, isFlipped: (id, pose) => wanted(id).includes(pose) }
   })()
 
   // ---------- side-view stage: Slay-the-Spire style, heroes on the left, monsters on the right ----------
@@ -2056,7 +2069,7 @@
         button("复制翻转清单", () => {
           const t = Flips.text()
           GM_setClipboard(t)
-          alert(t ? "已复制，发给 Claude 即可：\n" + t : "还没有勾选任何翻转")
+          alert(t ? "已复制，发给 Claude 即可：\n" + t : "和已发布的翻转一致，没有需要改的")
         }),
       )
       root.appendChild(gal)
@@ -2065,13 +2078,14 @@
         const img = el("img")
         img.src = Assets.url(`m/${st.gallery}/${pose}.webp`)
         img.style.transform = Flips.has("m/" + st.gallery, pose) ? "scaleX(-1)" : ""
+        img.title = "勾选 = 相对原始生成图水平翻转"
         const lab2 = el("label")
         const cb = el("input")
         cb.type = "checkbox"
-        cb.checked = Flips.has("m/" + st.gallery, pose)
+        cb.checked = Flips.isFlipped(st.gallery, pose)
         cb.addEventListener("change", () => {
           Flips.toggle(st.gallery, pose, cb.checked)
-          img.style.transform = cb.checked ? "scaleX(-1)" : ""
+          img.style.transform = Flips.has("m/" + st.gallery, pose) ? "scaleX(-1)" : ""
           Stage.refreshArt()
         })
         lab2.append(cb, ` ${POSE_ZH[pose]} 翻转`)

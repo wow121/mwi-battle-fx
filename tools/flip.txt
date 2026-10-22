@@ -1,4 +1,12 @@
-# monster poses drawn facing right instead of left (toward the heroes)
+# monster poses drawn facing right instead of left (toward the heroes); absolute, relative to the generated sheet
 # "<monster>" mirrors every pose, "<monster>:<pose>[,<pose>]" only those poses
-magnetic_golem:idle,cast,hurt
+# (the lab's gallery exports this same format: paste its lines here)
+magnetic_golem:idle,windup
 stalactite_golem:idle,cast
+cyclops:hurt
+veyes:hurt
+giant_mantis:hurt
+enchanted_bishop:hurt
+crystal_colossus:hurt
+nom_nom:cast
+grizzly_bear:hurt
