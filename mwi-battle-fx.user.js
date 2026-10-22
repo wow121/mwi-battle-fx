@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.4.0
+// @version      0.4.1
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -486,9 +486,12 @@
     }
 
     // ----- our tab next to the game's 交战 tab -----
-    const TAB_NAMES = ["交战", "Battle", "Combat"]
+    // the label carries the battle count, e.g. "交战# 423"
+    const TAB_RE = /^(交战|Battle|Combat)(\s*#\s*[\d,]+)?$/i
+    const TAB_SEL = '.MuiTab-root,[role="tab"],button'
     function findBattleTab() {
-      for (const b of document.querySelectorAll(".MuiTab-root")) if (!b.classList.contains("bfx-tab") && TAB_NAMES.includes(b.textContent.trim().replace(/\d+$/, ""))) return b
+      for (const b of document.querySelectorAll(TAB_SEL))
+        if (!b.classList.contains("bfx-tab") && TAB_RE.test(b.textContent.replace(/\s+/g, " ").trim())) return b
       return null
     }
     function panelsBox(btn) {
@@ -517,12 +520,14 @@
       tabBtn.setAttribute("aria-selected", "false")
       tabBtn.removeAttribute("id")
       tabBtn.removeAttribute("aria-controls")
+      // first text becomes our label; the rest (the "# 423" battle count) is cleared
       const tw = document.createTreeWalker(tabBtn, NodeFilter.SHOW_TEXT)
-      for (let n; (n = tw.nextNode()); )
-        if (n.nodeValue.trim()) {
-          n.nodeValue = zhUI() ? "舞台" : "Stage"
-          break
-        }
+      let labeled = false
+      for (let n; (n = tw.nextNode()); ) {
+        if (!n.nodeValue.trim()) continue
+        n.nodeValue = labeled ? "" : zhUI() ? "舞台" : "Stage"
+        labeled = true
+      }
       ref.after(tabBtn)
       panel = document.createElement("div")
       panel.className = "bfx-panel"
@@ -537,7 +542,7 @@
       ref.parentElement.addEventListener(
         "click",
         e => {
-          const b = e.target.closest?.(".MuiTab-root")
+          const b = e.target.closest?.(TAB_SEL)
           if (b && b !== tabBtn && active) deactivate()
         },
         true,
