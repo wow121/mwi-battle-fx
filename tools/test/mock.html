@@ -1,0 +1,59 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}button{cursor:pointer}
+.BattlePanel_x{display:flex;flex-direction:column;gap:30px;padding:20px 30px;width:420px}
+.BattlePanel_combatUnitGrid__2hTAM{display:flex;gap:14px}
+.u{width:110px;height:120px;border-radius:8px;background:#2c3354;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.u svg{width:70px;height:70px}
+</style></head><body>
+<div class="TabsComponent_tabsComponent__x" style="width:900px;margin:10px">
+ <div class="MuiTabs-root"><div class="MuiTabs-scroller"><div class="MuiTabs-flexContainer" style="display:flex;gap:4px;border-bottom:1px solid #445">
+  <button class="MuiButtonBase-root MuiTab-root Mui-selected" style="background:none;border:0;color:#9cf;padding:8px 16px;font-size:14px"><span class="MuiBadge-root">交战<span class="MuiBadge-badge"></span></span></button>
+  <button class="MuiButtonBase-root MuiTab-root" style="background:none;border:0;color:#ccc;padding:8px 16px;font-size:14px"><span class="MuiBadge-root">能力<span class="MuiBadge-badge"></span></span></button>
+ </div><span class="MuiTabs-indicator" style="display:block;height:2px;width:60px;background:#9cf"></span></div></div>
+ <div class="TabsComponent_tabPanelsContainer__26mzo">
+  <div class="TabPanel_tabPanel__tXMJF" id="gp0"><div class="BattlePanel_battlePanel__1yPCP"><div class="BattlePanel_battleArea__U9hij BattlePanel_x">
+ <div class="BattlePanel_monstersArea__2dzrY"><div class="BattlePanel_combatUnitGrid__2hTAM">
+  <div class="u"><svg viewBox="0 0 100 100"><use href="/sprites/combat_monsters.svg#abyssal_imp"/></svg>深渊小鬼</div>
+  <div class="u"><svg viewBox="0 0 100 100"><use href="/sprites/combat_monsters.svg#alligator"/></svg>鳄鱼</div>
+  <div class="u"><svg viewBox="0 0 100 100"><use href="/sprites/combat_monsters.svg#acrobat"/></svg>杂技师</div></div></div>
+ <div class="BattlePanel_playersArea__vvwlB"><div class="BattlePanel_combatUnitGrid__2hTAM">
+  <div class="u"><svg viewBox="0 0 100 100"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#anchorbound_equipment"/></svg>战士</div>
+  <div class="u"><svg viewBox="0 0 100 100"><use href="/sprites/avatars.svg#green_person_2"/><use href="/sprites/avatar_outfits.svg#cow_suit"/></svg>弓手</div>
+  <div class="u"><svg viewBox="0 0 100 100"><use href="/sprites/avatars.svg#purple_person_1"/></svg>法师</div></div></div>
+</div><div class="BattlePanel_infoArea__-JxTf" style="padding:8px;background:#262c48;margin-top:6px">消耗品 [饮料 28] [软糖 49] ｜ 技能 [暴击光环 100] [缠绕 7] ｜ 交战 #583 <button>逃跑</button></div></div></div>
+  <div class="TabPanel_tabPanel__tXMJF TabPanel_hidden__26UM3" id="gp1"><div style="padding:30px">能力面板</div></div>
+ </div></div>
+<style>.TabPanel_hidden__26UM3{display:none}.Mui-selected{color:#9cf!important}</style>
+<script>
+// what the game (React) does on its own tab clicks
+document.querySelectorAll('.MuiTab-root').forEach((b,i)=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.MuiTab-root:not(.bfx-tab)').forEach((x,j)=>x.classList.toggle('Mui-selected',j===i));
+  ['gp0','gp1'].forEach((id,j)=>document.getElementById(id).classList.toggle('TabPanel_hidden__26UM3',j!==i));
+}));
+</script>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799'}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const P=(name,style,dt,ab,hrid)=>({name,hrid,currentHitpoints:1200,currentManapoints:600,preparingAbilityHrid:ab,combatDetails:{maxHitpoints:1200,maxManapoints:800,combatStats:{combatStyleHrids:['/combat_styles/'+style],damageType:'/damage_types/'+dt}}});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function start(){
+ feed({type:'init_character_data',character:{name:'战士'},characterActions:[{actionHrid:'/actions/combat/golem_cave',difficultyTier:4,isDone:false}],characterItems:[]});
+ feed({type:'new_battle',players:[P('战士','slash','physical','/abilities/cleave'),P('弓手','ranged','physical','/abilities/flame_arrow'),P('法师','magic','fire','/abilities/fireball')],
+  monsters:[P('花岗岩魔像','smash','physical',null,'/monsters/granite_golem'),P('磁力魔像','smash','physical',null,'/monsters/magnetic_golem'),P('钟乳石魔像','stab','physical',null,'/monsters/stalactite_golem'),P('水晶巨像','magic','water',null,'/monsters/crystal_colossus')]});
+ await sleep(1500);
+ feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0},1:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0},2:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0,abilityHrid:'/abilities/fireball'}},mMap:{0:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},1:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},2:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},3:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0}}});
+ feed({type:'battle_updated',pMap:{2:{cHP:1200,cMP:570,atkCounter:11,abilityHrid:'/abilities/entangle'}},mMap:{1:{cHP:800,dmgCounter:1}}}); await sleep(1300);
+ feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:11}},mMap:{0:{cHP:1000,dmgCounter:1}}}); await sleep(1300);
+ feed({type:'battle_updated',pMap:{1:{cHP:1050,dmgCounter:1}},mMap:{1:{cHP:800,atkCounter:6}}}); await sleep(1400);
+ document.querySelector('.bfx-toggle').click(); await sleep(1500);
+ document.querySelector('.bfx-toggle').click(); await sleep(1000);
+ document.querySelector('.bfx-tab').click(); await sleep(800);
+ const order=['狂暴','物理光环','分裂斩','缠绕'];
+ const btns=[...document.querySelectorAll('.bfx-lab button.skill')];
+ for(const name of order){ const b=btns.find(x=>x.textContent===name); window.__step=name; if(b) b.click(); await sleep(1500); }
+}
+function back(){ document.querySelectorAll('.MuiTab-root')[0].click() }
+</script></body></html>

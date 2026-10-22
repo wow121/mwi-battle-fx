@@ -1,0 +1,11 @@
+seed boss	{"pMap":{},"mMap":{"0":{"cHP":8452,"cMP":15900,"atkCounter":10,"abilityHrid":"/abilities/puncture","dmgCounter":27}}}
+seed p0; boss casts puncture	{"pMap":{"0":{"cHP":1537,"cMP":692,"atkCounter":5223,"abilityHrid":"/abilities/natures_veil","dmgCounter":1322}},"mMap":{"0":{"cHP":8452,"cMP":15850,"atkCounter":11,"abilityHrid":"/abilities/impale","dmgCounter":27}}}
+seed p2; boss casts impale	{"pMap":{"2":{"cHP":1397,"cMP":546,"atkCounter":5122,"abilityHrid":"/abilities/toxic_pollen","dmgCounter":1310}},"mMap":{"0":{"cHP":8452,"cMP":15815,"atkCounter":12,"isAutoAtk":true,"dmgCounter":27}}}
+p2 toxic_pollen hits boss	{"pMap":{"2":{"cHP":1397,"cMP":501,"atkCounter":5123,"abilityHrid":"/abilities/entangle","dmgCounter":1310}},"mMap":{"0":{"cHP":7895,"cMP":15815,"atkCounter":12,"isAutoAtk":true,"dmgCounter":28}}}
+p0 natures_veil, boss no dmg	{"pMap":{"0":{"cHP":1537,"cMP":617,"atkCounter":5224,"abilityHrid":"/abilities/entangle","dmgCounter":1322}},"mMap":{"0":{"cHP":7895,"cMP":15815,"atkCounter":12,"isAutoAtk":true,"dmgCounter":29}}}
+p2 entangle hits boss	{"pMap":{"2":{"cHP":1462,"cMP":550,"atkCounter":5124,"abilityHrid":"/abilities/entangle","dmgCounter":1310}},"mMap":{"0":{"cHP":6450,"cMP":15815,"atkCounter":12,"isAutoAtk":true,"dmgCounter":33}}}
+boss auto-attacks p2	{"pMap":{"2":{"cHP":1428,"cMP":550,"atkCounter":5124,"abilityHrid":"/abilities/entangle","dmgCounter":1311}},"mMap":{"0":{"cHP":6450,"cMP":15815,"atkCounter":13,"abilityHrid":"/abilities/spike_shell","dmgCounter":33}}}
+boss casts spike_shell	{"pMap":{},"mMap":{"0":{"cHP":6450,"cMP":15750,"atkCounter":14,"isAutoAtk":true,"dmgCounter":33}}}
+seed p1	{"pMap":{"1":{"cHP":1404,"cMP":617,"atkCounter":5313,"abilityHrid":"/abilities/entangle","dmgCounter":1369}},"mMap":{}}
+p1 entangle + thorns	{"pMap":{"1":{"cHP":1383,"cMP":607,"atkCounter":5314,"abilityHrid":"/abilities/entangle","dmgCounter":1370}},"mMap":{"0":{"cHP":5204,"cMP":15750,"atkCounter":14,"isAutoAtk":true,"dmgCounter":40}}}
+regen ticks	{"pMap":{"0":{"cHP":1566,"cMP":676,"atkCounter":5224,"abilityHrid":"/abilities/entangle","dmgCounter":1322}},"mMap":{}}

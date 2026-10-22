@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.8.4
+// @version      0.8.5
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -505,6 +505,7 @@
 .bfx-chips{display:flex;justify-content:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;min-height:0}
 .bfx-chip{width:14px;height:14px;border-radius:50%;font:700 9px/14px sans-serif;text-align:center;color:#1a1a1a;box-shadow:0 0 3px rgba(0,0,0,.8)}
 .bfx-chip.debuff{color:#fff;background:#5a1a24!important;border:1px solid #ff5a6a;line-height:12px}
+.bfx-bubble{position:absolute;left:-12%;right:-12%;top:-8%;bottom:-4%;border-radius:50%;border:2px solid rgba(255,226,122,.85);background:radial-gradient(ellipse at 50% 35%,rgba(255,240,180,.08),rgba(255,214,90,.22) 70%,rgba(255,214,90,.05));box-shadow:0 0 14px rgba(255,214,90,.7),inset 0 0 12px rgba(255,214,90,.5);animation:bfx-ring 1.6s ease-in-out infinite;pointer-events:none}
 .bfx-hpt{position:absolute;left:0;right:0;top:-1px;font-size:9px;line-height:5px;text-align:center;text-shadow:0 0 2px #000,0 0 2px #000}
 .bfx-stage>*{pointer-events:none}
 /* effects are light on black: screen-blend the whole canvas so black is see-through over the scene */
@@ -1049,8 +1050,10 @@
       }
       return im.complete && im.naturalWidth ? im : null
     }
+    // every sheet the manifest lists: an effect that is still downloading falls back to the generic look,
+    // and long-cooldown skills would otherwise show that fallback on nearly every cast
     function preloadFx() {
-      for (const n of ["entangle", "water_strike", "life_drain", "smoke_burst", "firestorm", "flame_blast", "natures_veil", "toxic_pollen", "mana_spring", "fire_orb", "ice_orb", "nature_orb", "fire_burst", "water_burst", "nature_burst", "phys_hit", "slash", "stab", "smash", "fire_pillar", "ice_spikes", "poison_cloud", "heal", "buff", "revive", "death", "circles"]) fxImg(n)
+      for (const n of Assets.list("fx")) fxImg(n)
     }
     function drawFrame(c, im, f, w, h, anchor) {
       const fw = im.naturalWidth / 4
@@ -1329,6 +1332,24 @@
       a.status[key] = { until: now() + (BUFF_SECONDS[key] || 10) * 1000, kind }
       renderStatus(a)
     }
+    // while a self buff lasts the unit keeps a matching glow (up to two stack); invincible adds a shield bubble
+    const BUFF_LOOK = {
+      berserk: "#ff3b2f", frenzy: "#ffd23c", vampirism: "#b0102a", spike_shell: "#ff8a2a", retribution: "#ffd76a",
+      elemental_affinity: "#c77dff", precision: "#5ad6ff", insanity: "#d23cff", provoke: "#ff4040", taunt: "#ff4040", invincible: "#ffe27a",
+    }
+    function renderLook(a, active) {
+      const glows = active.filter(k => BUFF_LOOK[k]).slice(0, 2)
+      let filter = glows.map((k, n) => `drop-shadow(0 0 ${5 + n * 4}px ${BUFF_LOOK[k]})`).join(" ")
+      if (active.includes("toughness")) filter += " saturate(.55) brightness(.92)"
+      a.spriteEl.style.filter = filter.trim()
+      a.spriteEl.style.opacity = active.includes("elusiveness") ? "0.72" : ""
+      let bubble = a.el.querySelector(".bfx-bubble")
+      if (active.includes("invincible") && !bubble) {
+        bubble = document.createElement("div")
+        bubble.className = "bfx-bubble"
+        a.move.appendChild(bubble)
+      } else if (!active.includes("invincible")) bubble?.remove()
+    }
     function renderStatus(a) {
       const t = now()
       const auras = a.dead ? [] : Object.keys(AURA).filter(k => sideAuras[a.side][k] > t)
@@ -1342,6 +1363,7 @@
         }),
       )
       const chips = [...auras.map(k => [k, "buff"]), ...Object.entries(a.status).filter(([, v]) => v.until > t && !a.dead).map(([k, v]) => [k, v.kind])]
+      renderLook(a, chips.filter(([, kind]) => kind === "buff").map(([k]) => k))
       a.chipsEl.replaceChildren(
         ...chips.map(([k, kind]) => {
           const c = document.createElement("div")
@@ -1741,6 +1763,7 @@
       // expire rings and chips
       setInterval(() => mode && ["p", "m"].forEach(side => actors[side].forEach(renderStatus)), 1000)
       Assets.onChange(() => {
+        preloadFx()
         if (!mode) return
         if (mode === "live") shown.p.forEach((u, i) => Looks.assign(u, i))
         for (const side of ["p", "m"]) actors[side].forEach(refreshSprite)
