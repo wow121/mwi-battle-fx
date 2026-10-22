@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.5.2
+// @version      0.8.0
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -27,7 +27,7 @@
   const W = typeof unsafeWindow !== "undefined" ? unsafeWindow : window
 
   // ---------- settings ----------
-  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "" }
+  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   const cfg = { ...DEFAULTS, ...GM_getValue("battle_fx_cfg_v1", {}) }
   const saveCfg = () => GM_setValue("battle_fx_cfg_v1", cfg)
@@ -93,6 +93,8 @@
     vampirism: ["吸血", "buff", "self", "", ""],
     water_strike: ["流水冲击", "damage", "enemy", "magic", "water"],
   }
+  // seconds a skill's buff / debuff lasts (game data); auras are unique per kind, so different auras stack
+  const BUFF_SECONDS = {"berserk":20,"crippling_slash":12,"critical_aura":120,"elemental_affinity":20,"elusiveness":20,"fierce_aura":120,"fracturing_impact":12,"frenzy":20,"frost_surge":9,"guardian_aura":120,"ice_spear":8,"insanity":12,"invincible":12,"maim":12,"mana_spring":10,"mystic_aura":120,"pestilent_shot":12,"precision":20,"provoke":65,"puncture":12,"retribution":30,"smoke_burst":8,"speed_aura":120,"spike_shell":30,"taunt":65,"toughness":20,"toxic_pollen":10,"vampirism":20}
   const ELEMENT_COLOR = {
     fire: "#ff6a2b",
     water: "#3fb4ff",
@@ -331,7 +333,7 @@
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
     const url = path => (manifest?.rev && !cfg.assetBase ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
-    return { refresh, has, url, onChange: f => listeners.push(f) }
+    return { refresh, has, url, list: kind => manifest?.[kind] || [], onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -448,12 +450,32 @@
     return { onMessage, assign, exportMissing, me }
   })()
 
+  // ---------- pose flips picked in the lab's gallery (per viewer, on top of the shipped flips) ----------
+  const Flips = (() => {
+    const f = GM_getValue("battle_fx_flips_v1", {}) // monster id -> [poses]
+    const has = (art, pose) => !!art && art.startsWith("m/") && (f[art.slice(2)] || []).includes(pose)
+    function toggle(id, pose, on) {
+      const set = new Set(f[id] || [])
+      if (on) set.add(pose)
+      else set.delete(pose)
+      if (set.size) f[id] = [...set]
+      else delete f[id]
+      GM_setValue("battle_fx_flips_v1", f)
+    }
+    const text = () => Object.entries(f).map(([id, ps]) => id + ":" + ps.join(",")).join("\n")
+    return { has, toggle, text, of: id => f[id] || [] }
+  })()
+
   // ---------- side-view stage: Slay-the-Spire style, heroes on the left, monsters on the right ----------
   const Stage = (() => {
     const SVGNS = "http://www.w3.org/2000/svg"
     const actors = { p: [], m: [] }
     const fx = [] // canvas effects {t0, dur, draw(ctx, p, now), done}
     let stageEl, worldEl, canvas, ctx, banner, waitEl, bgEl
+    // where the stage hangs: "test" = the 动画测试 tab (lab units), "live" = over the game's unit cards
+    let host = null
+    let mode = ""
+    let shown = units
     let bgKey = ""
     let tabBtn, panel, indicator
     let active = false
@@ -483,6 +505,12 @@
 /* frames are the 512px pose cell plus a 96px margin all round: scale up so the cell fills the actor box */
 .bfx-sprite img{position:absolute;left:-18.75%;top:-18.75%;width:137.5%;height:137.5%;display:block}
 .bfx-art .bfx-shadow{bottom:2%;height:10%;width:56%}
+.bfx-rings{position:absolute;left:50%;bottom:0;width:0;height:0}
+.bfx-ring{position:absolute;border-radius:50%;border:2px solid;transform:translate(-50%,-50%);animation:bfx-ring 2.4s ease-in-out infinite}
+@keyframes bfx-ring{0%,100%{opacity:.45}50%{opacity:.95}}
+.bfx-chips{display:flex;justify-content:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;min-height:0}
+.bfx-chip{width:14px;height:14px;border-radius:50%;font:700 9px/14px sans-serif;text-align:center;color:#1a1a1a;box-shadow:0 0 3px rgba(0,0,0,.8)}
+.bfx-chip.debuff{color:#fff;background:#5a1a24!important;border:1px solid #ff5a6a;line-height:12px}
 .bfx-hpt{position:absolute;left:0;right:0;top:-1px;font-size:9px;line-height:5px;text-align:center;text-shadow:0 0 2px #000,0 0 2px #000}
 .bfx-stage>*{pointer-events:none}
 /* effects are light on black: screen-blend the whole canvas so black is see-through over the scene */
@@ -500,7 +528,23 @@
 .bfx-bar i{display:block;height:100%;width:100%;border-radius:2px;transition:width .3s}
 .bfx-num{position:absolute;left:0;top:0;z-index:6000;font:900 16px/1 sans-serif;white-space:nowrap;-webkit-text-stroke:1px rgba(0,0,0,.85);paint-order:stroke fill;text-shadow:0 2px 3px rgba(0,0,0,.6)}
 .bfx-banner{position:absolute;left:50%;top:8px;z-index:6000;transform:translateX(-50%);padding:4px 14px;border:1px solid rgba(255,255,255,.35);border-radius:4px;background:linear-gradient(#26306a,#121a3c);font-weight:700;font-size:13px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5);opacity:0}
-.bfx-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.5}`
+.bfx-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.5}
+.bfx-live-slot{position:absolute;inset:0;z-index:5}
+.bfx-stage.bfx-live{position:absolute;inset:0;height:auto;min-height:0;resize:none;border-radius:6px}
+.bfx-toggle{position:absolute;top:2px;right:4px;z-index:20;padding:2px 8px;font:12px/18px sans-serif;color:#dfe6ff;background:rgba(20,26,52,.85);border:1px solid #4a5590;border-radius:10px;cursor:pointer}
+.bfx-toggle:hover{background:#2a3460}
+.bfx-lab{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;font:12px/1.4 sans-serif;color:#dfe6ff}
+.bfx-lab .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px}
+.bfx-lab .lbl{min-width:34px;opacity:.7}
+.bfx-lab select,.bfx-lab button{font:12px sans-serif;background:#1d2440;color:#dfe6ff;border:1px solid #3a4470;border-radius:4px;padding:2px 6px;max-width:130px}
+.bfx-lab button{cursor:pointer}
+.bfx-lab button:hover{background:#2a3460}
+.bfx-lab button.on{background:#2f6a3a;border-color:#4fa860}
+.bfx-lab button.skill{background:#2b2350;border-color:#5a4a9a}
+.bfx-lab .gal{display:flex;flex-wrap:wrap;gap:6px}
+.bfx-lab .gal figure{margin:0;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 4px}
+.bfx-lab .gal img{width:96px;height:96px}
+.bfx-lab .gal label{font-size:11px;cursor:pointer}`
       document.head.appendChild(st)
     }
 
@@ -544,7 +588,7 @@
       let labeled = false
       for (let n; (n = tw.nextNode()); ) {
         if (!n.nodeValue.trim()) continue
-        n.nodeValue = labeled ? "" : zhUI() ? "舞台" : "Stage"
+        n.nodeValue = labeled ? "" : zhUI() ? "动画测试" : "FX Lab"
         labeled = true
       }
       ref.after(tabBtn)
@@ -569,6 +613,7 @@
     }
     function activate() {
       if (active || !panel) return
+      if (mode === "live") detach()
       const set = (el, prop, val) => {
         restore.push([el, prop, el.style[prop]])
         el.style[prop] = val
@@ -591,7 +636,7 @@
       tabBtn.setAttribute("aria-selected", "true")
       panel.style.display = ""
       active = true
-      mount()
+      attach(Lab.render(panel), "test")
     }
     function deactivate() {
       active = false
@@ -605,10 +650,10 @@
       tabBtn?.classList.remove("Mui-selected")
       tabBtn?.setAttribute("aria-selected", "false")
       if (panel) panel.style.display = "none"
-      // nothing runs while hidden: drop pending effects and the frame loop
-      fx.length = 0
-      if (raf) cancelAnimationFrame(raf)
-      raf = 0
+      // nothing runs while hidden: the lab stops, and the stage goes back over the real battle
+      Lab.stop()
+      if (mode === "test") detach()
+      Live.ensure()
     }
     function open() {
       ensureTab()
@@ -616,46 +661,67 @@
       activate()
       return true
     }
-    function mount() {
-      if (!stageEl || !panel.contains(stageEl)) {
-        // the stage box never moves; everything that shakes lives in .bfx-world inside it
-        panel.innerHTML = '<div class="bfx-stage"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div></div>'
-        stageEl = panel.querySelector(".bfx-stage")
-        worldEl = stageEl.querySelector(".bfx-world")
-        bgEl = stageEl.querySelector(".bfx-bg")
-        stageEl.style.height = cfg.stageH + "px"
-        canvas = stageEl.querySelector("canvas")
-        ctx = canvas.getContext("2d")
-        banner = stageEl.querySelector(".bfx-banner")
-        waitEl = stageEl.querySelector(".bfx-wait")
-        actors.p = []
-        actors.m = []
-        playersKey = ""
-        let hTimer = 0
-        new ResizeObserver(() => {
-          layout()
-          clearTimeout(hTimer)
-          hTimer = setTimeout(() => {
-            const h = Math.round(stageEl.getBoundingClientRect().height)
-            if (active && h > 0 && h !== cfg.stageH) {
-              cfg.stageH = h
-              saveCfg()
-            }
-          }, 400)
-        }).observe(stageEl)
-      }
-      units.p.forEach((u, i) => Looks.assign(u, i))
+    function createStage() {
+      // the stage box never moves; everything that shakes lives in .bfx-world inside it
+      stageEl = document.createElement("div")
+      stageEl.className = "bfx-stage"
+      stageEl.innerHTML = '<div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div>'
+      worldEl = stageEl.querySelector(".bfx-world")
+      bgEl = stageEl.querySelector(".bfx-bg")
+      canvas = stageEl.querySelector("canvas")
+      ctx = canvas.getContext("2d")
+      banner = stageEl.querySelector(".bfx-banner")
+      waitEl = stageEl.querySelector(".bfx-wait")
+      let hTimer = 0
+      new ResizeObserver(() => {
+        layout()
+        clearTimeout(hTimer)
+        hTimer = setTimeout(() => {
+          const h = Math.round(stageEl.getBoundingClientRect().height)
+          if (mode === "test" && h > 0 && h !== cfg.stageH) {
+            cfg.stageH = h
+            saveCfg()
+          }
+        }, 400)
+      }).observe(stageEl)
+    }
+    function attach(newHost, newMode) {
+      injectCss()
+      if (!stageEl) createStage()
+      if (host === newHost && mode === newMode && stageEl.parentElement === newHost) return
+      host = newHost
+      mode = newMode
+      shown = mode === "test" ? Lab.units : units
+      fx.length = 0
+      stageEl.classList.toggle("bfx-live", mode === "live")
+      stageEl.style.height = mode === "test" ? cfg.stageH + "px" : ""
+      host.appendChild(stageEl)
+      reload()
+      preloadFx()
+      Assets.refresh()
+    }
+    function detach() {
+      fx.length = 0
+      if (raf) cancelAnimationFrame(raf)
+      raf = 0
+      stageEl?.remove()
+      host = null
+      mode = ""
+    }
+    // rebuild everything from the units on show
+    function reload() {
+      if (!stageEl) return
+      if (mode === "live") shown.p.forEach((u, i) => Looks.assign(u, i))
+      playersKey = ""
       rebuild(true)
       setBackground()
-      preloadFx()
-      for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), units[side][a.i]?.hp <= 0 && die(a, true)))
-      Assets.refresh()
+      for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), shown[side][a.i]?.hp <= 0 && die(a, true), renderStatus(a)))
     }
     // location art, the elite / nightmare variant for higher tiers, plus a slight per-tier grade
     function setBackground() {
       if (!bgEl) return
-      const loc = stageLocation()
-      const t = where.tier || 0
+      const loc = mode === "test" ? Lab.loc() : stageLocation()
+      const t = mode === "test" ? Lab.tier() : where.tier || 0
       const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
       const name = loc && (Assets.has("bg", loc + band) ? loc + band : Assets.has("bg", loc) ? loc : null)
       const key = name + "|" + t
@@ -674,7 +740,7 @@
       }
       img.src = url
     }
-    const visible = () => cfg.enabled && active && !!stageEl && !document.hidden
+    const visible = () => cfg.enabled && !!stageEl?.isConnected && !document.hidden && (mode === "test" ? active : !!host?.offsetParent)
 
     // ----- sprites: the game's own svg sprite sheets -----
     const hrefOf = u => u.getAttribute("href") || u.getAttribute("xlink:href") || ""
@@ -709,7 +775,7 @@
     }
     // monsters: sheet + hrid (cards may still show the previous wave); players: the avatar/outfit layers on their card
     function spriteFor(side, i) {
-      const u = units[side][i]
+      const u = shown[side][i]
       if (side === "m" && u?.hrid) {
         monsterSheet ||= sheetUrl(/combat_monsters[^#]*\.svg/)
         if (monsterSheet) {
@@ -727,7 +793,7 @@
     }
     // generated pose frames: "m/<monster>" or "p/<look>" when the manifest has them
     function artFor(side, i) {
-      const u = units[side][i]
+      const u = shown[side][i]
       if (side === "m") {
         const id = shortId(u?.hrid)
         return Assets.has("m", id) ? "m/" + id : null
@@ -742,8 +808,12 @@
       if (!a.art || !a.img) return
       clearTimeout(a.poseTimer)
       if (a.dead && pose !== "dead") return
+      showFrame(a, pose)
+      if (ms > 0) a.poseTimer = setTimeout(() => showFrame(a, a.dead ? "dead" : "idle"), ms)
+    }
+    function showFrame(a, pose) {
       a.img.src = frameUrl(a, pose)
-      if (ms > 0) a.poseTimer = setTimeout(() => (a.img.src = frameUrl(a, a.dead ? "dead" : "idle")), ms)
+      a.img.style.transform = Flips.has(a.art, pose) ? "scaleX(-1)" : ""
     }
     function refreshSprite(a) {
       const art = artFor(a.side, a.i)
@@ -751,7 +821,7 @@
         a.art = art
         a.img = document.createElement("img")
         a.img.decoding = "async"
-        a.img.src = frameUrl(a, a.dead ? "dead" : "idle")
+        showFrame(a, a.dead ? "dead" : "idle")
         for (const p of ["windup", "strike", "hurt", "cast", "dead"]) new Image().src = frameUrl(a, p)
         a.spriteEl.replaceChildren(a.img)
         a.el.classList.add("bfx-art")
@@ -768,12 +838,12 @@
 
     // ----- actors -----
     function makeActor(side, i) {
-      const u = units[side][i] || {}
+      const u = shown[side][i] || {}
       const el = document.createElement("div")
       el.className = "bfx-actor bfx-" + side
       el.innerHTML =
-        '<div class="bfx-shadow"></div><div class="bfx-move"><div class="bfx-pose"><div class="bfx-hit"><div class="bfx-idle"><div class="bfx-sprite"></div></div></div></div></div>' +
-        '<div class="bfx-hud"><div class="bfx-name"></div><div class="bfx-bar"><i style="background:linear-gradient(#ff7a7a,#d93b3b)"></i><span class="bfx-hpt"></span></div><div class="bfx-bar"><i style="background:linear-gradient(#7ab8ff,#2f6fd9)"></i></div></div>'
+        '<div class="bfx-rings"></div><div class="bfx-shadow"></div><div class="bfx-move"><div class="bfx-pose"><div class="bfx-hit"><div class="bfx-idle"><div class="bfx-sprite"></div></div></div></div></div>' +
+        '<div class="bfx-hud"><div class="bfx-chips"></div><div class="bfx-name"></div><div class="bfx-bar"><i style="background:linear-gradient(#ff7a7a,#d93b3b)"></i><span class="bfx-hpt"></span></div><div class="bfx-bar"><i style="background:linear-gradient(#7ab8ff,#2f6fd9)"></i></div></div>'
       el.querySelector(".bfx-idle").style.animationDelay = -Math.random() * 1.8 + "s"
       el.querySelector(".bfx-name").textContent = u.name || ""
       const [hpI, mpI] = el.querySelectorAll(".bfx-bar i")
@@ -790,6 +860,10 @@
         hpI,
         mpI,
         hpT,
+        ringsEl: el.querySelector(".bfx-rings"),
+        chipsEl: el.querySelector(".bfx-chips"),
+        status: {}, // skill key -> {until, kind: "buff" | "debuff"}
+        fxBusyUntil: 0,
         x: 0,
         y: 0,
         s: 60,
@@ -807,15 +881,15 @@
       return a
     }
     function rebuild(all) {
-      const key = units.p.map(u => u.name).join("|")
+      const key = shown.p.map(u => u.name).join("|")
       if (all || key !== playersKey) {
         actors.p.forEach(a => a.el.remove())
-        actors.p = units.p.map((_, i) => makeActor("p", i))
+        actors.p = shown.p.map((_, i) => makeActor("p", i))
         playersKey = key
       }
       actors.m.forEach(a => a.el.remove())
-      actors.m = units.m.map((_, i) => makeActor("m", i))
-      waitEl.style.display = units.p.length || units.m.length ? "none" : ""
+      actors.m = shown.m.map((_, i) => makeActor("m", i))
+      waitEl.style.display = shown.p.length || shown.m.length ? "none" : ""
       layout()
     }
     function layout() {
@@ -850,7 +924,7 @@
     const mid = a => ({ x: a.x, y: a.y - a.s * 0.5 })
 
     function setBars(a) {
-      const u = units[a.side][a.i]
+      const u = shown[a.side][a.i]
       if (!u) return
       a.hpI.style.width = pct(u.hp, u.maxHp)
       a.mpI.style.width = pct(u.mp, u.maxMp)
@@ -866,7 +940,7 @@
       syncTimer = setTimeout(() => {
         for (const side of ["p", "m"])
           for (const a of actors[side]) {
-            const u = units[side][a.i]
+            const u = shown[side][a.i]
             if (!u) continue
             setBars(a)
             if (u.hp <= 0 && !a.dead) die(a, true)
@@ -983,7 +1057,7 @@
       return im.complete && im.naturalWidth ? im : null
     }
     function preloadFx() {
-      for (const n of ["fire_orb", "ice_orb", "nature_orb", "fire_burst", "water_burst", "nature_burst", "phys_hit", "slash", "stab", "smash", "fire_pillar", "ice_spikes", "poison_cloud", "heal", "buff", "revive", "death", "circles"]) fxImg(n)
+      for (const n of ["entangle", "water_strike", "life_drain", "smoke_burst", "firestorm", "flame_blast", "natures_veil", "toxic_pollen", "mana_spring", "fire_orb", "ice_orb", "nature_orb", "fire_burst", "water_burst", "nature_burst", "phys_hit", "slash", "stab", "smash", "fire_pillar", "ice_spikes", "poison_cloud", "heal", "buff", "revive", "death", "circles"]) fxImg(n)
     }
     function drawFrame(c, im, f, w, h, anchor) {
       const fw = im.naturalWidth / 4
@@ -1222,7 +1296,7 @@
       ).onfinish = () => n.remove()
     }
     function showBanner(a, ab) {
-      const u = units[a.side][a.i]
+      const u = shown[a.side][a.i]
       banner.textContent = (u?.name ? u.name + "：" : "") + ab.name
       banner.style.color = ab.kind === "heal" ? ELEMENT_COLOR.heal : ab.kind === "damage" ? ELEMENT_COLOR[ab.element] : ELEMENT_COLOR.buff
       banner.getAnimations().forEach(x => x.cancel())
@@ -1241,7 +1315,8 @@
       a.pose.animate(
         [
           { transform: "translateY(0)", filter: "none" },
-          { transform: `translateY(-10%) rotate(${-a.dir * 4}deg)`, filter: `brightness(1.3) drop-shadow(0 0 6px ${color})`, offset: 0.6 },
+          // cast in place: the cast frame already shows the gesture, so only a slight lean and swell
+          { transform: `rotate(${a.dir * 2}deg) scale(1.02)`, filter: `brightness(1.3) drop-shadow(0 0 6px ${color})`, offset: 0.6 },
           { transform: "translateY(0)", filter: "none" },
         ],
         { duration: dur + 200, easing: "ease-in-out" },
@@ -1250,8 +1325,50 @@
       burst(a.x, a.y - a.s * 0.2, { n: 10, color, speed: 60, gravity: -120, life: dur + 200, size: 2.5, spread: 1.6 })
     }
 
+    // ----- lasting effects: aura rings under every ally (stacked outward) + buff / debuff chips -----
+    const AURA = { critical_aura: "#ff8a3c", fierce_aura: "#ff3c5a", mystic_aura: "#9a7cff", guardian_aura: "#4aa8ff", speed_aura: "#9cff4a" }
+    const sideAuras = { p: {}, m: {} } // aura key -> expiry; recasting the same aura only refreshes it
+    function grantAura(side, key) {
+      sideAuras[side][key] = now() + (BUFF_SECONDS[key] || 120) * 1000
+      actors[side].forEach(renderStatus)
+    }
+    function addStatus(a, key, kind) {
+      a.status[key] = { until: now() + (BUFF_SECONDS[key] || 10) * 1000, kind }
+      renderStatus(a)
+    }
+    function renderStatus(a) {
+      const t = now()
+      const auras = a.dead ? [] : Object.keys(AURA).filter(k => sideAuras[a.side][k] > t)
+      a.ringsEl.replaceChildren(
+        ...auras.map((k, n) => {
+          const r = document.createElement("div")
+          r.className = "bfx-ring"
+          const w = a.s * (0.7 + n * 0.16)
+          Object.assign(r.style, { width: w + "px", height: w * 0.26 + "px", borderColor: AURA[k], boxShadow: `0 0 8px ${AURA[k]}, inset 0 0 6px ${AURA[k]}`, animationDelay: -n * 0.4 + "s" })
+          return r
+        }),
+      )
+      const chips = [...auras.map(k => [k, "buff"]), ...Object.entries(a.status).filter(([, v]) => v.until > t && !a.dead).map(([k, v]) => [k, v.kind])]
+      a.chipsEl.replaceChildren(
+        ...chips.map(([k, kind]) => {
+          const c = document.createElement("div")
+          c.className = "bfx-chip " + kind
+          c.style.background = AURA[k] || ELEMENT_COLOR.buff
+          c.textContent = (abilityInfo("/abilities/" + k)?.name || "?")[0]
+          return c
+        }),
+      )
+    }
+    // effects cast on the same actor back to back queue up instead of piling on top of each other
+    function fxSlot(a, dur) {
+      const t = now()
+      const wait = Math.max(0, a.fxBusyUntil - t)
+      a.fxBusyUntil = t + wait + dur * 0.7
+      return wait
+    }
+
     // ----- reactions -----
-    function impact(a, t, style, element, big) {
+    function impact(a, t, style, element, big, noBurst) {
       const color = ELEMENT_COLOR[element] || ELEMENT_COLOR.physical
       const m = mid(a)
       if (t && !t.dHP) {
@@ -1272,7 +1389,9 @@
       a.spriteEl.animate([{ filter: "brightness(3) saturate(0)" }, { filter: "none" }], { duration: 180 })
       if (style === "dot") burst(m.x, m.y, { n: 8, color: "#b77cff", speed: 70, gravity: -60, life: 500, size: 2.5 })
       else if (style === "reflect") burst(m.x, m.y, { n: 12, color: "#ff9a3c", speed: 170, gravity: 0, life: 360, size: 2, shape: "shard" })
-      else if (!sprite(BURST[element] || "phys_hit", m.x, m.y, a.s * (big ? 1.1 : 0.85), { dur: 520, flip: a.dir > 0 }))
+      else if (noBurst) {
+        // the spell's own effect is the hit
+      } else if (!sprite(BURST[element] || "phys_hit", m.x, m.y, a.s * (big ? 1.1 : 0.85), { dur: 520, flip: a.dir > 0 }))
         burst(m.x, m.y, { n: big ? 22 : 14, color, speed: big ? 200 : 150, life: 480 })
       if (style === "smash" && !sprite("smash", a.x, a.y + a.s * 0.05, a.s * 0.9, { dur: 560, anchor: "bottom" })) {
         ringFx(a.x, a.y, a.s * 0.1, a.s * 0.8, "#fff", 380, 0.3, 4)
@@ -1288,6 +1407,8 @@
       if (a.dead) return
       a.dead = true
       a.el.classList.add("bfx-dead")
+      a.status = {}
+      renderStatus(a)
       const m = mid(a)
       if (!quiet && !sprite("death", m.x, m.y - a.s * 0.15, a.s * 1.1, { dur: 1000 })) burst(m.x, m.y, { n: 18, color: "#ddd", speed: 90, gravity: -80, life: 800, size: 3 })
       if (a.art) {
@@ -1326,7 +1447,7 @@
       a.el.classList.remove("bfx-dead")
       a.deathAnim?.cancel()
       a.deathAnim = null
-      if (a.art) a.img.src = frameUrl(a, "idle")
+      if (a.art) showFrame(a, "idle")
       if (!quiet && !sprite("revive", a.x, a.y, a.s * 2, { dur: 1100, anchor: "bottom" })) {
         pillarFx(a.x, a.y, a.s * 0.9, a.s * 2.2, "#fff6c0", 900)
         burst(a.x, a.y - a.s * 0.3, { n: 18, color: "#fff6c0", speed: 80, gravity: -140, life: 900, size: 2.5 })
@@ -1334,9 +1455,9 @@
     }
 
     // ----- actions -----
-    function play(actions) {
-      if (!visible()) return
-      if (actors.p.length !== units.p.length || actors.m.length !== units.m.length) rebuild()
+    function play(actions, src = "live") {
+      if (mode !== src || !visible()) return
+      if (actors.p.length !== shown.p.length || actors.m.length !== shown.m.length) rebuild()
       for (const act of actions) {
         try {
           run(act)
@@ -1370,49 +1491,96 @@
       let dur
       if (act.effect === "damage") {
         const aoe = ab?.target === "allEnemies" || tg.length > 1
-        if (act.style === "magic") dur = magic(src, tg, act.element, aoe, quick)
-        else if (act.style === "ranged") dur = ranged(src, tg, act.element, aoe, quick)
-        else dur = melee(src, tg, act.style, act.element, aoe, quick, !!ab)
-      } else if (act.effect === "heal") dur = heal(src, tg, quick)
+        if (act.style === "magic") dur = magic(src, tg, act.element, ab, quick)
+        else if (act.style === "ranged") dur = ranged(src, tg, act.element, aoe, quick, ab)
+        else dur = melee(src, tg, act.style, act.element, aoe, quick, !!ab, ab)
+        // damage skills that leave a debuff (bleed, armor break, slow, poison...)
+        if (ab && BUFF_SECONDS[ab.key]) later(dur * 0.6, () => tg.forEach(({ a }) => addStatus(a, ab.key, "debuff")))
+      } else if (act.effect === "heal") dur = heal(src, tg, quick, ab)
       else dur = buff(src, ab, quick)
       src.busyUntil = T + dur
     }
 
-    function magic(src, tg, element, aoe, quick) {
+    // Every ability has its own generated effect (sheet name = ability key unless renamed):
+    //   proj   – flies from the caster (bolts and arrows), bursting on arrival
+    //   ground – rises from the target's feet (bottom-anchored)
+    //   on     – plays over the target (strikes, self buffs)
+    const PROJ = { fireball: "fire_orb", ice_spear: "ice_orb", quick_shot: 1, steady_shot: 1, penetrating_shot: 1, silencing_shot: 1, pestilent_shot: 1, aqua_arrow: 1, flame_arrow: 1 }
+    const GROUND = new Set(["entangle", "water_strike", "firestorm", "flame_blast", "natures_veil", "toxic_pollen", "mana_spring", "frost_surge", "rain_of_arrows", "sweep", "fracturing_impact", "rejuvenate", "heal", "berserk", "frenzy", "toughness", "promote", "critical_aura", "fierce_aura", "mystic_aura", "guardian_aura", "speed_aura", "revive"])
+    const RENAME = { frost_surge: "ice_spikes" }
+    const SIZE = { firestorm: 1.75, mana_spring: 1.6, water_strike: 1.5, flame_blast: 1.5, natures_veil: 1.45, toxic_pollen: 1.4, rain_of_arrows: 1.5, cleave: 1.6, sweep: 1.4, fracturing_impact: 1.2, revive: 2, invincible: 1.5 }
+    function fxSpec(ab) {
+      if (!ab) return null
+      const k = ab.key
+      if (PROJ[k]) return { proj: PROJ[k] === 1 ? k : PROJ[k] }
+      const spec = { h: SIZE[k] || 1.3, drain: k === "life_drain" }
+      spec[GROUND.has(k) ? "ground" : "on"] = RENAME[k] || k
+      return spec
+    }
+    // draws a ground / on spec at actor a; false when its sheet is not available
+    function specFx(spec, a, delay = 0, dur = 820) {
+      if (!spec || (!spec.ground && !spec.on)) return false
+      const m = mid(a)
+      return sprite(spec.ground || spec.on, a.x, spec.ground ? a.y + a.s * 0.04 : m.y, a.s * spec.h, { dur, anchor: spec.ground ? "bottom" : "center", delay })
+    }
+    // AoE: one big effect centred on the whole group instead of a copy on every unit
+    function groupFx(spec, group, delay = 0, dur = 900) {
+      if (!spec || (!spec.ground && !spec.on) || !group.length) return false
+      const xs = group.map(a => a.x)
+      const s = Math.max(...group.map(a => a.s))
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+      const ground = Math.max(...group.map(a => a.y))
+      // sheets are 3:4 frames; size them to cover the row, within the stage height
+      const h = Math.min(SH * 0.95, Math.max(s * spec.h * 1.2, ((Math.max(...xs) - Math.min(...xs) + s) * 1.05) / 0.75))
+      return sprite(spec.ground || spec.on, cx, spec.ground ? ground + s * 0.04 : ground - s * 0.5, h, { dur, anchor: spec.ground ? "bottom" : "center", delay })
+    }
+    const isAoe = (ab, tg) => ab?.target === "allEnemies" || ab?.target === "allAllies" || tg.length > 1
+    const ELEMENT_FX = { fire: { ground: "flame_blast", h: 1.5 }, water: { ground: "water_strike", h: 1.5 }, nature: { ground: "entangle", h: 1.35 } }
+
+    function magic(src, tg, element, ab, quick) {
       const color = ELEMENT_COLOR[element] || ELEMENT_COLOR.physical
       const castT = quick ? 120 : 360
       castPose(src, color, castT, element)
-      later(castT, () => {
-        if (!aoe) {
-          for (const { t, a } of tg) projectile(mid(src), mid(a), { kind: "orb", color, dur: 380, arc: Math.min(40, SH * 0.12), art: ORB[element] }, () => impact(a, t, "magic", element, true))
-          return
-        }
-        tg.forEach(({ t, a }, n) => {
-          const m = mid(a)
-          const d = n * 90
-          if (element === "fire" && sprite("fire_pillar", a.x, a.y, a.s * 1.6, { dur: 760, anchor: "bottom", delay: d })) {
-            later(d + 160, () => impact(a, t, "magic", element, true))
-          } else if (element === "water" && sprite("ice_spikes", a.x, a.y, a.s * 1.2, { dur: 640, anchor: "bottom", delay: d })) {
-            later(d + 140, () => impact(a, t, "magic", element))
-          } else if (element === "nature" && sprite("poison_cloud", a.x, a.y, a.s * 1.3, { dur: 900, anchor: "bottom", delay: d })) {
-            later(d + 220, () => impact(a, t, "magic", element))
-          } else if (element === "fire") {
-            later(d, () => projectile({ x: m.x - a.dir * a.s * 0.9, y: -20 }, m, { kind: "meteor", color, dur: 320, size: 1.3 }, () => impact(a, t, "magic", element, true)))
-          } else if (element === "water") {
-            spikesFx(a, color, d)
-            later(d + 120, () => impact(a, t, "magic", element))
-          } else if (element === "nature") {
-            burst(m.x, m.y, { n: 26, color, speed: 50, gravity: -30, life: 900, size: 4, delay: d })
-            later(d + 200, () => impact(a, t, "magic", element))
-          } else {
-            later(d, () => projectile(mid(src), m, { kind: "orb", color, dur: 360, arc: 30, art: ORB[element] }, () => impact(a, t, "magic", element)))
-          }
+      const spec = ab ? fxSpec(ab) || ELEMENT_FX[element] || { proj: ORB[element] } : { proj: ORB[element] }
+      if (isAoe(ab, tg) && (spec.ground || spec.on)) {
+        later(castT, () => {
+          const shown = groupFx(spec, tg.map(x => x.a))
+          tg.forEach(({ t, a }, n) => {
+            if (!shown) groundFallback(a, element, color, n * 90)
+            later(220 + n * 50, () => impact(a, t, "magic", element, true, shown))
+          })
         })
-      })
-      return castT + 380 + tg.length * 90
+        return castT + 500 + tg.length * 50
+      }
+      later(castT, () =>
+        tg.forEach(({ t, a }, n) => {
+          const d = n * 90
+          const m = mid(a)
+          if (!spec.ground && !spec.on) {
+            later(d, () => projectile(mid(src), m, { kind: "orb", color, dur: 380, arc: Math.min(40, SH * 0.12), art: spec.proj }, () => impact(a, t, "magic", element, !!ab)))
+            return
+          }
+          const shown = specFx(spec, a, d)
+          if (!shown) groundFallback(a, element, color, d)
+          later(d + 200, () => impact(a, t, "magic", element, true, shown))
+          // life drain: motes of life float back to the caster
+          if (spec.drain)
+            for (let k = 0; k < 5; k++) later(d + 260 + k * 70, () => projectile({ x: m.x + (Math.random() - 0.5) * a.s * 0.4, y: m.y }, mid(src), { kind: "orb", color: "#ff5a6a", dur: 420, arc: 30 + k * 6, size: 0.45 }))
+        }),
+      )
+      return castT + 420 + tg.length * 90
+    }
+    // the old procedural looks, for when an effect sheet has not loaded
+    function groundFallback(a, element, color, d) {
+      const m = mid(a)
+      if (element === "fire") later(d, () => projectile({ x: m.x - a.dir * a.s * 0.9, y: -20 }, m, { kind: "meteor", color, dur: 320, size: 1.3 }))
+      else if (element === "water") spikesFx(a, color, d)
+      else burst(m.x, m.y, { n: 26, color, speed: 50, gravity: -30, life: 900, size: 4, delay: d })
     }
 
-    function ranged(src, tg, element, aoe, quick) {
+    function ranged(src, tg, element, aoe, quick, ab) {
+      const spec = fxSpec(ab)
+      let rainShown = false
       const color = element === "physical" ? "#ffe9b0" : ELEMENT_COLOR[element]
       const drawT = quick ? 60 : 200
       setPose(src, "windup", drawT)
@@ -1424,14 +1592,17 @@
       later(drawT, () => {
         tg.forEach(({ t, a }, n) => {
           const m = mid(a)
-          if (aoe) {
+          if (spec?.ground) {
+            const shown = n === 0 ? (rainShown = groupFx(spec, tg.map(x => x.a), 0, 900)) : rainShown
+            later(260 + n * 50, () => impact(a, t, "ranged", element, true, shown))
+          } else if (aoe) {
             for (let k = 0; k < 3; k++) {
               const from = { x: m.x - a.dir * (20 + k * 14), y: -10 - k * 25 }
               const to = { x: m.x + (k - 1) * a.s * 0.25, y: a.y - a.s * 0.15 }
               later(n * 70 + k * 60, () => projectile(from, to, { kind: "arrow", color, dur: 260 }, () => (k === 0 ? impact(a, t, "ranged", element) : burst(to.x, to.y, { n: 5, color, life: 300, speed: 80 }))))
             }
           } else {
-            later(n * 70, () => projectile(mid(src), m, { kind: "arrow", color, dur: 300, arc: Math.min(30, SW * 0.04) }, () => impact(a, t, "ranged", element)))
+            later(n * 70, () => projectile(mid(src), m, { kind: "arrow", color, dur: 300, arc: Math.min(30, SW * 0.04), art: spec?.proj, size: 0.8 }, () => impact(a, t, "ranged", element, !!ab)))
           }
         })
       })
@@ -1439,7 +1610,8 @@
     }
 
     // melee: run up to the target (or the middle of the group for AoE), strike, run back
-    function melee(src, tg, style, element, aoe, quick, isSkill) {
+    function melee(src, tg, style, element, aoe, quick, isSkill, ab) {
+      const spec = fxSpec(ab)
       const color = ELEMENT_COLOR[element] || ELEMENT_COLOR.physical
       if (!tg.length) return 0
       const cx = tg.reduce((s, x) => s + x.a.x, 0) / tg.length
@@ -1482,32 +1654,45 @@
           { duration: 260, easing: "ease-out" },
         )
         later(strike, () => {
+          const groupShown = aoe && spec && groupFx(spec, tg.map(x => x.a), 0, 560)
           for (const { t, a } of tg) {
             const m = mid(a)
+            if (groupShown) {
+              impact(a, t, style, element, true, true)
+              continue
+            }
+            if (spec && specFx({ ...spec, h: spec.h * (spec.ground ? 1 : 0.95) }, a, 0, 520)) {
+              impact(a, t, style, element, true, true)
+              continue
+            }
             if (style === "stab") sprite("stab", m.x - src.dir * a.s * 0.15, m.y, a.s * 0.75, { dur: 300, flip: src.dir < 0 }) || thrustFx(m.x, m.y, src.dir, color, a.s * 0.6)
             else if (style === "slash" && !aoe) sprite("slash", m.x, m.y, a.s * 1.05, { dur: 320, flip: src.dir < 0 }) || slashFx(m.x, m.y, a.s * 0.5, src.dir, isSkill ? color : "#e8f0ff")
             impact(a, t, style, element, isSkill)
           }
-          if (aoe && style === "slash") sprite("slash", cx, cy - lead.s * 0.5, lead.s * 1.9, { dur: 360, flip: src.dir < 0 }) || slashFx(cx, cy - lead.s * 0.5, lead.s * 1.2, src.dir, color, 1.1)
+          if (aoe && style === "slash" && !spec) sprite("slash", cx, cy - lead.s * 0.5, lead.s * 1.9, { dur: 360, flip: src.dir < 0 }) || slashFx(cx, cy - lead.s * 0.5, lead.s * 1.2, src.dir, color, 1.1)
           if (style === "smash") shake(isSkill ? 8 : 5)
         })
       })
       return run + 320 + 250
     }
 
-    function heal(src, tg, quick) {
+    function heal(src, tg, quick, ab) {
+      const spec = fxSpec(ab) || { ground: "heal", h: 1.5 }
       const color = ELEMENT_COLOR.heal
       const castT = quick ? 100 : 300
       castPose(src, color, castT, "heal")
       later(castT, () => {
         const list = tg.length ? tg : [{ a: src, t: null }]
+        const groupShown = isAoe(ab, tg) && groupFx(spec, list.map(x => x.a), 0, 1000)
         list.forEach(({ t, a }, n) => {
-          if (!sprite("heal", a.x, a.y, a.s * 1.5, { dur: 900, anchor: "bottom", delay: n * 80 })) pillarFx(a.x, a.y, a.s * 0.8, a.s * 1.6, color, 700, n * 80)
+          if (groupShown) {
+            // the big effect covers everyone; numbers still pop per unit below
+          } else if (!specFx(spec, a, n * 80 + fxSlot(a, 900), 900)) pillarFx(a.x, a.y, a.s * 0.8, a.s * 1.6, color, 700, n * 80)
           burst(a.x, a.y - a.s * 0.3, { n: 12, color, speed: 50, gravity: -160, life: 900, size: 3, shape: "plus", delay: n * 80 })
           if (t) {
             later(n * 80 + 150, () => {
               if (t.revived) revive(a)
-              number(a, "+" + fmt(t.dHP), "heal")
+              if (t.dHP > 0) number(a, "+" + fmt(t.dHP), "heal")
               setHp(a, t)
             })
           }
@@ -1521,23 +1706,31 @@
       const castT = quick ? 80 : 240
       castPose(src, color, castT, "buff")
       const allies = ab?.target === "allAllies" ? actors[src.side].filter(a => !a.dead) : [src]
-      later(castT, () =>
+      const spec = fxSpec(ab) || { ground: "buff", h: 1.4 }
+      later(castT, () => {
+        if (ab && AURA[ab.key]) grantAura(src.side, ab.key)
+        else if (ab && BUFF_SECONDS[ab.key]) addStatus(src, ab.key, "buff")
+      })
+      later(castT, () => {
+        if (allies.length > 1 && groupFx(spec, allies, 0, 1000)) return
         allies.forEach((a, n) => {
-          if (sprite("buff", a.x, a.y, a.s * 1.4, { dur: 800, anchor: "bottom", delay: n * 60 })) return
+          if (specFx(spec, a, n * 60 + fxSlot(a, 800), 800)) return
           ringFx(a.x, a.y, a.s * 0.2, a.s * 0.75, color, 600, 0.3, 3, n * 60)
           pillarFx(a.x, a.y, a.s * 0.7, a.s * 1.4, color, 600, n * 60)
           burst(a.x, a.y - a.s * 0.2, { n: 10, color, speed: 40, gravity: -150, life: 800, size: 2.5, delay: n * 60 })
-        }),
-      )
+        })
+      })
       return castT + 500
     }
 
-    function newBattle() {
+    function newBattle(src = "live") {
+      if (mode !== src) return
+      sideAuras.m = {}
       if (!visible()) return
       setBackground()
-      const keepPlayers = units.p.map(u => u.name).join("|") === playersKey
+      const keepPlayers = shown.p.map(u => u.name).join("|") === playersKey
       rebuild(false)
-      if (keepPlayers) actors.p.forEach(a => units.p[a.i]?.hp > 0 && revive(a, true))
+      if (keepPlayers) actors.p.forEach(a => shown.p[a.i]?.hp > 0 && revive(a, true))
       // monsters walk in from the right
       actors.m.forEach((a, n) =>
         a.move.animate([{ transform: `translateX(${SW * 0.35}px)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }], {
@@ -1547,70 +1740,361 @@
           easing: "ease-out",
         }),
       )
-      for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), units[side][a.i]?.hp <= 0 && die(a, true)))
+      for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), shown[side][a.i]?.hp <= 0 && die(a, true)))
     }
 
     function start() {
       setInterval(ensureTab, 1000)
+      // expire rings and chips
+      setInterval(() => mode && ["p", "m"].forEach(side => actors[side].forEach(renderStatus)), 1000)
       Assets.onChange(() => {
-        if (!active) return
-        units.p.forEach((u, i) => Looks.assign(u, i))
+        if (!mode) return
+        if (mode === "live") shown.p.forEach((u, i) => Looks.assign(u, i))
         for (const side of ["p", "m"]) actors[side].forEach(refreshSprite)
         bgKey = ""
         setBackground()
       })
     }
 
-    return { play, newBattle, layout, open, start, ensureTab, actors, setBackground }
+    const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, refreshSprite(a))))
+    return { play, newBattle, layout, open, start, ensureTab, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+  })()
+
+  // ---------- real battles: the stage laid over the game's unit cards ----------
+  // Only BattlePanel_battleArea is covered, so consumables, ability cooldowns and the flee button below
+  // stay visible. A button in the panel's corner switches between our view and the original cards.
+  const Live = (() => {
+    let area = null
+    let slot = null
+    let btn = null
+    function cleanup() {
+      slot?.remove()
+      btn?.remove()
+      if (area) area.style.minHeight = ""
+      slot = btn = null
+      if (Stage.modeOf() === "live") Stage.detach()
+    }
+    function ensure() {
+      const a = cfg.enabled ? document.querySelector('[class*="BattlePanel_battleArea"]') : null
+      if (a !== area) {
+        cleanup()
+        area = a
+      }
+      if (!area) return
+      const panel = area.closest('[class*="BattlePanel_battlePanel"]') || area.parentElement
+      if (!btn?.isConnected) {
+        btn = document.createElement("button")
+        btn.className = "bfx-toggle"
+        btn.addEventListener("click", e => {
+          e.stopPropagation()
+          cfg.overlay = !cfg.overlay
+          saveCfg()
+          ensure()
+        })
+        if (getComputedStyle(panel).position === "static") panel.style.position = "relative"
+        panel.appendChild(btn)
+      }
+      btn.textContent = cfg.overlay ? "切换到原版" : "切换到动画"
+      if (!cfg.overlay) {
+        slot?.remove()
+        slot = null
+        area.style.minHeight = ""
+        if (Stage.modeOf() === "live") Stage.detach()
+        return
+      }
+      if (!slot?.isConnected) {
+        slot = document.createElement("div")
+        slot.className = "bfx-live-slot"
+        if (getComputedStyle(area).position === "static") area.style.position = "relative"
+        area.appendChild(slot)
+      }
+      area.style.minHeight = cfg.liveH + "px"
+      if (!Stage.isTestActive()) Stage.attach(slot, "live")
+    }
+    return { ensure }
+  })()
+
+  // ---------- 动画测试: a sandbox for any location, line-up, skill and pose ----------
+  const MONSTERS = {"abyssal_imp":["深渊小鬼","magic","fire"],"acrobat":["杂技师","smash","physical"],"alligator":["夏洛克","slash","physical"],"anchor_shark":["持锚鲨","smash","physical"],"aquahorse":["水马","ranged","water"],"black_bear":["黑熊","stab","physical"],"brine_marksman":["海盐射手","ranged","physical"],"butterjerry":["蝶鼠","stab","physical"],"captain_fishhook":["鱼钩船长","slash","physical"],"centaur_archer":["半人马弓箭手","ranged","physical"],"chronofrost_sorcerer":["霜时巫师","magic","water"],"crab":["螃蟹","smash","physical"],"crystal_colossus":["水晶巨像","stab","physical"],"cyclops":["独眼巨人","smash","physical"],"demonic_overlord":["恶魔霸主","magic","fire"],"deranged_jester":["小丑皇","smash","physical"],"dodocamel":["渡渡驼","smash","physical"],"dryad":["树精","magic","nature"],"dusk_revenant":["黄昏亡灵","ranged","physical"],"elementalist":["元素法师","magic","fire"],"enchanted_bishop":["秘法主教","magic","nature"],"enchanted_king":["秘法国王","slash","physical"],"enchanted_knight":["秘法骑士","slash","physical"],"enchanted_pawn":["秘法士兵","smash","physical"],"enchanted_queen":["秘法王后","magic","water"],"enchanted_rook":["秘法堡垒","ranged","physical"],"eye":["独眼","slash","physical"],"eyes":["叠眼","slash","physical"],"flame_sorcerer":["火焰巫师","magic","fire"],"fly":["苍蝇","smash","physical"],"frog":["青蛙","smash","physical"],"frost_sniper":["霜冻狙击手","ranged","water"],"giant_mantis":["巨螳螂","slash","physical"],"giant_scorpion":["巨蝎","stab","physical"],"giant_shoebill":["鲸头鹳","smash","physical"],"gobo_boomy":["轰轰","magic","fire"],"gobo_chieftain":["哥布林酋长","stab","physical"],"gobo_shooty":["咻咻","ranged","physical"],"gobo_slashy":["砍砍","slash","physical"],"gobo_smashy":["锤锤","smash","physical"],"gobo_stabby":["刺刺","stab","physical"],"granite_golem":["花岗岩魔像","smash","physical"],"griffin":["狮鹫","slash","physical"],"grizzly_bear":["棕熊","slash","physical"],"gummy_bear":["软糖熊","smash","physical"],"ice_sorcerer":["冰霜巫师","magic","water"],"infernal_warlock":["地狱术士","magic","fire"],"jackalope":["鹿角兔","magic","nature"],"juggler":["杂耍者","ranged","physical"],"jungle_sprite":["丛林精灵","magic","nature"],"luna_empress":["月神之蝶","magic","nature"],"magician":["魔术师","magic","fire"],"magnetic_golem":["磁力魔像","smash","physical"],"manticore":["狮蝎兽","ranged","physical"],"marine_huntress":["海洋猎手","ranged","water"],"mimic":["宝箱怪","stab","physical"],"myconid":["蘑菇人","magic","nature"],"nom_nom":["咬咬鱼","stab","physical"],"novice_sorcerer":["新手巫师","magic","water"],"panda":["熊猫","smash","physical"],"polar_bear":["北极熊","smash","physical"],"porcupine":["豪猪","ranged","physical"],"pyre_hunter":["火焰猎手","ranged","fire"],"rabid_rabbit":["疯魔兔","slash","physical"],"rat":["杰瑞","stab","physical"],"red_panda":["小熊猫","slash","physical"],"salamander":["火蜥蜴","magic","fire"],"sea_snail":["蜗牛","smash","physical"],"shadow_archer":["暗影弓手","ranged","physical"],"siren":["海妖","magic","water"],"skunk":["臭鼬","slash","physical"],"slimy":["史莱姆","magic","water"],"snake":["蛇","stab","physical"],"soul_hunter":["灵魂猎手","ranged","physical"],"squawker":["鹦鹉","magic","nature"],"stalactite_golem":["钟乳石魔像","stab","physical"],"swampy":["沼泽虫","smash","physical"],"the_kraken":["克拉肯","ranged","physical"],"the_watcher":["观察者","ranged","physical"],"tidal_conjuror":["潮汐召唤师","magic","water"],"treant":["树人","magic","nature"],"trial_badger":["试炼獾","slash","physical"],"trial_beetle":["试炼甲虫","smash","physical"],"trial_chameleon":["试炼变色龙","ranged","physical"],"trial_dragonfly":["试炼蜻蜓","ranged","physical"],"trial_firefly":["试炼萤火虫","magic","fire"],"trial_hedgehog":["试炼刺猬","magic","nature"],"trial_jellyfish":["试炼水母","magic","water"],"trial_wasp":["试炼黄蜂","stab","physical"],"turtle":["忍者龟","smash","physical"],"vampire":["吸血鬼","stab","physical"],"veyes":["复眼","slash","physical"],"werewolf":["狼人","slash","physical"],"zombie":["僵尸","slash","physical"],"zombie_bear":["僵尸熊","stab","physical"]}
+  const LOCATIONS = {"aqua_planet":["海洋星球",["sea_snail","crab","aquahorse","nom_nom","turtle","marine_huntress"]],"bear_with_it":["熊熊星球",["gummy_bear","panda","black_bear","grizzly_bear","polar_bear","red_panda"]],"chimerical_den":["奇幻洞穴",["rat","skunk","porcupine","slimy","frog","snake","swampy","alligator","sea_snail","crab","aquahorse","jungle_sprite","myconid","nom_nom","turtle","centaur_archer","gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","eye","butterjerry","eyes","veyes","jackalope","dodocamel","manticore","griffin"]],"enchanted_fortress":["秘法要塞",["novice_sorcerer","ice_sorcerer","flame_sorcerer","panda","black_bear","magnetic_golem","abyssal_imp","elementalist","grizzly_bear","polar_bear","stalactite_golem","soul_hunter","enchanted_pawn","enchanted_knight","enchanted_bishop","enchanted_rook","enchanted_queen","enchanted_king"]],"gobo_planet":["哥布林星球",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","gobo_chieftain"]],"golem_cave":["魔像洞穴",["magnetic_golem","stalactite_golem","granite_golem","crystal_colossus"]],"infernal_abyss":["地狱深渊",["abyssal_imp","soul_hunter","infernal_warlock","demonic_overlord"]],"jungle_planet":["丛林星球",["jungle_sprite","myconid","treant","centaur_archer","luna_empress"]],"pirate_cove":["海盗基地",["eye","eyes","veyes","zombie","magnetic_golem","abyssal_imp","vampire","stalactite_golem","soul_hunter","squawker","werewolf","granite_golem","infernal_warlock","anchor_shark","brine_marksman","tidal_conjuror","captain_fishhook","the_kraken"]],"planet_of_the_eyes":["眼球星球",["eye","eyes","veyes","the_watcher"]],"sinister_circus":["阴森马戏团",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","novice_sorcerer","gummy_bear","ice_sorcerer","flame_sorcerer","panda","black_bear","grizzly_bear","polar_bear","zombie","vampire","rabid_rabbit","elementalist","werewolf","zombie_bear","acrobat","juggler","magician","deranged_jester"]],"smelly_planet":["臭臭星球",["fly","rat","skunk","porcupine","slimy"]],"sorcerers_tower":["巫师之塔",["novice_sorcerer","ice_sorcerer","flame_sorcerer","elementalist","chronofrost_sorcerer"]],"swamp_planet":["沼泽星球",["frog","snake","swampy","alligator","giant_shoebill"]],"twilight_zone":["暮光之地",["zombie","vampire","werewolf","dusk_revenant"]]}
+  const Lab = (() => {
+    const STYLES = ["slash", "stab", "smash", "ranged", "magic"]
+    const STYLE_ZH = { slash: "斩击", stab: "刺击", smash: "钝击", ranged: "远程", magic: "魔法" }
+    const POSES = ["idle", "windup", "strike", "hurt", "cast", "dead"]
+    const POSE_ZH = { idle: "待机", windup: "蓄力", strike: "出手", hurt: "受击", cast: "施法", dead: "倒下" }
+    const DEF = {
+      loc: "golem_cave",
+      tier: 0,
+      monsters: ["granite_golem", "magnetic_golem", "stalactite_golem", "", ""],
+      players: [
+        { look: "default_slash", style: "slash", skills: ["cleave", "maim", "berserk", "fierce_aura"] },
+        { look: "default_ranged", style: "ranged", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "speed_aura"] },
+        { look: "default_magic", style: "magic", skills: ["fireball", "entangle", "toxic_pollen", "heal"] },
+      ],
+      gallery: "magnetic_golem",
+    }
+    const st = { ...structuredClone(DEF), ...GM_getValue("battle_fx_lab_v1", {}) }
+    const save = () => GM_setValue("battle_fx_lab_v1", st)
+    const lab = { p: [], m: [] }
+    let root = null
+    let autoTimer = 0
+    const zh = k => abilityInfo("/abilities/" + k)?.name || k
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)]
+    const alive = side => lab[side].map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
+
+    function unitP(pl, i) {
+      const magicSkill = pl.skills.find(k => ABILITIES[k]?.[3] === "magic")
+      return {
+        name: `${i + 1}号 ${STYLE_ZH[pl.style]}`,
+        hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000,
+        style: pl.style,
+        element: pl.style === "magic" ? ABILITIES[magicSkill]?.[4] || "fire" : "physical",
+        lookId: pl.look,
+        counters: {},
+      }
+    }
+    function unitM(id) {
+      const [name, style, element] = MONSTERS[id] || [id, "smash", "physical"]
+      return { name, hrid: "/monsters/" + id, hp: 4000, mp: 1000, maxHp: 4000, maxMp: 1000, style, element, counters: {} }
+    }
+    function buildUnits() {
+      lab.p = st.players.map(unitP)
+      lab.m = st.monsters.filter(Boolean).map(unitM)
+    }
+    // a change of hp on one unit, in the shape the stage expects
+    function change(side, i, d) {
+      const u = lab[side][i]
+      const before = u.hp
+      u.hp = Math.max(0, Math.min(u.maxHp, u.hp + d))
+      return { side, i, dHP: u.hp - before, hp: u.hp, maxHp: u.maxHp, died: before > 0 && u.hp <= 0, revived: before <= 0 && u.hp > 0 }
+    }
+    const hitAmount = (side, i) => (Math.random() < 0.1 ? 0 : -Math.round(lab[side][i].maxHp * (0.04 + Math.random() * 0.08)))
+
+    function act(side, i, key) {
+      const u = lab[side][i]
+      if (!u || u.hp <= 0) return
+      const foe = side === "p" ? "m" : "p"
+      const ab = key ? abilityInfo("/abilities/" + key) : null
+      let effect = "damage"
+      let targets = []
+      if (!ab || ab.kind === "damage") {
+        const f = alive(foe)
+        if (!f.length) return
+        targets = (ab?.target === "allEnemies" ? f : [pick(f)]).map(j => change(foe, j, hitAmount(foe, j)))
+      } else if (ab.kind === "heal") {
+        effect = "heal"
+        const al = alive(side)
+        const low = [...al].sort((a, b) => lab[side][a].hp / lab[side][a].maxHp - lab[side][b].hp / lab[side][b].maxHp)[0]
+        const ids = ab.target === "allAllies" ? al : ab.target === "lowestHpAlly" ? [low] : [i]
+        targets = ids.map(j => change(side, j, Math.round(lab[side][j].maxHp * 0.15)))
+      } else if (ab.kind === "revive") {
+        effect = "heal"
+        const dead = lab[side].map((x, j) => (x.hp <= 0 ? j : -1)).filter(j => j >= 0)
+        targets = dead.slice(0, 1).map(j => change(side, j, Math.round(lab[side][j].maxHp * 0.5)))
+      } else effect = "buff"
+      Stage.play([{ actor: { side, i }, ab, effect, style: ab?.style || u.style, element: ab?.kind === "damage" ? ab.element : u.element, targets }], "test")
+      afterTurn()
+    }
+    // a cleared wave respawns, a wiped party gets back up
+    let pending = 0
+    function afterTurn() {
+      if (pending) return
+      if (!alive("m").length && lab.m.length)
+        pending = setTimeout(() => {
+          pending = 0
+          lab.m = st.monsters.filter(Boolean).map(unitM)
+          Stage.newBattle("test")
+        }, 1600)
+      else if (!alive("p").length)
+        pending = setTimeout(() => {
+          pending = 0
+          lab.p.forEach((_, j) => Stage.play([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("p", j, lab.p[j].maxHp)] }], "test"))
+        }, 1600)
+    }
+    function autoTick() {
+      const who = [...alive("p").map(i => ["p", i]), ...alive("m").map(i => ["m", i])]
+      if (!who.length) return
+      const [side, i] = pick(who)
+      const skills = side === "p" ? st.players[i].skills.filter(Boolean) : []
+      act(side, i, skills.length && Math.random() < 0.4 ? pick(skills) : null)
+    }
+    function setAuto(on) {
+      clearInterval(autoTimer)
+      autoTimer = on ? setInterval(autoTick, 750) : 0
+      draw()
+    }
+    function reset() {
+      clearTimeout(pending)
+      pending = 0
+      buildUnits()
+      Stage.reload()
+    }
+
+    // ----- controls -----
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag)
+      if (cls) e.className = cls
+      if (text != null) e.textContent = text
+      return e
+    }
+    function select(options, value, onChange) {
+      const s = el("select")
+      for (const [v, label] of options) {
+        const o = el("option", null, label)
+        o.value = v
+        s.appendChild(o)
+      }
+      s.value = value ?? ""
+      s.addEventListener("change", () => onChange(s.value))
+      return s
+    }
+    const button = (label, onClick, cls) => {
+      const b = el("button", cls, label)
+      b.addEventListener("click", onClick)
+      return b
+    }
+    const row = label => {
+      const r = el("div", "row")
+      r.appendChild(el("span", "lbl", label))
+      root.appendChild(r)
+      return r
+    }
+    const monsterOptions = () => {
+      const here = LOCATIONS[st.loc]?.[1] || []
+      const rest = Object.keys(MONSTERS).filter(id => !here.includes(id)).sort((a, b) => MONSTERS[a][0].localeCompare(MONSTERS[b][0], "zh"))
+      return [["", "—"], ...[...here, ...rest].map(id => [id, MONSTERS[id][0]])]
+    }
+    const skillOptions = () => {
+      const order = { damage: 0, heal: 1, revive: 1, buff: 2 }
+      const keys = Object.keys(ABILITIES).sort((a, b) => (order[ABILITIES[a][1]] ?? 3) - (order[ABILITIES[b][1]] ?? 3) || ABILITIES[a][0].localeCompare(ABILITIES[b][0], "zh"))
+      return [["", "—"], ...keys.map(k => [k, ABILITIES[k][0]])]
+    }
+
+    function draw() {
+      if (!root) return
+      root.replaceChildren()
+      const r1 = row("战场")
+      r1.append(
+        select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => {
+          st.loc = v
+          st.monsters = [...LOCATIONS[v][1].slice(0, 3), "", ""]
+          save()
+          draw()
+          reset()
+        }),
+        select([0, 1, 2, 3, 4, 5].map(t => [t, "T" + t]), st.tier, v => {
+          st.tier = +v
+          save()
+          Stage.setBackground()
+        }),
+      )
+      for (let k = 0; k < 5; k++)
+        r1.appendChild(
+          select(monsterOptions(), st.monsters[k] || "", v => {
+            st.monsters[k] = v
+            save()
+            reset()
+          }),
+        )
+
+      const looks = Assets.list("p")
+      st.players.forEach((pl, i) => {
+        const r = row(`${i + 1}号`)
+        r.append(
+          select((looks.length ? looks : [pl.look]).map(id => [id, id.replace(/^default_/, "通用·")]), pl.look, v => ((pl.look = v), save(), reset())),
+          select(STYLES.map(x => [x, STYLE_ZH[x]]), pl.style, v => ((pl.style = v), save(), reset())),
+          ...[0, 1, 2, 3].map(k => select(skillOptions(), pl.skills[k] || "", v => ((pl.skills[k] = v), save(), draw()))),
+          button("普攻", () => act("p", i, null)),
+          ...pl.skills.filter(Boolean).map(k => button(zh(k), () => act("p", i, k), "skill")),
+          button("移除", () => {
+            if (st.players.length > 1) st.players.splice(i, 1)
+            save()
+            draw()
+            reset()
+          }),
+        )
+      })
+
+      const r3 = row("操作")
+      r3.append(
+        button("+ 我方", () => {
+          if (st.players.length < 5) st.players.push(structuredClone(DEF.players[st.players.length % 3]))
+          save()
+          draw()
+          reset()
+        }),
+        button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
+        button("怪物放技能", () => {
+          const dmg = Object.keys(ABILITIES).filter(k => ABILITIES[k][1] === "damage")
+          if (alive("m").length) act("m", pick(alive("m")), pick(dmg))
+        }),
+        button("全部击杀", () => {
+          for (const side of ["m"]) alive(side).forEach(j => Stage.play([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change(side, j, -99999)] }], "test"))
+          afterTurn()
+        }),
+        button("全员复活", () => {
+          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && Stage.play([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }], "test"))
+        }),
+        button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
+        button("重置", reset),
+      )
+
+      // gallery: every pose of one monster, with per-pose flips that apply right away
+      const r4 = row("图鉴")
+      const gal = el("div", "gal")
+      r4.append(
+        select(Object.keys(MONSTERS).sort((a, b) => MONSTERS[a][0].localeCompare(MONSTERS[b][0], "zh")).map(id => [id, MONSTERS[id][0]]), st.gallery, v => ((st.gallery = v), save(), draw())),
+        button("复制翻转清单", () => {
+          const t = Flips.text()
+          GM_setClipboard(t)
+          alert(t ? "已复制，发给 Claude 即可：\n" + t : "还没有勾选任何翻转")
+        }),
+      )
+      root.appendChild(gal)
+      for (const pose of POSES) {
+        const fig = el("figure")
+        const img = el("img")
+        img.src = Assets.url(`m/${st.gallery}/${pose}.webp`)
+        img.style.transform = Flips.has("m/" + st.gallery, pose) ? "scaleX(-1)" : ""
+        const lab2 = el("label")
+        const cb = el("input")
+        cb.type = "checkbox"
+        cb.checked = Flips.has("m/" + st.gallery, pose)
+        cb.addEventListener("change", () => {
+          Flips.toggle(st.gallery, pose, cb.checked)
+          img.style.transform = cb.checked ? "scaleX(-1)" : ""
+          Stage.refreshArt()
+        })
+        lab2.append(cb, ` ${POSE_ZH[pose]} 翻转`)
+        fig.append(img, lab2)
+        gal.appendChild(fig)
+      }
+    }
+
+    // builds the controls in the tab panel and returns the element the stage hangs in
+    function render(panel) {
+      root = panel.querySelector(".bfx-lab")
+      if (!root) {
+        root = el("div", "bfx-lab")
+        panel.prepend(root)
+      }
+      let slot = panel.querySelector(".bfx-lab-stage")
+      if (!slot) {
+        slot = el("div", "bfx-lab-stage")
+        panel.appendChild(slot)
+      }
+      buildUnits()
+      draw()
+      return slot
+    }
+    const stop = () => setAuto(false)
+    return { units: lab, render, stop, loc: () => st.loc, tier: () => st.tier, startAuto: () => setAuto(true) }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
   function demo() {
-    if (!Stage.open()) return alert("先进入战斗页面（能看到“交战”标签）再演示")
-    if (!units.p.length || !units.m.length) {
-      const P = (name, style, element, hp = 1200) => ({ name, hrid: null, hp, mp: 600, maxHp: 1200, maxMp: 800, ability: null, style, element, counters: {} })
-      units.p = [P("战士", "slash", "physical"), P("弓手", "ranged", "physical"), P("法师", "magic", "fire")]
-      units.m = [
-        { ...P("花岗岩魔像", "smash", "physical", 3000), hrid: "/monsters/granite_golem", maxHp: 3000 },
-        { ...P("磁力魔像", "smash", "physical", 3000), hrid: "/monsters/magnetic_golem", maxHp: 3000 },
-        { ...P("钟乳石魔像", "stab", "physical", 3000), hrid: "/monsters/stalactite_golem", maxHp: 3000 },
-      ]
-      if (!where.zone) where.zone = "golem_cave"
-      Stage.newBattle()
-    }
-    const np = units.p.length
-    const nm = units.m.length
-    const T = (side, i, dHP, extra = {}) => {
-      const u = units[side][i % (side === "p" ? np : nm)]
-      return { side, i: i % (side === "p" ? np : nm), dHP, hp: Math.max(0, u.hp + dHP), maxHp: u.maxHp, died: false, revived: false, ...extra }
-    }
-    const A = (side, i, abKey, targets, style, element) => {
-      const ab = abKey ? abilityInfo("/abilities/" + abKey) : null
-      const effect = ab ? (ab.kind === "damage" ? "damage" : ab.kind === "heal" ? "heal" : "buff") : "damage"
-      return { actor: { side, i: i % (side === "p" ? np : nm) }, ab, effect, style: style || ab?.style, element: element || ab?.element || "physical", targets }
-    }
-    const allM = dmg => units.m.map((_, i) => T("m", i, dmg))
-    const allP = dmg => units.p.map((_, i) => T("p", i, dmg))
-    const steps = [
-      [A("p", 0, null, [T("m", 0, -180)], "slash", "physical")],
-      [A("m", 1, null, [T("p", 0, -120)], "smash", "physical")],
-      [A("p", 1, null, [T("m", 1, -150)], "ranged", "physical")],
-      [A("p", 2, "fireball", [T("m", 0, -420)])],
-      [A("m", 2, null, [T("p", 2, -90)], "stab", "physical")],
-      [A("p", 2, "firestorm", allM(-300))],
-      [A("p", 1, "rain_of_arrows", allM(-220))],
-      [A("p", 0, "cleave", allM(-260))],
-      [A("p", 2, "frost_surge", allM(-280))],
-      [A("p", 2, "toxic_pollen", allM(-200))],
-      [A("p", 0, "stunning_blow", [T("m", 1, -500)])],
-      [A("p", 1, "flame_arrow", [T("m", 2, -350)])],
-      [A("p", 2, "rejuvenate", allP(150))],
-      [A("p", 0, "berserk", [])],
-      [A("p", 0, "impale", [T("m", 0, -999, { died: true, hp: 0 })])],
-    ]
-    steps.forEach((acts, n) =>
-      setTimeout(() => Stage.play(acts), n * 1300),
-    )
+    if (!Stage.open()) return alert("先进入战斗页面（能看到“交战”标签）")
+    Lab.startAuto()
   }
 
   // ---------- menu ----------
@@ -1629,8 +2113,7 @@
       GM_registerMenuCommand(`角色形象：${cfg.lookMode === "outfit" ? "按服装" : "按装备"}（点击切换）`, () => {
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"
         saveCfg()
-        units.p.forEach((u, i) => Looks.assign(u, i))
-        Stage.newBattle()
+        if (Stage.modeOf() === "live") Stage.reload()
         menu()
       }),
       GM_registerMenuCommand("导出待生成形象（复制到剪贴板）", () => {
@@ -1653,12 +2136,13 @@
           menu()
         }
       }),
-      GM_registerMenuCommand("演示一遍", demo),
+      GM_registerMenuCommand("打开动画测试（自动战斗）", demo),
       toggle("debug", "调试：控制台打印战斗消息"),
     ]
   }
   menu()
   Stage.start()
+  setInterval(() => Live.ensure(), 1000)
   Assets.refresh()
 
   // ---------- websocket hook ----------

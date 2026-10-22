@@ -1,5 +1,4 @@
 # monster poses drawn facing right instead of left (toward the heroes)
 # "<monster>" mirrors every pose, "<monster>:<pose>[,<pose>]" only those poses
-magnetic_golem:idle,cast
+magnetic_golem:idle,cast,hurt
 stalactite_golem:idle,cast
-nom_nom:idle,cast
