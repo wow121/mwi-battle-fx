@@ -1,0 +1,114 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>公会试炼 40 人演示</title><style>
+html,body{margin:0;height:100%;background:#151a2c;font:13px sans-serif;color:#ddd;overflow:hidden}
+.GuildPanel_guildPanel__1IIto{position:absolute;inset:8px}
+.BattlePanel_battleArea__U9hij{position:relative;height:calc(100vh - 16px)}
+</style></head><body>
+<!-- a 40-player guild trial that fights forever: tools/demo-mac.sh downloads and serves it on a Mac -->
+<div class="GuildPanel_guildPanel__1IIto"><div class="BattlePanel_battlePanel__1yPCP"><div class="BattlePanel_battleArea__U9hij">
+ <div class="BattlePanel_playersArea__vvwlB"><div class="BattlePanel_guildPartyArea__kKY5M"></div></div>
+ <div class="BattlePanel_monstersArea__2dzrY"><div class="BattlePanel_combatUnitGrid__2hTAM"></div></div>
+</div></div></div>
+<!-- the sprite sheets the userscript borrows from the game page -->
+<svg style="display:none"><use href="sprites/avatars.svg#cat_1"/><use href="sprites/avatar_outfits.svg#mage_1"/><use href="sprites/items.svg#cheese"/><use href="sprites/combat_monsters.svg#trial_wasp"/></svg>
+<script>
+// ---------- roster: 6 tanks, 12 melee, 10 ranged, 12 magic, each with a look, gear and an enhancement level ----------
+let seed=7; const rnd=()=>((seed=(seed*16807)%2147483647)/2147483647); const pick=a=>a[Math.floor(rnd()*a.length)];
+const AVATARS=['blue_person_1','blue_person_2','blue_person_3','bunny_1','bunny_2','cat_1','cat_2','cat_3','cat_4','cat_5','dog_1','dog_2','dog_3','dog_4','dog_5','frog_1','frog_2','gingerbread','golden_bunny','golden_cat','golden_cow','golden_frog','golden_hamster','golden_retriever','green_person_1','green_person_2','green_person_3','hamster_1','hamster_2','iron_cow','jack_o_lantern','lucky_koi','pirate_1','pirate_2','purple_person_1','purple_person_2','purple_person_3','red_person_1','red_person_2','red_person_3','santa','siamese_cat','siren','spring_festival_boy','spring_festival_girl','yellow_person_1','yellow_person_2','yellow_person_3'];
+const OUTFIT={tank:['warrior_1','warrior_2','anchorbound_equipment','maelstrom_equipment','kraken_equipment'],melee:['warrior_1','warrior_2','suit_1','suit_3','pirate_1','pirate_2','halloween_suit','tshirt_melee'],ranged:['ranger_1','ranger_2','luna_equipment','kraken_equipment','tshirt_ranged','spring_festival_boy'],magic:['mage_1','mage_2','royal_fire_equipment','royal_water_equipment','royal_nature_equipment','siren_dress','dress_3','tshirt_magic']};
+const ROLES=[
+ ...Array(6).fill('tank'),...Array(12).fill('melee'),...Array(10).fill('ranged'),...Array(12).fill('magic')];
+const NAMES=['铁壁','磐石','守望','坚盾','壁垒','狮心','疾风','裂空','断罪','赤焰刃','霜锋','雷鸣','碎岩','影刺','狂澜','破军','孤狼','斩月','鹰眼','追星','流光','穿杨','飞羽','落日','神射','夜枭','苍穹','百步','炽炎','寒冰','翠叶','星辉','月影','潮汐','烈阳','秘法','圣愈','花语','雾隐','灵泉'];
+const MELEE=[['regal_sword','slash'],['holy_sword','slash'],['crimson_sword','slash'],['rainbow_sword','slash'],['furious_spear','stab'],['holy_spear','stab'],['rainbow_spear','stab'],['stalactite_spear','stab'],['chaotic_flail','smash'],['holy_mace','smash'],['rainbow_mace','smash'],['crimson_mace','smash']];
+const TANKW=[['holy_mace','smash'],['regal_sword','slash'],['holy_spear','stab'],['azure_mace','smash'],['crimson_sword','slash']];
+const SHIELDS=['knights_aegis','manticore_shield','arcane_shield','holy_buckler','vision_shield','treant_shield'];
+const BOWS=['cursed_bow','sundering_crossbow','vampiric_bow','soul_hunter_crossbow','arcane_bow','arcane_crossbow','redwood_bow','purpleheart_crossbow','ginkgo_bow','cedar_crossbow'];
+const STAFFS=[['blazing_trident','fire'],['blooming_trident','nature',1],['rippling_trident','water'],['frost_staff','water'],['infernal_battlestaff','fire'],['jackalope_staff','nature',1],['arcane_fire_staff','fire'],['arcane_water_staff','water'],['arcane_nature_staff','nature',1],['redwood_fire_staff','fire'],['redwood_water_staff','water'],['purpleheart_nature_staff','nature']];
+const BOOKS=['bishops_codex','tome_of_the_elements','tome_of_healing','watchful_relic'];
+const SKILLS={tank:['provoke','toughness','spike_shell','retribution','guardian_aura','shield_bash'],slash:['cleave','maim','crippling_slash','berserk'],stab:['puncture','impale','penetrating_strike','frenzy'],smash:['stunning_blow','sweep','fracturing_impact','berserk'],ranged:['quick_shot','flame_arrow','aqua_arrow','rain_of_arrows','penetrating_shot','steady_shot','silencing_shot','pestilent_shot'],fire:['fireball','firestorm','flame_blast'],water:['ice_spear','water_strike','frost_surge'],nature:['entangle','toxic_pollen','natures_veil'],heal:['rejuvenate','quick_aid','heal']};
+const ENH=()=>{const r=rnd();return r<.3?Math.floor(rnd()*5):r<.55?5+Math.floor(rnd()*3):r<.7?8+Math.floor(rnd()*2):r<.85?10+Math.floor(rnd()*2):r<.95?12+Math.floor(rnd()*3):15+Math.floor(rnd()*6)};
+const roster=ROLES.map((role,i)=>{
+ const p={name:NAMES[i],role,avatar:pick(AVATARS),outfit:rnd()<.85?pick(OUTFIT[role]):'',items:{},hp:2600,mp:1500,skills:[]};
+ if(role==='tank'){const [w,s]=i===5?['griffin_bulwark','smash']:TANKW[i];p.style=s;p.element='physical';if(i===5)p.items.two_hand=w;else{p.items.main_hand=w;p.items.off_hand=SHIELDS[i]};p.skills=SKILLS.tank;p.hp=4200}
+ else if(role==='melee'){const [w,s]=MELEE[i-6];p.style=s;p.element='physical';p.items.main_hand=w;p.skills=SKILLS[s]}
+ else if(role==='ranged'){p.style='ranged';p.element='physical';p.items.two_hand=BOWS[i-18];p.skills=SKILLS.ranged;p.hp=2200}
+ else{const [w,el,healer]=STAFFS[i-28];p.style='magic';p.element=el;p.items.main_hand=w;p.items.off_hand=pick(BOOKS);p.skills=healer?[...SKILLS.heal,SKILLS[el][0]]:SKILLS[el];p.healer=!!healer;p.hp=2000}
+ const slot=Object.keys(p.items);p.enh={};slot.forEach(s=>p.enh[s]=ENH());
+ return p});
+const profiles=Object.fromEntries(roster.map(p=>[p.name,{avatar:p.avatar,outfit:p.outfit,items:p.items,enh:p.enh}]));
+// art comes from the asset CDN like in the game (no local assets/ needed)
+window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{guildH:innerHeight-16}:k==='battle_fx_profiles_v1'?profiles:d;
+window.GM_setValue=()=>{};window.GM_setClipboard=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'demo'}};
+window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());
+</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+ws.addEventListener('message',e=>{void e.data}); // the game reads every message; the userscript sees them through that read
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const rand=(a,b)=>a+Math.random()*(b-a);
+const MON=[['trial_beetle','smash',260000],['trial_dragonfly','ranged',220000],['trial_wasp','stab',220000],['trial_firefly','magic',200000]];
+const TIER=5;
+const P=roster.map(p=>({...p,cHP:p.hp,cMP:p.mp,atk:10,dmg:0,crit:0,next:null,deadUntil:0}));
+const M=MON.map(([id,style,hp])=>({id,style,hp,cHP:hp,cMP:5000,atk:5,dmg:0,crit:0,next:null,deadUntil:0}));
+const unit=(name,style,el,hp,mp,extra)=>({name,currentHitpoints:hp,currentManapoints:mp,combatDetails:{maxHitpoints:hp,maxManapoints:mp,combatStats:{combatStyleHrids:['/combat_styles/'+style],damageType:'/damage_types/'+el}},...extra});
+const KIND=s=>({provoke:'buff',toughness:'buff',spike_shell:'buff',retribution:'buff',guardian_aura:'buff',berserk:'buff',frenzy:'buff',rejuvenate:'heal',quick_aid:'heal',heal:'heal'}[s]||'damage');
+const AOE=new Set(['cleave','crippling_slash','sweep','fracturing_impact','rain_of_arrows','firestorm','flame_blast','frost_surge','toxic_pollen','natures_veil']);
+const pState=p=>({cHP:Math.round(p.cHP),cMP:Math.round(p.cMP),mHP:p.hp,mMP:p.mp});
+let started=false
+async function start(){
+ if(started)return;started=true
+ feed({type:'new_guild_battle',tier:TIER,players:P.map(p=>unit(p.name,p.style,p.element,p.hp,p.mp,{avatarHrid:'/avatars/'+p.avatar,avatarOutfitHrid:p.outfit?'/avatar_outfits/'+p.outfit:''})),monsters:M.map(m=>unit(m.id,m.style,m.style==='magic'?'fire':'physical',m.hp,5000,{hrid:'/monsters/'+m.id}))});
+ await sleep(800);
+ // first update: counters and prepared skills for everyone (tanks have already taunted once, so they stand in front)
+ const pm={};P.forEach((p,i)=>{if(p.role==='tank')p.next='/abilities/provoke';pm[i]={...pState(p),atkCounter:p.atk,dmgCounter:p.dmg,critCounter:p.crit,...(p.next?{abilityHrid:p.next}:{isAutoAtk:true})}});
+ const mm={};M.forEach((m,i)=>mm[i]={cHP:m.cHP,cMP:m.cMP,mHP:m.hp,mMP:5000,atkCounter:m.atk,dmgCounter:m.dmg,critCounter:m.crit,isAutoAtk:true});
+ feed({type:'guild_battle_updated',battleId:1,tier:TIER,pMap:pm,mMap:mm});
+ await sleep(600);
+ loop();monsters();
+}
+const alive=a=>a.map((u,i)=>[u,i]).filter(([u])=>u.cHP>0);
+// one player acts per update: the skill it had prepared (shown by the previous update) or an auto attack
+async function loop(){
+ for(;;){
+  await sleep(rand(110,260));
+  const now=Date.now();
+  // the fallen get back up after a few seconds
+  P.forEach((p,i)=>{if(p.cHP<=0&&now>p.deadUntil){p.cHP=p.hp;feed({type:'guild_battle_updated',battleId:1,tier:TIER,pMap:{[i]:pState(p)},mMap:{}})}});
+  const cand=alive(P);if(!cand.length)continue;
+  const [p,i]=pick(cand);const foes=alive(M);if(!foes.length)continue;
+  const ab=p.next?p.next.split('/').pop():null;
+  const crit=Math.random()<.18;p.atk++;if(crit)p.crit++;
+  const pm={},mm={};
+  if(ab&&KIND(ab)==='heal'){
+   p.cMP-=60;const hurt=alive(P).sort((a,b)=>a[0].cHP/a[0].hp-b[0].cHP/b[0].hp);
+   (ab==='rejuvenate'?hurt.slice(0,10):ab==='heal'?[[p,i]]:hurt.slice(0,1)).forEach(([q,j])=>{q.cHP=Math.min(q.hp,q.cHP+rand(300,700));pm[j]=pState(q)});
+  }else if(ab&&KIND(ab)==='buff'){p.cMP-=50}
+  else{
+   if(ab)p.cMP-=55;
+   const targets=ab&&AOE.has(ab)?foes:[pick(foes)];
+   targets.forEach(([m,j])=>{m.dmg++;const miss=!ab&&Math.random()<.1;if(!miss)m.cHP=Math.max(0,m.cHP-rand(ab?2500:1200,ab?7000:3500)*(crit?1.7:1));mm[j]={cHP:Math.round(m.cHP),dmgCounter:m.dmg};if(m.cHP<=0)m.deadUntil=Date.now()+2500});
+  }
+  p.cMP=Math.min(p.mp,p.cMP+15);
+  p.next=Math.random()<.4?'/abilities/'+pick(p.skills):null;
+  pm[i]={...pState(p),atkCounter:p.atk,critCounter:p.crit,...(p.next?{abilityHrid:p.next}:{isAutoAtk:true})};
+  feed({type:'guild_battle_updated',battleId:1,tier:TIER,pMap:pm,mMap:mm});
+ }
+}
+// the swarm: each monster attacks someone (often a tank) or sprays a group; the slain come back after a moment
+async function monsters(){
+ for(;;){
+  await sleep(rand(380,700));
+  const now=Date.now();
+  M.forEach((m,j)=>{if(m.cHP<=0&&now>m.deadUntil){m.cHP=m.hp;feed({type:'guild_battle_updated',battleId:1,tier:TIER,pMap:{},mMap:{[j]:{cHP:m.cHP,mHP:m.hp}}})}});
+  const cand=alive(M);if(!cand.length)continue;
+  const [m,j]=pick(cand);const aoe=m.next!=null;m.atk++;
+  const targets=aoe?alive(P).sort(()=>Math.random()-.5).slice(0,8):[pick(alive(P).filter(([p])=>p.role==='tank').concat(rnd()<.4?alive(P):[]))].filter(Boolean);
+  const pm={};
+  targets.forEach(([p,i])=>{p.dmg++;p.cHP=Math.max(0,p.cHP-rand(aoe?250:350,aoe?700:900));pm[i]={...pState(p),dmgCounter:p.dmg};if(p.cHP<=0)p.deadUntil=Date.now()+4000});
+  m.next=Math.random()<.25?'/abilities/'+pick(['frost_surge','toxic_pollen','firestorm']):null;
+  feed({type:'guild_battle_updated',battleId:1,tier:TIER,pMap:pm,mMap:{[j]:{cHP:Math.round(m.cHP),atkCounter:m.atk,...(m.next?{abilityHrid:m.next}:{isAutoAtk:true})}}});
+ }
+}
+addEventListener('load',()=>setTimeout(start,800));
+</script></body></html>

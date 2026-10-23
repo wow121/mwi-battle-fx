@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.10.2
+// @version      0.10.3
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -1434,12 +1434,19 @@
       const list = actors.p
       const n = list.length
       if (!n) return
-      const rows = n <= 4 ? 1 : n <= 10 ? 2 : n <= 18 ? 3 : n <= 30 ? 4 : 5
       const groups = ROLE_ORDER.map(r => list.filter(a => roleOf(shown.p[a.i]) === r)).filter(g => g.length)
-      const cols = groups.reduce((c, g) => c + Math.ceil(g.length / rows), 0)
-      const s = Math.min(SH * 0.4, (SW * 0.46) / (cols * 0.68 + (groups.length - 1) * 0.3 + 0.9)) * cfg.scale
+      // as many rows as make the units biggest: the formation must fit the left half across and ~60% of the height
+      // (rows step back by a third of a unit), so a tall stage stacks deeper instead of leaving the sky empty
+      let rows = 1
+      let s = 0
+      for (let r = 1; r <= Math.min(8, n); r++) {
+        const cols = groups.reduce((c, g) => c + Math.ceil(g.length / r), 0)
+        const size = Math.min(SH * 0.4, (SW * 0.44) / (cols * 0.68 + (groups.length - 1) * 0.3 + 0.15 * (r - 1) + 0.9), (SH * 0.62) / (1 + 0.34 * (r - 1)))
+        if (size > s * 1.02) (s = size), (rows = r)
+      }
+      s *= cfg.scale
       const dx = s * 0.68
-      const dy = rows > 1 ? Math.min(s * 0.32, (SH * 0.42) / (rows - 1)) : 0
+      const dy = s * 0.34
       let col = 0
       for (const g of groups) {
         g.forEach((a, k) => {
