@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.10.1
+// @version      0.10.2
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -719,6 +719,10 @@
 .bfx-zoom button{width:22px;height:20px;padding:0;font:13px/18px sans-serif;color:#dfe6ff;background:rgba(20,26,52,.85);border:1px solid #4a5590;border-radius:6px;cursor:pointer}
 .bfx-tiny .bfx-name,.bfx-tiny .bfx-chips,.bfx-guild .bfx-p .bfx-hpt{display:none}
 .bfx-guild .bfx-p .bfx-name{font-size:1em}
+/* names may spill past the unit's width (centred) before they are cut short */
+.bfx-name{display:flex;justify-content:center;width:max-content;max-width:170%;margin-left:50%;transform:translateX(-50%)}
+.bfx-name>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.bfx-name>b{flex:none;white-space:pre}
 .bfx-guild .bfx-p .bfx-hud{width:90%}
 .bfx-guild .bfx-p .bfx-bar{height:.3em;margin-top:.1em}
 .bfx-bg{position:absolute;inset:0;background:center 85%/cover no-repeat;opacity:0;transition:opacity .6s}
@@ -1022,12 +1026,25 @@
       }
       locEl.style.display = text ? "" : "none"
       locEl.textContent = text
-      if (text && tier !== null) {
-        const t = document.createElement("b")
-        t.textContent = " T" + tier
-        t.style.color = tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff"
-        locEl.appendChild(t)
-      }
+      if (text && tier !== null) locEl.appendChild(tierTag(tier))
+    }
+    // " T3" coloured by band: normal / elite (T2+) / nightmare (T4+)
+    function tierTag(tier) {
+      const t = document.createElement("b")
+      t.textContent = " T" + tier
+      t.style.color = tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff"
+      return t
+    }
+    // a monster's difficulty: its own from the battle message (spawn tier + chosen tier: dungeon waves mix tiers).
+    // Without one, an ordinary zone's tier (all its monsters share it), the trial's or the lab's; none in dungeons
+    // and the labyrinth, where the zone tier says nothing about a given monster
+    const DUNGEONS = new Set(["chimerical_den", "enchanted_fortress", "pirate_cove", "sinister_circus"])
+    function tierOf(u) {
+      const own = u?.raw?.difficultyTier
+      if (typeof own === "number") return own
+      if (mode === "guild") return gunits.tier ?? null
+      if (mode === "test") return Lab.tier() ?? null
+      return where.labyrinth || DUNGEONS.has(where.zone) ? null : where.tier ?? null
     }
     function setBackground() {
       setLocation()
@@ -1284,7 +1301,13 @@
         '<div class="bfx-rings"></div><div class="bfx-shadow"></div><div class="bfx-move"><div class="bfx-pose"><div class="bfx-hit"><div class="bfx-idle"><div class="bfx-sprite"></div></div></div></div></div>' +
         '<div class="bfx-hud"><div class="bfx-chips"></div><div class="bfx-name"></div><div class="bfx-bar"><i style="background:linear-gradient(#ff7a7a,#d93b3b)"></i><span class="bfx-hpt"></span></div><div class="bfx-bar"><i style="background:linear-gradient(#7ab8ff,#2f6fd9)"></i></div></div>'
       el.querySelector(".bfx-idle").style.animationDelay = -Math.random() * 1.8 + "s"
-      el.querySelector(".bfx-name").textContent = nameOf(side, u)
+      // the name is cut short when it does not fit, never the tier after it
+      const nameEl = el.querySelector(".bfx-name")
+      const nm = document.createElement("span")
+      nm.textContent = nameOf(side, u)
+      nameEl.appendChild(nm)
+      const tier = side === "m" ? tierOf(u) : null
+      if (tier !== null) nameEl.appendChild(tierTag(tier))
       const [hpI, mpI] = el.querySelectorAll(".bfx-bar i")
       const hpT = el.querySelector(".bfx-hpt")
       const a = {
