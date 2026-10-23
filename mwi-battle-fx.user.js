@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.9.9
+// @version      0.10.0
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -102,6 +102,9 @@
   }
   // seconds a skill's buff / debuff lasts (game data); auras are unique per kind, so different auras stack
   const BUFF_SECONDS = {"berserk":20,"crippling_slash":12,"critical_aura":120,"elemental_affinity":20,"elusiveness":20,"fierce_aura":120,"fracturing_impact":12,"frenzy":20,"frost_surge":9,"guardian_aura":120,"ice_spear":8,"insanity":12,"invincible":12,"maim":12,"mana_spring":10,"mystic_aura":120,"pestilent_shot":12,"precision":20,"provoke":65,"puncture":12,"retribution":30,"smoke_burst":8,"speed_aura":120,"spike_shell":30,"taunt":65,"toughness":20,"toxic_pollen":10,"vampirism":20}
+  // official zh names: monsters by short hrid, combat zones (/actions/combat/<id>) by id
+  const MONSTER_ZH = {"abyssal_imp":"深渊小鬼","acrobat":"杂技师","trial_hedgehog":"试炼刺猬","anchor_shark":"持锚鲨","aquahorse":"水马","trial_jellyfish":"试炼水母","black_bear":"黑熊","gobo_boomy":"轰轰","brine_marksman":"海盐射手","butterjerry":"蝶鼠","captain_fishhook":"鱼钩船长","centaur_archer":"半人马弓箭手","cyclops":"独眼巨人","chronofrost_sorcerer":"霜时巫师","dryad":"树精","crystal_colossus":"水晶巨像","frost_sniper":"霜冻狙击手","demonic_overlord":"恶魔霸主","deranged_jester":"小丑皇","dodocamel":"渡渡驼","dusk_revenant":"黄昏亡灵","trial_chameleon":"试炼变色龙","elementalist":"元素法师","enchanted_bishop":"秘法主教","enchanted_king":"秘法国王","enchanted_knight":"秘法骑士","enchanted_pawn":"秘法士兵","enchanted_queen":"秘法王后","enchanted_rook":"秘法堡垒","eye":"独眼","eyes":"叠眼","flame_sorcerer":"火焰巫师","fly":"苍蝇","trial_beetle":"试炼甲虫","trial_dragonfly":"试炼蜻蜓","trial_wasp":"试炼黄蜂","trial_firefly":"试炼萤火虫","frog":"青蛙","sea_snail":"蜗牛","giant_shoebill":"鲸头鹳","gobo_chieftain":"哥布林酋长","granite_golem":"花岗岩魔像","griffin":"狮鹫","grizzly_bear":"棕熊","gummy_bear":"软糖熊","crab":"螃蟹","ice_sorcerer":"冰霜巫师","infernal_warlock":"地狱术士","trial_badger":"试炼獾","jackalope":"鹿角兔","rat":"杰瑞","juggler":"杂耍者","jungle_sprite":"丛林精灵","giant_mantis":"巨螳螂","luna_empress":"月神之蝶","magician":"魔术师","magnetic_golem":"磁力魔像","manticore":"狮蝎兽","marine_huntress":"海洋猎手","giant_scorpion":"巨蝎","mimic":"宝箱怪","myconid":"蘑菇人","nom_nom":"咬咬鱼","novice_sorcerer":"新手巫师","panda":"熊猫","polar_bear":"北极熊","porcupine":"豪猪","rabid_rabbit":"疯魔兔","red_panda":"小熊猫","alligator":"夏洛克","gobo_shooty":"咻咻","skunk":"臭鼬","gobo_slashy":"砍砍","slimy":"史莱姆","gobo_smashy":"锤锤","soul_hunter":"灵魂猎手","squawker":"鹦鹉","gobo_stabby":"刺刺","stalactite_golem":"钟乳石魔像","pyre_hunter":"火焰猎手","swampy":"沼泽虫","the_kraken":"克拉肯","the_watcher":"观察者","snake":"蛇","tidal_conjuror":"潮汐召唤师","salamander":"火蜥蜴","shadow_archer":"暗影弓手","treant":"树人","turtle":"忍者龟","vampire":"吸血鬼","veyes":"复眼","siren":"海妖","werewolf":"狼人","zombie":"僵尸","zombie_bear":"僵尸熊"}
+  const ZONE_ZH = {"fly":"苍蝇","rat":"杰瑞","skunk":"臭鼬","porcupine":"豪猪","slimy":"史莱姆","smelly_planet":"臭臭星球","frog":"青蛙","snake":"蛇","swampy":"沼泽虫","alligator":"夏洛克","swamp_planet":"沼泽星球","sea_snail":"蜗牛","crab":"螃蟹","aquahorse":"水马","nom_nom":"咬咬鱼","turtle":"忍者龟","aqua_planet":"海洋星球","jungle_sprite":"丛林精灵","myconid":"蘑菇人","treant":"树人","centaur_archer":"半人马弓箭手","jungle_planet":"丛林星球","gobo_stabby":"刺刺","gobo_slashy":"砍砍","gobo_smashy":"锤锤","gobo_shooty":"咻咻","gobo_boomy":"轰轰","gobo_planet":"哥布林星球","eye":"独眼","eyes":"叠眼","veyes":"复眼","planet_of_the_eyes":"眼球星球","novice_sorcerer":"新手巫师","ice_sorcerer":"冰霜巫师","flame_sorcerer":"火焰巫师","elementalist":"元素法师","sorcerers_tower":"巫师之塔","gummy_bear":"软糖熊","panda":"熊猫","black_bear":"黑熊","grizzly_bear":"棕熊","polar_bear":"北极熊","bear_with_it":"熊熊星球","magnetic_golem":"磁力魔像","stalactite_golem":"钟乳石魔像","granite_golem":"花岗岩魔像","golem_cave":"魔像洞穴","zombie":"僵尸","vampire":"吸血鬼","werewolf":"狼人","twilight_zone":"暮光之地","abyssal_imp":"深渊小鬼","soul_hunter":"灵魂猎手","infernal_warlock":"地狱术士","infernal_abyss":"地狱深渊","chimerical_den":"奇幻洞穴","sinister_circus":"阴森马戏团","enchanted_fortress":"秘法要塞","pirate_cove":"海盗基地"}
   const ELEMENT_COLOR = {
     fire: "#ff6a2b",
     water: "#3fb4ff",
@@ -119,6 +122,8 @@
       return true
     }
   }
+  // what a unit is called on the stage: monsters by their official zh name in a zh UI (the server sends English)
+  const nameOf = (side, u) => (side === "m" && zhUI() && MONSTER_ZH[shortId(u?.hrid)]) || u?.name || ""
   function abilityInfo(hrid) {
     if (!hrid) return null
     const key = hrid.split("/").pop()
@@ -648,7 +653,7 @@
     const SVGNS = "http://www.w3.org/2000/svg"
     const actors = { p: [], m: [] }
     const fx = [] // canvas effects {t0, dur, draw(ctx, p, now), done}
-    let stageEl, viewEl, worldEl, canvas, ctx, banner, waitEl, bgEl
+    let stageEl, viewEl, worldEl, canvas, ctx, banner, waitEl, bgEl, locEl
     // guild-trial camera: zoom z (1 = whole field) and pan x / y in stage pixels; cres = canvas resolution factor
     const view = { z: 1, x: 0, y: 0 }
     let cres = 1
@@ -680,6 +685,8 @@
  radial-gradient(ellipse 60% 30% at 50% 100%,rgba(120,140,255,.18),transparent),
  linear-gradient(180deg,#141b38 0%,#22305e 48%,#3a3a62 64%,#2b2742 65%,#1e1b30 100%)}
 .bfx-view{position:absolute;inset:0;transform-origin:0 0}
+.bfx-loc{position:absolute;left:6px;top:4px;z-index:20;padding:1px 9px;font:600 12px/18px sans-serif;color:#eef2ff;background:rgba(10,14,30,.6);border:1px solid rgba(255,255,255,.15);border-radius:10px;text-shadow:0 1px 2px #000}
+.bfx-guild .bfx-loc{left:84px}
 .bfx-world{position:absolute;inset:0}
 .bfx-guild{cursor:grab;touch-action:none}
 .bfx-zoom{display:none;position:absolute;left:4px;top:2px;z-index:20;gap:3px;pointer-events:auto!important}
@@ -877,7 +884,7 @@
       stageEl.className = "bfx-stage"
       // .bfx-view carries the guild-trial zoom / pan, .bfx-world the shakes
       stageEl.innerHTML =
-        '<div class="bfx-view"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div></div><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div>' +
+        '<div class="bfx-view"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div></div><div class="bfx-banner"></div><div class="bfx-loc"></div><div class="bfx-wait">等待战斗…</div>' +
         '<div class="bfx-zoom"><button data-z="1.25">＋</button><button data-z="0.8">－</button><button data-z="0">⟲</button></div>'
       viewEl = stageEl.querySelector(".bfx-view")
       worldEl = stageEl.querySelector(".bfx-world")
@@ -886,6 +893,7 @@
       ctx = canvas.getContext("2d")
       banner = stageEl.querySelector(".bfx-banner")
       waitEl = stageEl.querySelector(".bfx-wait")
+      locEl = stageEl.querySelector(".bfx-loc")
       zoomControls()
       let hTimer = 0
       new ResizeObserver(() => {
@@ -980,7 +988,36 @@
       for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), shown[side][a.i]?.hp <= 0 && die(a, true), renderStatus(a)))
     }
     // location art, the elite / nightmare variant for higher tiers, plus a slight per-tier grade
+    // the badge in the corner: where we fight and the difficulty tier (colour by band: normal / elite / nightmare)
+    function setLocation() {
+      if (!locEl) return
+      const zh = zhUI()
+      const title = id => (zh && ZONE_ZH[id]) || (id || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+      let text = ""
+      let tier = null
+      if (mode === "guild") {
+        const bosses = [...new Set(shown.m.map(u => nameOf("m", u)).filter(Boolean))]
+        text = (zh ? "公会试炼" : "Guild Trial") + (bosses.length ? " · " + bosses.join(" / ") : "")
+      } else if (mode === "test") {
+        text = title(Lab.loc())
+        tier = Lab.tier()
+      } else if (where.labyrinth) text = zh ? "迷宫" : "Labyrinth"
+      else {
+        const zone = where.zone && ZONE_ZH[where.zone] ? where.zone : stageLocation()
+        text = zone ? title(zone) : ""
+        tier = where.tier ?? null
+      }
+      locEl.style.display = text ? "" : "none"
+      locEl.textContent = text
+      if (text && tier !== null) {
+        const t = document.createElement("b")
+        t.textContent = " T" + tier
+        t.style.color = tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff"
+        locEl.appendChild(t)
+      }
+    }
     function setBackground() {
+      setLocation()
       if (!bgEl) return
       const loc = mode === "test" ? Lab.loc() : mode === "guild" ? "guild_trial" : stageLocation()
       const t = mode === "test" ? Lab.tier() : mode === "guild" ? 0 : where.tier || 0
@@ -1234,7 +1271,7 @@
         '<div class="bfx-rings"></div><div class="bfx-shadow"></div><div class="bfx-move"><div class="bfx-pose"><div class="bfx-hit"><div class="bfx-idle"><div class="bfx-sprite"></div></div></div></div></div>' +
         '<div class="bfx-hud"><div class="bfx-chips"></div><div class="bfx-name"></div><div class="bfx-bar"><i style="background:linear-gradient(#ff7a7a,#d93b3b)"></i><span class="bfx-hpt"></span></div><div class="bfx-bar"><i style="background:linear-gradient(#7ab8ff,#2f6fd9)"></i></div></div>'
       el.querySelector(".bfx-idle").style.animationDelay = -Math.random() * 1.8 + "s"
-      el.querySelector(".bfx-name").textContent = u.name || ""
+      el.querySelector(".bfx-name").textContent = nameOf(side, u)
       const [hpI, mpI] = el.querySelectorAll(".bfx-bar i")
       const hpT = el.querySelector(".bfx-hpt")
       const a = {
@@ -1813,7 +1850,8 @@
     }
     function showBanner(a, ab) {
       const u = shown[a.side][a.i]
-      banner.textContent = (u?.name ? u.name + "：" : "") + ab.name
+      const who = nameOf(a.side, u)
+      banner.textContent = (who ? who + "：" : "") + ab.name
       banner.style.color = ab.kind === "heal" ? ELEMENT_COLOR.heal : ab.kind === "damage" ? ELEMENT_COLOR[ab.element] : ELEMENT_COLOR.buff
       banner.getAnimations().forEach(x => x.cancel())
       banner.animate(

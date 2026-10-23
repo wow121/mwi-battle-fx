@@ -29,7 +29,7 @@ const roster=[];
 for(let i=0;i<40;i++){const style=i<6?'smash':i<18?['slash','stab','smash'][i%3]:i<28?'ranged':'magic';roster.push(P('P'+i,style,style==='magic'?['fire','water','nature'][i%3]:'physical'))}
 document.getElementById('grid').innerHTML=roster.slice(1).map(p=>`<div class="MiniUnit_miniUnit__a"><span class="MiniUnit_name__c">${p.name}</span></div>`).join('');
 async function start(){
- feed({type:'new_guild_battle',players:roster,monsters:[P('试炼獾','slash','physical','/monsters/trial_badger',400000)]});
+ feed({type:'new_guild_battle',players:roster,monsters:[P('Trial Badger','slash','physical','/monsters/trial_badger',400000)]});
  await sleep(1500);
  const pm={};roster.forEach((p,i)=>pm[i]={cHP:1500,cMP:800,atkCounter:10,dmgCounter:0,...(i<6?{abilityHrid:'/abilities/provoke'}:{})});
  feed({type:'guild_battle_updated',pMap:pm,mMap:{0:{cHP:400000,cMP:1000,atkCounter:5,dmgCounter:0}}});
