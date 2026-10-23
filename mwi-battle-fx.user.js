@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.9.6
+// @version      0.9.7
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -2566,6 +2566,69 @@
   // const Lab = { units: { p: [], m: [] }, render() {}, stop() {}, redraw() {}, loc: () => null, tier: () => 0 }
   // #release-end
 
+  // #dev-start
+  // ---------- 录制战斗消息: samples of every websocket message type plus the battle panels' DOM ----------
+  // For supporting a new mode (labyrinth, guild trials): record while fighting there, the file shows which
+  // messages drive it and where its battle cards sit. Chat is counted, never stored.
+  const Recorder = (() => {
+    let rec = null
+    let timer = 0
+    const RE = /Battle|Combat|Labyrinth|Guild/
+    // class name -> count over the elements whose classes mention battle / combat / labyrinth / guild
+    function classes() {
+      const out = {}
+      for (const el of document.querySelectorAll('[class*="Battle"],[class*="Combat"],[class*="Labyrinth"],[class*="Guild"]'))
+        for (const c of el.classList) if (RE.test(c)) out[c] = (out[c] || 0) + 1
+      return out
+    }
+    // indented tag.class tree (with svg use hrefs and short texts) of the outermost battle-ish containers
+    function outline() {
+      const lines = []
+      const walk = (el, d) => {
+        if (lines.length > 4000 || d > 12) return
+        const cls = typeof el.className === "string" ? el.className : el.getAttribute?.("class") || ""
+        const href = el.tagName === "use" ? " href=" + (el.getAttribute("href") || el.getAttribute("xlink:href") || "") : ""
+        const text = el.children.length ? "" : (el.textContent || "").trim().slice(0, 40)
+        lines.push("  ".repeat(d) + el.tagName.toLowerCase() + (cls ? "." + cls.trim().split(/\s+/).join(".") : "") + href + (text ? ` "${text}"` : ""))
+        for (const ch of el.children) walk(ch, d + 1)
+      }
+      const roots = [...document.querySelectorAll('[class*="BattlePanel"],[class*="Labyrinth"],[class*="GuildTrial"],[class*="Guild_"]')].filter(el => !el.parentElement?.closest('[class*="BattlePanel"],[class*="Labyrinth"],[class*="GuildTrial"],[class*="Guild_"]'))
+      roots.slice(0, 6).forEach(r => walk(r, 0))
+      return lines.join("\n")
+    }
+    function on(type, msg) {
+      if (!rec) return
+      const t = (rec.types[type] ||= { n: 0, bytes: 0, samples: [] })
+      t.n++
+      t.bytes += msg.length
+      if (!t.classes) t.classes = classes()
+      if (/chat/.test(type) || t.samples.length >= 25 || rec.size > 8e6) return
+      const m = msg.length > 300000 ? msg.slice(0, 300000) : msg
+      t.samples.push({ at: Date.now() - rec.t0, msg: m })
+      rec.size += m.length
+    }
+    function start() {
+      rec = { version: GM_info?.script?.version, url: location.href, t0: Date.now(), size: 0, types: {}, snapshots: [] }
+      const snap = () => rec && rec.snapshots.push({ at: Date.now() - rec.t0, classes: classes() }) && rec.snapshots.length > 120 && rec.snapshots.shift()
+      snap()
+      timer = setInterval(snap, 10000)
+    }
+    function stop() {
+      clearInterval(timer)
+      const data = { ...rec, seconds: Math.round((Date.now() - rec.t0) / 1000), outline: outline(), classesEnd: classes() }
+      rec = null
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }))
+      a.download = `mwi-battle-rec-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      return data
+    }
+    return { on, start, stop, active: () => !!rec }
+  })()
+  // #dev-end
+
   // ---------- menu ----------
   let menuIds = []
   function menu() {
@@ -2618,6 +2681,7 @@
         }
       }),
       GM_registerMenuCommand("打开动画测试（自动战斗）", demo), // #dev
+      GM_registerMenuCommand(Recorder.active() ? "⏹ 停止录制并下载文件" : "⏺ 录制战斗消息（迷宫 / 公会战）", () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
       toggle("debug", "调试：控制台打印战斗消息"), // #dev
     ]
   }
@@ -2651,6 +2715,7 @@
         const ws = this.currentTarget
         if (ws instanceof W.WebSocket && ws.url.includes("milkywayidle") && msg.length < 2e7) {
           const type = (/"type":"([a-z_]+)"/.exec(msg.slice(0, 200)) || (msg.length < 20000 && /"type":"([a-z_]+)"/.exec(msg)) || [])[1]
+          Recorder.on(type || "?", msg) // #dev
           if (type && WANTED.test(type)) {
             setTimeout(() => {
               try {
@@ -2670,5 +2735,5 @@
   }
   Object.defineProperty(W.MessageEvent.prototype, "data", desc)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll } // #dev
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder } // #dev
 })()
