@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.9.1
+// @version      0.9.2
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -183,6 +183,7 @@
         const tick = key => typeof e[key] === "number" && u.counters[key] !== undefined && e[key] > u.counters[key]
         c.acted = tick("atkCounter")
         c.struck = tick("dmgCounter")
+        c.hits = c.struck ? e.dmgCounter - u.counters.dmgCounter : 0
         for (const key of ["atkCounter", "dmgCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
         // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
@@ -191,6 +192,7 @@
       }
     }
     const actions = resolve(changes)
+    procs(actions, changes)
     if (cfg.debug) console.log("[战斗动画]", JSON.stringify(obj), changes, actions)
     if (cfg.enabled) Stage.play(actions)
   }
@@ -259,6 +261,66 @@
     // life drain / regen ticks
     for (const h of healed) if (!used.has(h)) actions.push({ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [h] })
     return actions
+  }
+
+  // ---------- 95 weapons' special effects ----------
+  // The game sends no proc flag: each effect is inferred from the update it happens in (mechanics as in
+  // mwi-fastsim). A proc flashes the holder's weapon in the effect's colour. Teammates' weapons are known
+  // only after the viewer opened their profile.
+  const PROCS = {
+    blazing_trident: "#ff7a2b", // blaze: a cast adds a fire hit on every enemy
+    blooming_trident: "#7dff8a", // bloom: a cast adds a heal
+    rippling_trident: "#4fc3ff", // ripple: a cast refunds 10 MP (and cuts cooldowns)
+    chaotic_flail: "#ff4a6a", // mayhem: a missed auto attack swings at the next enemy
+    sundering_crossbow: "#7ff6ff", // pierce: an auto attack goes on to the next enemy
+    cursed_bow: "#b86bff", // curse: every landed hit stacks damage taken
+    furious_spear: "#ff6a2a", // fury: every landed hit stacks accuracy / damage
+    regal_sword: "#ffe27a", // parry: the holder takes an attack aimed at the party and strikes back
+    griffin_bulwark: "#fff2b0", // weaken: whoever hits the holder deals less damage
+  }
+  const weaponOf = u => {
+    const it = u?.items || {}
+    return shortId(it.main_hand || it.two_hand)?.replace(/_refined$/, "") || null
+  }
+  const castDrop = {} // "<player>|<ability>" -> largest MP drop seen; a cast ~10 MP cheaper was rippled
+  function procs(actions, changes) {
+    const holders = units.p.map((u, i) => ({ i, w: weaponOf(u) })).filter(h => PROCS[h.w])
+    if (!holders.length) return
+    const flash = (act, h) => (act.procs ||= []).push({ side: "p", i: h.i, color: PROCS[h.w] })
+    for (const act of actions) {
+      const a = act.actor
+      const h = a?.side === "p" && holders.find(x => x.i === a.i)
+      if (h && act.ab) {
+        const c = changes.find(x => x.side === "p" && x.i === a.i)
+        if (h.w === "blazing_trident") {
+          const foes = changes.filter(x => x.side === "m" && x.struck)
+          if (foes.some(x => x.hits >= 2) || (act.ab.kind !== "damage" && foes.length) || (act.ab.target === "enemy" && foes.length > 1)) flash(act, h)
+        } else if (h.w === "blooming_trident") {
+          const healed = changes.filter(x => x.side === "p" && x.dHP > 0)
+          if (act.ab.kind === "heal" ? act.ab.target !== "allAllies" && healed.length > 1 : healed.length) flash(act, h)
+        } else if (h.w === "rippling_trident" && c?.dMP < 0) {
+          const k = a.i + "|" + act.ab.key
+          if (-c.dMP > (castDrop[k] || 0)) castDrop[k] = -c.dMP
+          else if (-c.dMP <= castDrop[k] - 8) flash(act, h)
+        }
+      } else if (h && act.effect === "damage" && (h.w === "sundering_crossbow" || h.w === "chaotic_flail") && act.targets.length > 1) flash(act, h)
+      // curse / fury: any landed hit, auto attack or skill
+      if (h && act.effect === "damage" && (h.w === "cursed_bow" || h.w === "furious_spear") && act.targets.some(t => t.dHP < 0)) flash(act, h)
+      if (act.effect === "damage" && a?.side === "m") {
+        for (const t of act.targets) {
+          const g = t.side === "p" && holders.find(x => x.w === "griffin_bulwark" && x.i === t.i)
+          if (g) flash(act, g)
+        }
+      }
+      // a monster hurt by its own attack with no player acting: parried by a living regal sword holder
+      if (!a && act.style === "reflect" && act.targets[0]?.side === "m") {
+        const p = holders.find(x => x.w === "regal_sword" && units.p[x.i].hp > 0)
+        if (p) {
+          Object.assign(act, { actor: { side: "p", i: p.i }, style: units.p[p.i].style, element: units.p[p.i].element })
+          flash(act, p)
+        }
+      }
+    }
   }
 
   // ---------- helpers ----------
@@ -601,8 +663,22 @@
         },
       }
     }
+    // a weapon / off-hand layer as one held piece: its sheet, crop rect and grip point (piece pixels)
+    function held(id) {
+      const k = ready() && base(id)
+      const rects = k && index.layers[k]
+      const r = rects && (rects.weapon || rects.off)
+      if (!r) return null
+      const [sx, sy, w, h, dx, dy] = r
+      // weapons were drawn in the doll's front fist (rig canvas = 2x piece pixels); off-hands roughly mid-grip
+      const fist = index.rig.pivots.fist
+      const grip = rects.weapon ? [fist[0] / 2 - dx, fist[1] / 2 - dy] : [w / 2, h * 0.6]
+      const W = Math.max(...Object.values(rects).map(x => x[0] + x[2])) + 2
+      const H = Math.max(...Object.values(rects).map(x => x[1] + x[3]))
+      return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1] }
+    }
     const list = prefix => (index ? Object.keys(index.layers).filter(k => (prefix ? k.startsWith(prefix) : !/^[ao]_/.test(k))) : [])
-    return { ready, build, keyOf, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
+    return { ready, build, keyOf, held, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
   })()
 
   // ---------- side-view stage: Slay-the-Spire style, heroes on the left, monsters on the right ----------
@@ -674,6 +750,8 @@
 [data-pose=windup] .bfx-wpn{transform:rotate(-60deg)}
 [data-pose=strike] .bfx-wpn{transform:translate(4px,4px) rotate(75deg)}
 [data-pose=strike] .bfx-off{transform:translateX(4px)}
+[data-pose=windup] .bfx-wpn[data-mid]{transform:rotate(-15deg)}
+[data-pose=strike] .bfx-wpn[data-mid]{transform:translateX(5px) rotate(12deg)}
 [data-style=ranged][data-pose=windup] .bfx-wpn{transform:translateX(-3px) rotate(-10deg)}
 [data-style=ranged][data-pose=strike] .bfx-wpn{transform:translateX(-6px)}
 [data-style=magic][data-pose=windup] .bfx-wpn,[data-pose=cast] .bfx-wpn{transform:translateY(-12px) rotate(-25deg)}
@@ -910,6 +988,11 @@
     // avatars / avatar_outfits / items: "<name>_sprite.<hash>.svg" in the game, "<name>.svg" in the mock
     // held icons on the 100-unit avatar box: [x, y, size]; the weapon sits in the front hand, the off-hand at the back
     const HELD = { "bfx-wpn": [58, 30, 46], "bfx-off": [4, 50, 34] }
+    // drawn held pieces (the paper-doll weapon / off-hand layers): grip on the hand, scaled from rig pixels
+    const HANDS = { "bfx-wpn": [79, 66], "bfx-off": [21, 67] }
+    const HELD_SCALE = 0.2
+    const PLAYER_SCALE = 0.75
+    let glowSeq = 0
     function sheet(name) {
       if (sheets[name]) return sheets[name]
       if (now() - (sheetAt[name] ?? -1e9) > 3000) {
@@ -962,19 +1045,46 @@
       }
       if (!hrefs.length) return null
       const it = u?.items || {}
-      const held = sheet("items") ? [["bfx-off", it.off_hand], ["bfx-wpn", it.main_hand || it.two_hand]].filter(x => x[1]) : []
+      const held = [["bfx-off", it.off_hand], ["bfx-wpn", it.main_hand || it.two_hand]].filter(x => x[1] && (Doll.held(x[1]) || sheet("items")))
       const node = svgOf(hrefs)
+      const attrs = (el, o) => Object.entries(o).forEach(([k, v]) => el.setAttribute(k, v))
       for (const [cls, id] of held) {
         const g = document.createElementNS(SVGNS, "g")
         g.setAttribute("class", cls)
-        const w = document.createElementNS(SVGNS, "use")
-        w.setAttribute("href", sheet("items") + "#" + id)
-        const [x, y, size] = HELD[cls]
-        for (const [k, v] of Object.entries({ x, y, width: size, height: size })) w.setAttribute(k, v)
-        g.appendChild(w)
+        const pc = Doll.held(id)
+        if (pc) {
+          // the drawn piece, cropped from its layer sheet, its grip in the hand
+          const [hx, hy] = HANDS[cls]
+          const k = HELD_SCALE
+          const box = document.createElementNS(SVGNS, "svg")
+          attrs(box, { x: hx - pc.grip[0] * k, y: hy - pc.grip[1] * k, width: pc.rect[2] * k, height: pc.rect[3] * k, viewBox: pc.rect.join(" "), overflow: "hidden" })
+          const img = document.createElementNS(SVGNS, "image")
+          attrs(img, { href: pc.url, width: pc.W, height: pc.H })
+          box.appendChild(img)
+          g.appendChild(box)
+          g.style.transformOrigin = `${hx}px ${hy}px`
+          if (pc.mid) g.dataset.mid = 1
+        } else {
+          // no drawn piece: the game's item icon
+          const w = document.createElementNS(SVGNS, "use")
+          const [x, y, size] = HELD[cls]
+          attrs(w, { href: sheet("items") + "#" + id, x, y, width: size, height: size })
+          g.appendChild(w)
+        }
+        if (cls === "bfx-wpn") {
+          // glow layer behind the weapon: a blurred outline whose colour flashWeapon sets
+          const id = "bfx-glow" + ++glowSeq
+          const defs = document.createElementNS(SVGNS, "defs")
+          defs.innerHTML = `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.3" result="a"/><feGaussianBlur in="a" stdDeviation="2" result="b"/><feFlood flood-color="#fff"/><feComposite in2="b" operator="in"/></filter>`
+          const glow = document.createElementNS(SVGNS, "g")
+          attrs(glow, { class: "bfx-glow", filter: `url(#${id})`, opacity: 0 })
+          for (const ch of [...g.childNodes]) glow.appendChild(ch.cloneNode(true))
+          glow.appendChild(defs)
+          g.insertBefore(glow, g.firstChild)
+        }
         node.appendChild(g)
       }
-      return { key: hrefs.join() + "|" + held.join(), node, real: true }
+      return { key: hrefs.join() + "|" + held.join() + (Doll.ready() ? "|d" : ""), node, real: true }
     }
     // monsters: sheet + hrid (cards may still show the previous wave); players: their game look
     function spriteFor(side, i) {
@@ -1031,6 +1141,14 @@
     }
     function showFrame(a, pose) {
       a.img.src = frameUrl(a, pose)
+    }
+    // a weapon special effect: the held weapon's glow outline pulses in the effect's colour
+    function flashWeapon(a, color) {
+      const glow = a?.spriteEl.querySelector(".bfx-wpn .bfx-glow")
+      if (!glow) return
+      glow.querySelector("feFlood").setAttribute("flood-color", color)
+      glow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 0.8, offset: 0.55 }, { opacity: 0 }], { duration: 750, easing: "ease-out" })
+      a.spriteEl.querySelector(".bfx-wpn").animate([{ filter: "none" }, { filter: "brightness(1.7)", offset: 0.2 }, { filter: "none" }], { duration: 600 })
     }
     function refreshSprite(a) {
       const art = artFor(a.side, a.i)
@@ -1128,7 +1246,8 @@
         const list = actors[side]
         const n = list.length
         // shrink with the head count so neighbours overlap by at most ~30%
-        const s = Math.min(SH * 0.5, SW * 0.21, (SW * 0.44) / (1 + 0.72 * Math.max(0, n - 1))) * cfg.scale
+        // players are drawn edge to edge (no frame margin): smaller than the monsters
+        const s = Math.min(SH * 0.5, SW * 0.21, (SW * 0.44) / (1 + 0.72 * Math.max(0, n - 1))) * cfg.scale * (side === "p" ? PLAYER_SCALE : 1)
         const room = SW * 0.44 - s
         const step = n > 1 ? Math.min(s * 0.78, room / (n - 1)) : 0
         list.forEach((a, k) => {
@@ -1742,6 +1861,7 @@
       } else if (act.effect === "heal") dur = heal(src, tg, quick, ab)
       else dur = buff(src, ab, quick)
       src.busyUntil = T + dur
+      for (const p of act.procs || []) later(Math.min(dur, 900) * 0.45, () => flashWeapon(actorOf(p), p.color))
     }
 
     // Every ability has its own generated effect (sheet name = ability key unless renamed):
@@ -1998,11 +2118,14 @@
         bgKey = ""
         setBackground()
       })
-      Doll.onLoad(() => Lab.redraw())
+      Doll.onLoad(() => {
+        Lab.redraw()
+        if (mode) actors.p.forEach(refreshSprite)
+      })
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { play, newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    return { play, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -2272,6 +2395,7 @@
           draw()
           reset()
         }),
+        button("武器闪光", () => lab.p.forEach((u, i) => Stage.flashWeapon("p", i, PROCS[weaponOf(u)] || "#ffe27a"))),
         button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
         button("怪物放技能", () => {
           const dmg = Object.keys(ABILITIES).filter(k => ABILITIES[k][1] === "damage")

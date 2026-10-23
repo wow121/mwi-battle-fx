@@ -40,7 +40,7 @@ ws.addEventListener('message',e=>{void e.data});
 const P=(name,style,dt,ab,hrid)=>({name,hrid,currentHitpoints:1200,currentManapoints:600,preparingAbilityHrid:ab,combatDetails:{maxHitpoints:1200,maxManapoints:800,combatStats:{combatStyleHrids:['/combat_styles/'+style],damageType:'/damage_types/'+dt}}});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function start(){
- feed({type:'init_character_data',character:{name:'战士'},characterActions:[{actionHrid:'/actions/combat/golem_cave',difficultyTier:4,isDone:false}],characterItems:[{itemLocationHrid:'/item_locations/main_hand',itemHrid:'/items/cheese_sword',count:1},{itemLocationHrid:'/item_locations/off_hand',itemHrid:'/items/azure_buckler',count:1}]});
+ feed({type:'init_character_data',character:{name:'战士'},characterActions:[{actionHrid:'/actions/combat/golem_cave',difficultyTier:4,isDone:false}],characterItems:[{itemLocationHrid:'/item_locations/main_hand',itemHrid:'/items/furious_spear',count:1},{itemLocationHrid:'/item_locations/off_hand',itemHrid:'/items/azure_buckler',count:1}]});
  feed({type:'new_battle',players:[P('战士','slash','physical','/abilities/cleave'),P('弓手','ranged','physical','/abilities/flame_arrow'),P('法师','magic','fire','/abilities/fireball')],
   monsters:[P('花岗岩魔像','smash','physical',null,'/monsters/granite_golem'),P('磁力魔像','smash','physical',null,'/monsters/magnetic_golem'),P('钟乳石魔像','stab','physical',null,'/monsters/stalactite_golem'),P('水晶巨像','magic','water',null,'/monsters/crystal_colossus')]});
  await sleep(1500);
