@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.10.4
+// @version      0.10.5
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -757,6 +757,13 @@
 [data-pose=strike] .bfx-off{transform:translateX(4px)}
 [data-pose=windup] .bfx-wpn[data-mid]{transform:rotate(-15deg)}
 [data-pose=strike] .bfx-wpn[data-mid]{transform:translateX(5px) rotate(12deg)}
+/* melee weapon swings by style: slash sweeps from high behind, stab levels the weapon and thrusts, smash goes overhead */
+[data-style=slash][data-pose=windup] .bfx-wpn{transform:rotate(-110deg)}
+[data-style=slash][data-pose=strike] .bfx-wpn{transform:translate(4px,4px) rotate(100deg)}
+[data-style=stab][data-pose=windup] .bfx-wpn{transform:translateX(-12px) rotate(82deg)}
+[data-style=stab][data-pose=strike] .bfx-wpn{transform:translateX(16px) rotate(88deg)}
+[data-style=smash][data-pose=windup] .bfx-wpn{transform:translateY(-8px) rotate(-125deg)}
+[data-style=smash][data-pose=strike] .bfx-wpn{transform:translateY(6px) rotate(125deg)}
 [data-style=ranged][data-pose=windup] .bfx-wpn{transform:translateX(-3px) rotate(-10deg)}
 [data-style=ranged][data-pose=strike] .bfx-wpn{transform:translateX(-6px)}
 [data-style=magic][data-pose=windup] .bfx-wpn,[data-pose=cast] .bfx-wpn{transform:translateY(-12px) rotate(-25deg)}
@@ -2277,19 +2284,27 @@
       const cy = tg.reduce((s, x) => s + x.a.y, 0) / tg.length
       const lead = tg[0].a
       const run = quick ? 0 : 230
-      const strike = 70
-      setPose(src, "windup", run + strike)
-      later(run + strike, () => setPose(src, "strike", 300))
+      // each style has its own swing; strike = ms from arriving to the hit
+      const swing = MELEE_SWING[style] || MELEE_SWING.slash
+      const jabs = style === "stab" && isSkill ? 3 : 1
+      const strike = swing.hit + (jabs - 1) * 110
+      setPose(src, "windup", run + swing.hit - 50)
+      later(run + swing.hit - 50, () => setPose(src, "strike", 300 + (jabs - 1) * 110))
+      // stab skills: three quick jabs, the weapon drawn back between them
+      for (let k = 1; k < jabs; k++) {
+        later(run + swing.hit + (k - 1) * 110 + 40, () => setPose(src, "windup", 60))
+        later(run + swing.hit + (k - 1) * 110 + 95, () => setPose(src, "strike", 300))
+      }
       if (!quick) {
         const dx = cx - src.dir * lead.s * (aoe ? 1.1 : 0.75) - src.x
         const dy = cy - src.y
-        const D = run + 320 + 250
+        const D = run + strike + 250 + 250
         src.el.style.zIndex = 4000
         const anim = src.move.animate(
           [
             { transform: "translate(0,0)" },
             { transform: `translate(${dx}px,${dy}px)`, offset: run / D, easing: "ease-in-out" },
-            { transform: `translate(${dx}px,${dy}px)`, offset: (run + 320) / D },
+            { transform: `translate(${dx}px,${dy}px)`, offset: (run + strike + 250) / D },
             { transform: "translate(0,0)" },
           ],
           { duration: D, easing: "ease-in-out" },
@@ -2303,15 +2318,10 @@
         )
       }
       later(run, () => {
-        src.pose.animate(
-          [
-            { transform: "none" },
-            { transform: `rotate(${-src.dir * 14}deg)`, offset: 0.35 },
-            { transform: `rotate(${src.dir * 22}deg) translateX(${src.dir * 8}%)`, offset: 0.6 },
-            { transform: "none" },
-          ],
-          { duration: 260, easing: "ease-out" },
-        )
+        src.pose.animate(swing.body(src.dir, jabs), { duration: swing.dur + (jabs - 1) * 110, easing: "ease-out" })
+        // extra jabs land as thrust flashes before the real hit
+        for (let k = 0; k < jabs - 1; k++)
+          later(swing.hit + k * 110, () => tg.forEach(({ a }) => sprite("stab", mid(a).x - src.dir * a.s * 0.15, mid(a).y + (k - 0.5) * a.s * 0.12, a.s * 0.6, { dur: 220, flip: src.dir < 0 }) || thrustFx(mid(a).x, mid(a).y, src.dir, color, a.s * 0.5)))
         later(strike, () => {
           const groupShown = aoe && spec && groupFx(spec, tg.map(x => x.a), 0, 560)
           for (const { t, a } of tg) {
@@ -2332,7 +2342,46 @@
           if (style === "smash") shake(isSkill ? 8 : 5)
         })
       })
-      return run + 320 + 250
+      return run + strike + 250 + 250
+    }
+    // melee body swings (on .bfx-pose); hit = ms into the swing when the blow lands
+    const MELEE_SWING = {
+      // slash: twist back, then a wide sweep that carries the body forward
+      slash: {
+        dur: 320,
+        hit: 110,
+        body: d => [
+          { transform: "none" },
+          { transform: `rotate(${-d * 18}deg) translateX(${-d * 4}%)`, offset: 0.25 },
+          { transform: `rotate(${d * 26}deg) translateX(${d * 12}%)`, offset: 0.5 },
+          { transform: "none" },
+        ],
+      },
+      // stab: crouch back, then a straight low lunge (repeated for multi-jab skills), no turning
+      stab: {
+        dur: 280,
+        hit: 150,
+        body: (d, jabs) => {
+          const out = [{ transform: "none" }, { transform: `translateX(${-d * 8}%) scaleY(.92)`, offset: 0.3 / jabs }]
+          for (let k = 0; k < jabs; k++) {
+            out.push({ transform: `translateX(${d * 24}%) translateY(4%)`, offset: (0.55 + k) / (jabs + 0.45) })
+            if (k < jabs - 1) out.push({ transform: `translateX(${d * 6}%)`, offset: (0.85 + k) / (jabs + 0.45) })
+          }
+          out.push({ transform: "none" })
+          return out
+        },
+      },
+      // smash: leap up winding back, slam down
+      smash: {
+        dur: 400,
+        hit: 270,
+        body: d => [
+          { transform: "none" },
+          { transform: `translateY(-28%) rotate(${-d * 10}deg)`, offset: 0.45 },
+          { transform: `translateY(5%) rotate(${d * 8}deg) scaleY(.9)`, offset: 0.68 },
+          { transform: "none" },
+        ],
+      },
     }
 
     function heal(src, tg, quick, ab) {
