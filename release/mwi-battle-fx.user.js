@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.9.5
+// @version      0.9.6
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -1398,8 +1398,10 @@
       )
     }
     // projectile from a to b; arc lifts the middle of the path; onHit fires on arrival
-    function projectile(from, to, { kind, color, dur, arc = 0, size = 1, art }, onHit) {
+    // trail: streak colour for skill shots drawn from a sheet (arrows always streak)
+    function projectile(from, to, { kind, color, dur, arc = 0, size = 1, art, trail: streak }, onHit) {
       const trail = []
+      const motes = [] // sparks shed along a streaked path
       const im = art && fxImg(art)
       const f = addFx(dur, (c, p) => {
         const e = kind === "meteor" ? p * p : p
@@ -1407,6 +1409,36 @@
         const y = from.y + (to.y - from.y) * e - arc * 4 * e * (1 - e)
         const ang = Math.atan2(to.y - from.y - arc * 4 * (1 - 2 * e), to.x - from.x)
         c.globalCompositeOperation = "lighter"
+        if (kind === "arrow" || streak) {
+          // a fading ribbon (white near the head) and a few sparks left hanging in the air
+          const sc = streak || color
+          trail.push({ x, y })
+          if (trail.length > 10) trail.shift()
+          if (Math.random() < 0.6) motes.push({ x, y, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50 - 15, t: p })
+          c.save()
+          c.lineCap = "round"
+          c.shadowColor = sc
+          c.shadowBlur = 10
+          for (let k = 1; k < trail.length; k++) {
+            c.globalAlpha = (k / trail.length) * 0.85
+            c.strokeStyle = k > trail.length - 3 ? "#fff" : sc
+            c.lineWidth = (1 + (k / trail.length) * 4 * size) * cfg.scale
+            c.beginPath()
+            c.moveTo(trail[k - 1].x, trail[k - 1].y)
+            c.lineTo(trail[k].x, trail[k].y)
+            c.stroke()
+          }
+          c.fillStyle = sc
+          for (const m of motes) {
+            const age = ((p - m.t) * dur) / 1000
+            if (age > 0.35) continue
+            c.globalAlpha = 1 - age / 0.35
+            c.beginPath()
+            c.arc(m.x + m.vx * age, m.y + m.vy * age, 1.6 * cfg.scale, 0, Math.PI * 2)
+            c.fill()
+          }
+          c.restore()
+        }
         if (im) {
           // looping projectile sheet, drawn flying along the path
           const h = 70 * cfg.scale * size
@@ -1418,23 +1450,32 @@
         c.shadowColor = color
         c.shadowBlur = 12
         if (kind === "arrow") {
-          const L = 26 * cfg.scale * size
+          // shaft, coloured fletching, bright head
+          const k = cfg.scale * size
+          const L = 24 * k
           c.translate(x, y)
           c.rotate(ang)
-          const g = c.createLinearGradient(-L * 2.2, 0, 0, 0)
-          g.addColorStop(0, "rgba(255,255,255,0)")
-          g.addColorStop(1, color)
-          c.strokeStyle = g
-          c.lineWidth = 2.5 * cfg.scale
+          c.lineCap = "round"
+          c.strokeStyle = "#f4e6c8"
+          c.lineWidth = 2.2 * k
           c.beginPath()
-          c.moveTo(-L * 2.2, 0)
+          c.moveTo(-L, 0)
           c.lineTo(0, 0)
           c.stroke()
+          c.fillStyle = color
+          c.beginPath()
+          c.moveTo(-L - 7 * k, -4.5 * k)
+          c.lineTo(-L + 6 * k, 0)
+          c.lineTo(-L - 7 * k, 4.5 * k)
+          c.lineTo(-L - 3 * k, 0)
+          c.closePath()
+          c.fill()
           c.fillStyle = "#fff"
           c.beginPath()
-          c.moveTo(4 * cfg.scale, 0)
-          c.lineTo(-5 * cfg.scale, -3.5 * cfg.scale)
-          c.lineTo(-5 * cfg.scale, 3.5 * cfg.scale)
+          c.moveTo(7 * k, 0)
+          c.lineTo(-3 * k, -4.5 * k)
+          c.lineTo(-1 * k, 0)
+          c.lineTo(-3 * k, 4.5 * k)
           c.closePath()
           c.fill()
         } else {
@@ -1461,6 +1502,51 @@
       })
       f.done = onHit
       return f
+    }
+    // a bow shot leaving: flash and ring at the front of the shooter, sparks spraying forward
+    function muzzleFx(src, color, big) {
+      const m = mid(src)
+      const x = m.x + src.dir * src.s * 0.3
+      const y = m.y
+      addFx(big ? 320 : 220, (c, p) => {
+        const r = src.s * (big ? 0.34 : 0.22) * (0.4 + p)
+        const g = c.createRadialGradient(x, y, 0, x, y, r)
+        g.addColorStop(0, "#fff")
+        g.addColorStop(0.35, color)
+        g.addColorStop(1, "rgba(0,0,0,0)")
+        c.globalCompositeOperation = "lighter"
+        c.globalAlpha = 1 - p
+        c.fillStyle = g
+        c.beginPath()
+        c.arc(x, y, r, 0, Math.PI * 2)
+        c.fill()
+      })
+      ringFx(x, y, src.s * 0.05, src.s * (big ? 0.42 : 0.26), color, big ? 320 : 240, 0.55, 2)
+      burst(x, y, { n: big ? 12 : 7, color, angle: src.dir > 0 ? 0 : Math.PI, spread: 0.9, speed: 190, gravity: 0, life: 260, size: 2, shape: "shard" })
+    }
+    // a shot that goes through: a beam from the shooter on past the target to the edge of the stage
+    function pierceFx(from, to, color) {
+      const dx = to.x - from.x
+      const dy = to.y - from.y
+      const len = Math.hypot(dx, dy) || 1
+      const ex = to.x + (dx / len) * SW
+      const ey = to.y + (dy / len) * SW
+      addFx(320, (c, p) => {
+        c.globalCompositeOperation = "lighter"
+        c.globalAlpha = 1 - p
+        c.lineCap = "round"
+        c.shadowColor = color
+        c.shadowBlur = 14
+        c.strokeStyle = color
+        c.lineWidth = (6 * (1 - p) + 1) * cfg.scale
+        c.beginPath()
+        c.moveTo(from.x, from.y)
+        c.lineTo(ex, ey)
+        c.stroke()
+        c.strokeStyle = "#fff"
+        c.lineWidth = 1.5 * cfg.scale
+        c.stroke()
+      })
     }
     function slashFx(x, y, r, dir, color, wide = 1) {
       const start = dir > 0 ? -0.85 * Math.PI : -0.15 * Math.PI
@@ -1669,6 +1755,8 @@
         // the spell's own effect is the hit
       } else if (!sprite(BURST[element] || "phys_hit", m.x, m.y, a.s * (big ? 1.1 : 0.85), { dur: 520, flip: a.dir > 0 }))
         burst(m.x, m.y, { n: big ? 22 : 14, color, speed: big ? 200 : 150, life: 480 })
+      // arrows: splinters thrown on along the line of flight (away from the shooter the target faces)
+      if (style === "ranged") burst(m.x, m.y, { n: big ? 12 : 7, color, angle: a.dir > 0 ? Math.PI : 0, spread: 0.8, speed: 210, gravity: 120, life: 320, size: 2, shape: "shard" })
       if (style === "smash" && !sprite("smash", a.x, a.y + a.s * 0.05, a.s * 0.9, { dur: 560, anchor: "bottom" })) {
         ringFx(a.x, a.y, a.s * 0.1, a.s * 0.8, "#fff", 380, 0.3, 4)
         burst(a.x, a.y, { n: 12, color: "#c9b38a", angle: -Math.PI / 2, spread: 2.6, speed: 120, gravity: 300, life: 500, size: 3 })
@@ -1862,10 +1950,12 @@
       else burst(m.x, m.y, { n: 26, color, speed: 50, gravity: -30, life: 900, size: 4, delay: d })
     }
 
+    // skill shots streak in their own colour; others in the damage type's
+    const SHOT_COLOR = { pestilent_shot: "#9be15d", silencing_shot: "#c48cff", steady_shot: "#ffd75a", penetrating_shot: "#fff2c0" }
     function ranged(src, tg, element, aoe, quick, ab) {
       const spec = fxSpec(ab)
       let rainShown = false
-      const color = element === "physical" ? "#ffe9b0" : ELEMENT_COLOR[element]
+      const color = SHOT_COLOR[ab?.key] || (element === "physical" ? "#ffe9b0" : ELEMENT_COLOR[element])
       const drawT = quick ? 60 : 200
       setPose(src, "windup", drawT)
       later(drawT, () => setPose(src, "strike", 320))
@@ -1874,10 +1964,16 @@
         { duration: drawT + 160, easing: "ease-out" },
       )
       later(drawT, () => {
+        muzzleFx(src, color, !!ab)
         tg.forEach(({ t, a }, n) => {
           const m = mid(a)
           if (spec?.ground) {
             const shown = n === 0 ? (rainShown = groupFx(spec, tg.map(x => x.a), 0, 900)) : rainShown
+            // a volley streaking down onto each target ahead of the rain effect
+            for (let k = 0; k < 3; k++) {
+              const to = { x: m.x + (k - 1) * a.s * 0.3, y: a.y - a.s * 0.1 }
+              later(n * 50 + k * 70, () => projectile({ x: to.x - a.dir * a.s * 0.8, y: -20 }, to, { kind: "arrow", color, dur: 240 }, () => burst(to.x, to.y, { n: 5, color, life: 280, speed: 90, shape: "shard" })))
+            }
             later(260 + n * 50, () => impact(a, t, "ranged", element, true, shown))
           } else if (aoe) {
             for (let k = 0; k < 3; k++) {
@@ -1886,7 +1982,15 @@
               later(n * 70 + k * 60, () => projectile(from, to, { kind: "arrow", color, dur: 260 }, () => (k === 0 ? impact(a, t, "ranged", element) : burst(to.x, to.y, { n: 5, color, life: 300, speed: 80 }))))
             }
           } else {
-            later(n * 70, () => projectile(mid(src), m, { kind: "arrow", color, dur: 300, arc: Math.min(30, SW * 0.04), art: spec?.proj, size: 0.8 }, () => impact(a, t, "ranged", element, !!ab)))
+            const arc = Math.min(30, SW * 0.04)
+            later(n * 70, () =>
+              projectile(mid(src), m, { kind: "arrow", color, dur: 300, arc, art: spec?.proj, size: 0.8, trail: ab ? color : null }, () => {
+                impact(a, t, "ranged", element, !!ab)
+                if (ab?.key === "penetrating_shot") pierceFx(mid(src), m, color)
+              }),
+            )
+            // quick shot: a second arrow right behind the first
+            if (ab?.key === "quick_shot") later(n * 70 + 90, () => projectile(mid(src), { x: m.x, y: m.y - a.s * 0.12 }, { kind: "arrow", color, dur: 260, arc, size: 0.7 }, () => burst(m.x, m.y - a.s * 0.12, { n: 6, color, life: 280, speed: 120, shape: "shard" })))
           }
         })
       })

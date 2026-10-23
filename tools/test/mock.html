@@ -48,6 +48,8 @@ async function start(){
  feed({type:'battle_updated',pMap:{2:{cHP:1200,cMP:570,atkCounter:11,abilityHrid:'/abilities/entangle'}},mMap:{1:{cHP:800,dmgCounter:1}}}); await sleep(1300);
  feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:11,critCounter:1}},mMap:{0:{cHP:1000,dmgCounter:1}}}); await sleep(1300);
  feed({type:'battle_updated',pMap:{1:{cHP:1050,dmgCounter:1}},mMap:{1:{cHP:800,atkCounter:6}}}); await sleep(1400);
+ feed({type:'battle_updated',pMap:{1:{cHP:1050,cMP:560,atkCounter:11,isAutoAtk:true}},mMap:{2:{cHP:900,dmgCounter:1}}}); await sleep(1300);
+ feed({type:'battle_updated',pMap:{1:{cHP:1050,cMP:560,atkCounter:12}},mMap:{2:{cHP:780,dmgCounter:2}}}); await sleep(1300);
  document.querySelector('.bfx-toggle').click(); await sleep(1500);
  document.querySelector('.bfx-toggle').click(); await sleep(1000);
  document.querySelector('.bfx-tab').click(); await sleep(800);
