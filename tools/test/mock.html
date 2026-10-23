@@ -44,9 +44,9 @@ async function start(){
  feed({type:'new_battle',players:[P('战士','slash','physical','/abilities/cleave'),P('弓手','ranged','physical','/abilities/flame_arrow'),P('法师','magic','fire','/abilities/fireball')],
   monsters:[P('花岗岩魔像','smash','physical',null,'/monsters/granite_golem'),P('磁力魔像','smash','physical',null,'/monsters/magnetic_golem'),P('钟乳石魔像','stab','physical',null,'/monsters/stalactite_golem'),P('水晶巨像','magic','water',null,'/monsters/crystal_colossus')]});
  await sleep(1500);
- feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0},1:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0},2:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0,abilityHrid:'/abilities/fireball'}},mMap:{0:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},1:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},2:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},3:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0}}});
+ feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0,critCounter:0},1:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0},2:{cHP:1200,cMP:600,atkCounter:10,dmgCounter:0,abilityHrid:'/abilities/fireball'}},mMap:{0:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},1:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},2:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0},3:{cHP:1200,cMP:600,atkCounter:5,dmgCounter:0}}});
  feed({type:'battle_updated',pMap:{2:{cHP:1200,cMP:570,atkCounter:11,abilityHrid:'/abilities/entangle'}},mMap:{1:{cHP:800,dmgCounter:1}}}); await sleep(1300);
- feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:11}},mMap:{0:{cHP:1000,dmgCounter:1}}}); await sleep(1300);
+ feed({type:'battle_updated',pMap:{0:{cHP:1200,cMP:600,atkCounter:11,critCounter:1}},mMap:{0:{cHP:1000,dmgCounter:1}}}); await sleep(1300);
  feed({type:'battle_updated',pMap:{1:{cHP:1050,dmgCounter:1}},mMap:{1:{cHP:800,atkCounter:6}}}); await sleep(1400);
  document.querySelector('.bfx-toggle').click(); await sleep(1500);
  document.querySelector('.bfx-toggle').click(); await sleep(1000);

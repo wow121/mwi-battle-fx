@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.9.2
+// @version      0.9.3
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -184,7 +184,8 @@
         c.acted = tick("atkCounter")
         c.struck = tick("dmgCounter")
         c.hits = c.struck ? e.dmgCounter - u.counters.dmgCounter : 0
-        for (const key of ["atkCounter", "dmgCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
+        c.crit = tick("critCounter")
+        for (const key of ["atkCounter", "dmgCounter", "critCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
         // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
         else if (e.isAutoAtk) u.ability = null
@@ -192,6 +193,11 @@
       }
     }
     const actions = resolve(changes)
+    // critCounter: whichever side it ticks on (attacker or the one hit), the action's hits were critical
+    for (const act of actions) {
+      const by = act.actor && changes.find(c => c.side === act.actor.side && c.i === act.actor.i)
+      if (act.effect === "damage") for (const t of act.targets) t.crit = (t.crit || !!by?.crit) && t.dHP < 0
+    }
     procs(actions, changes)
     if (cfg.debug) console.log("[战斗动画]", JSON.stringify(obj), changes, actions)
     if (cfg.enabled) Stage.play(actions)
@@ -763,6 +769,8 @@
 .bfx-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-size:11px;font-weight:600;text-shadow:0 1px 2px #000,0 0 3px #000}
 .bfx-bar{position:relative;height:4px;margin-top:2px;background:rgba(0,0,0,.6);border-radius:2px;overflow:visible;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 .bfx-bar i{display:block;height:100%;width:100%;border-radius:2px;transition:width .3s}
+.bfx-num.bfx-crit{font-style:italic;-webkit-text-stroke:1.5px #5a1a00;text-shadow:0 0 6px rgba(255,170,40,.9),0 2px 3px rgba(0,0,0,.7)}
+.bfx-num.bfx-crit small{display:block;font-size:.5em;line-height:1;text-align:center;letter-spacing:1px;-webkit-text-stroke:1px #5a1a00}
 .bfx-num{position:absolute;left:0;top:0;z-index:6000;font:900 16px/1 sans-serif;white-space:nowrap;-webkit-text-stroke:1px rgba(0,0,0,.85);paint-order:stroke fill;text-shadow:0 2px 3px rgba(0,0,0,.6)}
 .bfx-banner{position:absolute;left:50%;top:8px;z-index:6000;transform:translateX(-50%);padding:4px 14px;border:1px solid rgba(255,255,255,.35);border-radius:4px;background:linear-gradient(#26306a,#121a3c);font-weight:700;font-size:13px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5);opacity:0}
 .bfx-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.5}
@@ -1617,10 +1625,12 @@
     // ----- dom bits -----
     function number(a, text, kind) {
       const n = document.createElement("div")
-      n.className = "bfx-num"
+      const crit = kind === "crit"
+      n.className = "bfx-num" + (crit ? " bfx-crit" : "")
       n.textContent = text
-      n.style.color = kind === "heal" ? "#7dffa5" : kind === "miss" ? "#c8d2e8" : a.side === "p" ? "#ffb0a8" : "#fff"
-      n.style.fontSize = 16 * cfg.scale * (kind === "big" ? 1.25 : 1) + "px"
+      if (crit) n.insertAdjacentHTML("afterbegin", `<small>${zhUI() ? "暴击" : "CRIT"}</small>`)
+      n.style.color = kind === "heal" ? "#7dffa5" : kind === "miss" ? "#c8d2e8" : crit ? (a.side === "p" ? "#ff7a4a" : "#ffd23a") : a.side === "p" ? "#ffb0a8" : "#fff"
+      n.style.fontSize = 16 * cfg.scale * (crit ? 1.75 : kind === "big" ? 1.25 : 1) + "px"
       worldEl.appendChild(n)
       const x = a.x + (Math.random() - 0.5) * a.s * 0.5
       const y = a.y - a.s * 0.85
@@ -1628,12 +1638,12 @@
       n.animate(
         [
           { transform: tr(0, 0.4), opacity: 0 },
-          { transform: tr(-26, 1.3), opacity: 1, offset: 0.16 },
+          { transform: tr(-26, crit ? 1.7 : 1.3), opacity: 1, offset: 0.16 },
           { transform: tr(-12, 1), opacity: 1, offset: 0.3 },
           { transform: tr(-16, 1), opacity: 1, offset: 0.8 },
           { transform: tr(-30, 1), opacity: 0 },
         ],
-        { duration: 1100, fill: "forwards", easing: "ease-out" },
+        { duration: crit ? 1400 : 1100, fill: "forwards", easing: "ease-out" },
       ).onfinish = () => n.remove()
     }
     function showBanner(a, ab) {
@@ -1757,8 +1767,13 @@
         ringFx(a.x, a.y, a.s * 0.1, a.s * 0.8, "#fff", 380, 0.3, 4)
         burst(a.x, a.y, { n: 12, color: "#c9b38a", angle: -Math.PI / 2, spread: 2.6, speed: 120, gravity: 300, life: 500, size: 3 })
       }
+      if (t?.crit) {
+        // critical: a white flash ring and a heavier shake on top of the usual hit
+        ringFx(m.x, m.y, a.s * 0.1, a.s * 0.7, "#ffe27a", 300, 0.9, 3)
+        a.hit.animate([{ transform: "none" }, { transform: `translateX(${-a.dir * a.s * 0.2}px) rotate(${-a.dir * 10}deg)`, offset: 0.2 }, { transform: "none" }], { duration: 380, easing: "ease-out" })
+      }
       if (t) {
-        number(a, fmt(t.dHP), big ? "big" : "")
+        number(a, fmt(t.dHP), t.crit ? "crit" : big ? "big" : "")
         setHp(a, t)
         if (t.died) later(160, () => die(a))
       }
@@ -2236,7 +2251,7 @@
       const u = lab[side][i]
       const before = u.hp
       u.hp = Math.max(0, Math.min(u.maxHp, u.hp + d))
-      return { side, i, dHP: u.hp - before, hp: u.hp, maxHp: u.maxHp, died: before > 0 && u.hp <= 0, revived: before <= 0 && u.hp > 0 }
+      return { side, i, dHP: u.hp - before, hp: u.hp, maxHp: u.maxHp, died: before > 0 && u.hp <= 0, revived: before <= 0 && u.hp > 0, crit: d < 0 && Math.random() < 0.2 }
     }
     const hitAmount = (side, i) => (Math.random() < 0.1 ? 0 : -Math.round(lab[side][i].maxHp * (0.04 + Math.random() * 0.08)))
 
