@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.9.4
+// @version      0.9.5
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -415,8 +415,8 @@
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
   const VISIBLE_SLOTS = ["head", "body", "legs", "feet", "hands", "main_hand", "two_hand", "off_hand", "back"]
   const Looks = (() => {
-    const me = { name: null, avatar: null, outfit: null, items: {} }
-    const profiles = GM_getValue("battle_fx_profiles_v1", {}) // player name -> {avatar, outfit, items}
+    const me = { name: null, avatar: null, outfit: null, items: {}, enh: {} }
+    const profiles = GM_getValue("battle_fx_profiles_v1", {}) // player name -> {avatar, outfit, items, enh}
     // first string value whose key matches, searching a few levels down
     function findKey(o, re, depth = 3) {
       if (!o || typeof o !== "object" || depth < 0) return undefined
@@ -439,17 +439,27 @@
       }
       return items
     }
+    // slot -> enhancement level (+N) of the visible gear
+    function enhFrom(list) {
+      const enh = {}
+      for (const it of Array.isArray(list) ? list : Object.values(list || {})) {
+        const slot = shortId(it?.itemLocationHrid)
+        if (VISIBLE_SLOTS.includes(slot) && it.enhancementLevel > 0) enh[slot] = it.enhancementLevel
+      }
+      return enh
+    }
     function onMessage(obj) {
       if (obj.type === "init_character_data") {
         me.name = obj.character?.name || me.name
         Object.assign(me, avatarOf(obj.character || {}))
         if (!me.avatar) Object.assign(me, avatarOf(obj))
         me.items = itemsFrom(obj.characterItems)
+        me.enh = enhFrom(obj.characterItems)
       } else if (obj.type === "profile_shared") {
         const p = obj.profile || {}
         const name = p.sharableCharacter?.name
         if (name) {
-          profiles[name] = { ...avatarOf(p.sharableCharacter), items: itemsFrom(p.wearableItemMap) }
+          profiles[name] = { ...avatarOf(p.sharableCharacter), items: itemsFrom(p.wearableItemMap), enh: enhFrom(p.wearableItemMap) }
           GM_setValue("battle_fx_profiles_v1", profiles)
         }
       } else if (Array.isArray(obj.endCharacterItems)) {
@@ -457,8 +467,16 @@
         for (const it of obj.endCharacterItems) {
           const slot = shortId(it.itemLocationHrid)
           const id = shortId(it.itemHrid)
-          if (VISIBLE_SLOTS.includes(slot) && it.count > 0) me.items[slot] = id
-          else for (const s of VISIBLE_SLOTS) if (me.items[s] === id) delete me.items[s]
+          if (VISIBLE_SLOTS.includes(slot) && it.count > 0) {
+            me.items[slot] = id
+            me.enh[slot] = it.enhancementLevel || 0
+          } else {
+            for (const s of VISIBLE_SLOTS) {
+              if (me.items[s] !== id) continue
+              delete me.items[s]
+              delete me.enh[s]
+            }
+          }
         }
       }
     }
@@ -501,6 +519,7 @@
       u.avatar = fromBattle.avatar || prof.avatar || card.avatar || null
       u.outfit = fromBattle.outfit || prof.outfit || card.outfit || null
       u.items = prof.items || {}
+      u.enh = prof.enh || {}
       const modes = cfg.lookMode === "outfit" ? ["outfit", "equip"] : ["equip", "outfit"]
       u.lookId = null
       for (const m of modes) {
@@ -901,6 +920,27 @@
           : `<path d="M18 92 Q14 40 50 30 Q86 40 82 92 Z" fill="${c}" stroke="#0006" stroke-width="2"/><circle cx="38" cy="55" r="5" fill="#fff"/><circle cx="38" cy="55" r="2.5" fill="#000"/><circle cx="62" cy="55" r="5" fill="#fff"/><circle cx="62" cy="55" r="2.5" fill="#000"/>`
       return s
     }
+    // enhancement aura behind a held piece: none below +5, then blue / purple / orange / red-gold, rainbow from +15;
+    // from +10 it breathes (svg animations: css filters on svg elements are unreliable)
+    // [from +N, colour, outline radius, blur, breathing period s] in avatar-box units
+    const ENCH = [[15, "rainbow", 2.6, 3.4, 1.6], [12, "#ff5a3c", 2.2, 3, 1.4], [10, "#ffa53a", 1.9, 2.6, 2.4], [8, "#c07bff", 1.6, 2.2, 0], [5, "#6fb6ff", 1.3, 2, 0]]
+    const RAINBOW = "#ff4d4d;#ffb84d;#fff04d;#4dff88;#4dc3ff;#b84dff;#ff4d4d"
+    function enchAura(level, content) {
+      const tier = ENCH.find(([n]) => level >= n)
+      if (!tier || !content.length) return null
+      const [, color, radius, blur, breathe] = tier
+      const id = "bfx-ench" + ++glowSeq
+      const g = document.createElementNS(SVGNS, "g")
+      g.setAttribute("class", "bfx-ench")
+      g.setAttribute("filter", `url(#${id})`)
+      g.setAttribute("opacity", breathe ? 0.7 : 0.9)
+      const flood = color === "rainbow" ? `<feFlood flood-color="#ff4d4d"><animate attributeName="flood-color" values="${RAINBOW}" dur="3s" repeatCount="indefinite"/></feFlood>` : `<feFlood flood-color="${color}"/>`
+      g.innerHTML =
+        `<defs><filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feMorphology in="SourceAlpha" operator="dilate" radius="${radius}" result="a"/><feGaussianBlur in="a" stdDeviation="${blur}" result="b"/>${flood}<feComposite in2="b" operator="in" result="c"/><feMerge><feMergeNode in="c"/><feMergeNode in="c"/></feMerge></filter></defs>` +
+        (breathe ? `<animate attributeName="opacity" values="0.55;1;0.55" dur="${breathe}s" repeatCount="indefinite"/>` : "")
+      for (const ch of content) g.appendChild(ch.cloneNode(true))
+      return g
+    }
     // the game's own look for a player: avatar + outfit from their card (live) or the ids we know (lab),
     // holding the weapon / off-hand icons when we know the gear (self, or a profile the viewer has opened)
     function gameLook(i) {
@@ -913,10 +953,14 @@
       }
       if (!hrefs.length) return null
       const it = u?.items || {}
-      const held = [["bfx-off", it.off_hand], ["bfx-wpn", it.main_hand || it.two_hand]].filter(x => x[1] && (Doll.held(x[1]) || sheet("items")))
+      const enh = u?.enh || {}
+      const held = [
+        ["bfx-off", it.off_hand, enh.off_hand || 0],
+        ["bfx-wpn", it.main_hand || it.two_hand, (it.main_hand ? enh.main_hand : enh.two_hand) || 0],
+      ].filter(x => x[1] && (Doll.held(x[1]) || sheet("items")))
       const node = svgOf(hrefs)
       const attrs = (el, o) => Object.entries(o).forEach(([k, v]) => el.setAttribute(k, v))
-      for (const [cls, id] of held) {
+      for (const [cls, id, level] of held) {
         const g = document.createElementNS(SVGNS, "g")
         g.setAttribute("class", cls)
         const pc = Doll.held(id)
@@ -950,6 +994,8 @@
           glow.appendChild(defs)
           g.insertBefore(glow, g.firstChild)
         }
+        const aura = enchAura(level, [...g.childNodes].filter(ch => !ch.classList?.contains("bfx-glow")))
+        if (aura) g.insertBefore(aura, g.firstChild)
         node.appendChild(g)
       }
       return { key: hrefs.join() + "|" + held.join() + (Doll.ready() ? "|d" : ""), node, real: true }
