@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.10.9
+// @version      0.10.10
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -1094,7 +1094,11 @@
     const HELD_SCALE = 0.2
     // two-handed bulwarks are body-sized shields: drawn bigger than the one-handed gear
     const isBulwark = id => /bulwark/.test(id)
-    const heldScale = id => HELD_SCALE * (isBulwark(id) ? 1.8 : 1)
+    // two-handed melee weapons (glaives, great clubs...) were drawn no longer than the spears: scaled up to a
+    // reach of ~470 rig pixels so they out-measure the one-handers; bows and other two-handers keep their size
+    const heldScale = (id, pc) =>
+      HELD_SCALE *
+      (isBulwark(id) ? 1.8 : Doll.slotOf(id) === "two_hand" && !/bow|shooter|boomstick/.test(id) ? Math.max(1, 470 / Math.hypot(pc.rect[2], pc.rect[3])) : 1)
     const PLAYER_SCALE = 0.75
     let glowSeq = 0
     // a big guild roster: effects get cheaper (no canvas shadow blur, fewer sparks, still enhancement auras)
@@ -1193,7 +1197,7 @@
         if (pc) {
           // the drawn piece, cropped from its layer sheet, its grip in the hand
           const [hx, hy] = HANDS[cls]
-          const k = heldScale(id)
+          const k = heldScale(id, pc)
           const box = document.createElementNS(SVGNS, "svg")
           const w = pc.rect[2] * k
           const h = pc.rect[3] * k
