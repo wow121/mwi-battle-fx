@@ -10,6 +10,8 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 cd "$REPO"
 TRAILER=$'\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
 
+# the release copy (no lab / debug) is rebuilt from the dev script on every publish
+python3 -I tools/build-release.py
 git add -A
 if ! git diff --cached --quiet; then git commit -q -m "$MSG$TRAILER"; fi
 REV=$(git rev-parse --short=10 HEAD)

@@ -12,7 +12,9 @@ SSHO=(-i "$HOME/.ssh/epos_windows_ed25519" -o UserKnownHostsFile="$HOME/.ssh/epo
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/sprites"
-cp "$REPO/tools/test/mock.html" "$REPO/tools/test/drive.mjs" "$REPO/mwi-battle-fx.user.js" "$TMP/"
+cp "$REPO/tools/test/mock.html" "$REPO/tools/test/drive.mjs" "$TMP/"
+# SCRIPT=release/mwi-battle-fx.user.js tests the release copy (no lab: the run stops after the live part)
+cp "${SCRIPT:-$REPO/mwi-battle-fx.user.js}" "$TMP/mwi-battle-fx.user.js"
 cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items}.svg "$TMP/sprites/"
 cp -r "$REPO/assets" "$TMP/"
 tar -cf "$TMP/in.tar" -C "$TMP" mock.html drive.mjs mwi-battle-fx.user.js sprites assets

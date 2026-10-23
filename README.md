@@ -15,7 +15,12 @@
 - "动画测试"标签里每个我方单位可选"游戏形象"，任意组合头像 / 服装 / 武器 / 副手预览；"武器闪光"按钮可预览特效光。
 - 纸娃娃（`assets/doll/`）不再整体拼装（v0.9.1 起），只用其中的武器 / 副手贴片。
 
-安装：[mwi-battle-fx.user.js](https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/mwi-battle-fx.user.js)（访问不了 GitHub 时用 jsDelivr 的固定版本地址）
+安装（发布版，推荐）：[release/mwi-battle-fx.user.js](https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/release/mwi-battle-fx.user.js)
+——只有战斗画面，不带"动画测试"标签和调试菜单。
+
+开发版：[mwi-battle-fx.user.js](https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/mwi-battle-fx.user.js)，多一个"动画测试"沙盒标签和调试菜单。
+两个版本不要同时启用。发布版由 `tools/build-release.py` 从开发版生成（`publish.sh` 每次自动运行），不要直接改。
+访问不了 GitHub 时用 jsDelivr 的固定版本地址。
 
 ## 素材生成（tools/）
 

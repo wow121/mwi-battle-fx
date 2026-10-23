@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.9.3
+// @version      0.9.4
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -28,6 +28,9 @@
   "use strict"
   const W = typeof unsafeWindow !== "undefined" ? unsafeWindow : window
 
+  // DEV: the build (tools/build-release.py) writes the release copy with this false and drops the
+  // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
+  const DEV = true
   // ---------- settings ----------
   const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
@@ -151,7 +154,7 @@
     units.p = (obj.players || []).map(unitFrom)
     units.m = (obj.monsters || []).map(unitFrom)
     units.p.forEach((u, i) => Looks.assign(u, i))
-    if (cfg.debug) console.log("[战斗动画] new_battle", obj)
+    if (cfg.debug) console.log("[战斗动画] new_battle", obj) // #dev
     if (cfg.enabled) Stage.newBattle()
   }
 
@@ -199,7 +202,7 @@
       if (act.effect === "damage") for (const t of act.targets) t.crit = (t.crit || !!by?.crit) && t.dHP < 0
     }
     procs(actions, changes)
-    if (cfg.debug) console.log("[战斗动画]", JSON.stringify(obj), changes, actions)
+    if (cfg.debug) console.log("[战斗动画]", JSON.stringify(obj), changes, actions) // #dev
     if (cfg.enabled) Stage.play(actions)
   }
 
@@ -398,7 +401,7 @@
               GM_setValue("battle_fx_manifest_at_v1", fetchedAt)
               listeners.forEach(f => f())
             } catch (e) {
-              if (cfg.debug) console.warn("[战斗动画] manifest", urls[k], e)
+              if (cfg.debug) console.warn("[战斗动画] manifest", urls[k], e) // #dev
               next(k + 1)
             }
           },
@@ -419,7 +422,7 @@
   const Looks = (() => {
     const me = { name: null, avatar: null, outfit: null, items: {} }
     const profiles = GM_getValue("battle_fx_profiles_v1", {}) // player name -> {avatar, outfit, items}
-    const missing = GM_getValue("battle_fx_missing_v1", {}) // look id -> spec, for 导出待生成形象
+    const missing = GM_getValue("battle_fx_missing_v1", {}) // look id -> spec, for 导出待生成形象 // #dev
     // first string value whose key matches, searching a few levels down
     function findKey(o, re, depth = 3) {
       if (!o || typeof o !== "object" || depth < 0) return undefined
@@ -514,60 +517,31 @@
           u.lookId = id
           break
         }
+        // #dev-start
         if (m === modes[0] && !missing[id]) {
           missing[id] = { id, ...sp, name: u.name }
           GM_setValue("battle_fx_missing_v1", missing)
         }
+        // #dev-end
       }
     }
+    // #dev-start
     function exportMissing() {
       const list = Object.values(missing).filter(x => !Assets.has("p", x.id))
       GM_setClipboard(JSON.stringify(list, null, 1))
       return list.length
     }
     return { onMessage, assign, exportMissing, me }
+    // #dev-end
+    // #release-start
+    // return { onMessage, assign, me }
+    // #release-end
   })()
 
-  // ---------- paper doll: any player built from avatar / outfit / equipment layers on one rig ----------
-  // Every layer (assets/doll/<id>.webp) was generated on the same mannequin and cut into rig pieces
-  // (head, torso, arm, leg, weapon, off-hand, back), so all layers line up; poses turn the parts on their pivots.
+  // ---------- paper-doll layers: drawn side-view weapons / off-hands for the held gear ----------
+  // Every layer (assets/doll/<id>.webp) was generated on the same mannequin and cut into rig pieces; whole dolls
+  // are no longer assembled (v0.9.1), only the weapon and off-hand pieces are used.
   const Doll = (() => {
-    const LAYERS = ["legs", "feet", "body", "hands", "head", "back", "main_hand", "two_hand", "off_hand"]
-    // part -> [pivot, piece, angle key]; back to front. The back arm and leg reuse the front pieces.
-    const PARTS = [
-      ["back", "neck", "back", "torso"],
-      ["armB", "shoulder", "arm", "armB"],
-      ["legB", "hip", "leg", "legB"],
-      ["leg", "hip", "leg", "leg"],
-      ["torso", "hip", "torso", "torso"],
-      ["off", "shoulder", "off", "armB"],
-      ["head", "neck", "head", "head"],
-      ["weapon", "shoulder", "weapon", "arm"],
-      ["arm", "shoulder", "arm", "arm"],
-    ]
-    const ON_TORSO = new Set(["back", "armB", "off", "head", "weapon", "arm"])
-    // limb angles in degrees from straight down, + = forward; torso / head: + = lean forward;
-    // tip = where the weapon points (turned in the fist); weapons gripped in the middle keep their own angle:
-    // bows and bulwarks upright, crossbows level
-    const REST = { torso: 0, head: 0, arm: 46, armB: -28, leg: 9, legB: -9, tip: 160 }
-    const POSES = {
-      idle: {},
-      windup: { torso: -6, arm: 150, armB: -40 },
-      strike: { torso: 10, head: 4, arm: 75, armB: -50, leg: 28, legB: -22 },
-      windup_slash: { torso: -8, arm: 165, armB: -35, leg: 14, legB: -14, tip: 235 },
-      strike_slash: { torso: 12, head: 5, arm: 55, armB: -55, leg: 30, legB: -24, tip: 85 },
-      windup_smash: { torso: -12, head: -4, arm: 175, armB: 150, tip: 215 },
-      strike_smash: { torso: 16, head: 6, arm: 35, armB: 20, leg: 24, legB: -26, tip: 60 },
-      windup_stab: { torso: -6, arm: 10, armB: -40, leg: 16, legB: -16, tip: 95 },
-      strike_stab: { torso: 12, head: 4, arm: 92, armB: -60, leg: 34, legB: -30, tip: 92 },
-      windup_ranged: { torso: -4, arm: 92, armB: 85, tip: 180 },
-      strike_ranged: { torso: -2, arm: 92, armB: 35, tip: 180 },
-      windup_magic: { torso: -5, arm: 120, armB: -30, tip: 165 },
-      strike_magic: { torso: 8, head: 4, arm: 105, armB: -45, leg: 18, legB: -12, tip: 130 },
-      cast: { torso: -4, head: -8, arm: 150, armB: 130, tip: 175 },
-      hurt: { torso: -14, head: -14, arm: 20, armB: -50, leg: 2, legB: -22 },
-      dead: { head: 12, arm: 5, armB: -5, leg: 2, legB: -2 },
-    }
     let index = null
     let loading = false
     const listeners = []
@@ -584,7 +558,7 @@
             index = JSON.parse(r.responseText)
             listeners.forEach(f => f())
           } catch (e) {
-            if (cfg.debug) console.warn("[战斗动画] doll index", e)
+            if (cfg.debug) console.warn("[战斗动画] doll index", e) // #dev
           }
         },
         onerror: () => (loading = false),
@@ -594,81 +568,6 @@
     Assets.onChange(load)
     const ready = () => (load(), !!index)
     const base = id => id && String(id).replace(/_refined$/, "")
-    // the layers a unit wears, bottom first; unknown avatars wear the default body
-    function layersOf(u) {
-      const L = index.layers
-      const out = []
-      const add = id => id && L[id] && !out.includes(id) && out.push(id)
-      add("a_" + (L["a_" + u.avatar] ? u.avatar : "person_default"))
-      add("o_" + u.outfit)
-      const slots = cfg.lookMode === "outfit" && !u.lab ? ["main_hand", "two_hand", "off_hand"] : LAYERS
-      for (const sl of slots) add(base(u.items?.[sl]))
-      return out
-    }
-    const pct = v => (v / index.rig.canvas) * 100
-    function transformOf(part, pose, style, weapon) {
-      const p = { ...REST, ...POSES[pose], ...POSES[pose + "_" + style] }
-      const [, pivot, piece, key] = PARTS.find(x => x[0] === part)
-      const { pivots, angles } = index.rig
-      const around = (pt, deg) => (deg ? `translate(${pct(pt[0])}%,${pct(pt[1])}%) rotate(${deg}deg) translate(${-pct(pt[0])}%,${-pct(pt[1])}%)` : "")
-      let t = part === "torso" || ON_TORSO.has(part) ? around(pivots.hip, p.torso) : ""
-      if (key === "head") t += " " + around(pivots[pivot], p.head)
-      else if (key !== "torso") {
-        // pieces were drawn with the limb at its mannequin angle; the back limbs borrow the front pieces
-        const drawn = piece === "off" ? angles.armB : angles[piece] ?? 0
-        t += " " + around(pivots[pivot], -(p[key] - drawn))
-        if (part === "weapon") {
-          const [dir, mid] = index.dirs?.[weapon] || [p.tip, 0]
-          const want = mid ? (/crossbow/.test(weapon) ? 90 : 180) : p.tip
-          t += " " + around(pivots.fist, -(want - dir - (p.arm - drawn)))
-        }
-      }
-      return t.trim() || "none"
-    }
-    const keyOf = u => (ready() && u ? layersOf(u).join("+") : "")
-    function build(u) {
-      if (!ready() || !u) return null
-      const layers = layersOf(u)
-      const key = layers.join("+")
-      const el = document.createElement("div")
-      el.className = "bfx-doll"
-      const half = index.rig.canvas / 2
-      const groups = {}
-      for (const [part, , piece] of PARTS) {
-        const g = document.createElement("div")
-        g.className = "bfx-dg bfx-dg-" + part
-        for (const id of layers) {
-          const rects = index.layers[id]
-          const r = rects[piece]
-          if (!r) continue
-          const W = Math.max(...Object.values(rects).map(x => x[0] + x[2])) + 2
-          const H = Math.max(...Object.values(rects).map(x => x[1] + x[3]))
-          const [sx, sy, w, h, dx, dy] = r
-          const box = document.createElement("div")
-          box.className = "bfx-pc"
-          Object.assign(box.style, { left: (dx / half) * 100 + "%", top: (dy / half) * 100 + "%", width: (w / half) * 100 + "%", height: (h / half) * 100 + "%" })
-          const img = document.createElement("img")
-          img.decoding = "async"
-          img.src = Assets.url("doll/" + id + ".webp")
-          Object.assign(img.style, { left: (-sx / w) * 100 + "%", top: (-sy / h) * 100 + "%", width: (W / w) * 100 + "%", height: (H / h) * 100 + "%" })
-          box.appendChild(img)
-          g.appendChild(box)
-        }
-        if (g.childNodes.length) el.appendChild((groups[part] = g))
-      }
-      let cur = ""
-      const weapon = layers.find(id => index.dirs?.[id])
-      return {
-        key,
-        el,
-        pose(name, style) {
-          const k = name + "|" + style
-          if (k === cur) return
-          cur = k
-          for (const part in groups) groups[part].style.transform = transformOf(part, POSES[name] ? name : "idle", style, weapon)
-        },
-      }
-    }
     // a weapon / off-hand layer as one held piece: its sheet, crop rect and grip point (piece pixels)
     function held(id) {
       const k = ready() && base(id)
@@ -684,7 +583,7 @@
       return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1] }
     }
     const list = prefix => (index ? Object.keys(index.layers).filter(k => (prefix ? k.startsWith(prefix) : !/^[ao]_/.test(k))) : [])
-    return { ready, build, keyOf, held, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
+    return { ready, held, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
   })()
 
   // ---------- side-view stage: Slay-the-Spire style, heroes on the left, monsters on the right ----------
@@ -724,11 +623,6 @@
 .bfx-bg{position:absolute;inset:0;background:center 85%/cover no-repeat;opacity:0;transition:opacity .6s}
 .bfx-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),transparent 30%,transparent 70%,rgba(0,0,0,.35))}
 /* frames are the 512px pose cell plus a 96px margin all round: scale up so the cell fills the actor box */
-.bfx-doll{position:absolute;inset:0;transform:translateY(6%)}
-.bfx-dg{position:absolute;inset:0;transform-origin:0 0;transition:transform .14s ease-out}
-.bfx-dg-armB,.bfx-dg-legB{filter:brightness(.72) saturate(.85)}
-.bfx-pc{position:absolute;overflow:hidden}
-.bfx-sprite .bfx-pc img{position:absolute;max-width:none;display:block}
 .bfx-sprite>img{position:absolute;left:-18.75%;top:-18.75%;width:137.5%;height:137.5%;display:block}
 .bfx-art .bfx-shadow{bottom:2%;height:10%;width:56%}
 .bfx-rings{position:absolute;left:50%;bottom:0;width:0;height:0}
@@ -778,6 +672,7 @@
 .bfx-stage.bfx-live{position:absolute;inset:0;height:auto;min-height:0;resize:none;border-radius:6px}
 .bfx-toggle{position:absolute;top:2px;right:4px;z-index:20;padding:2px 8px;font:12px/18px sans-serif;color:#dfe6ff;background:rgba(20,26,52,.85);border:1px solid #4a5590;border-radius:10px;cursor:pointer}
 .bfx-toggle:hover{background:#2a3460}
+/* #dev-start */
 .bfx-lab{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;font:12px/1.4 sans-serif;color:#dfe6ff}
 .bfx-lab .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px}
 .bfx-lab .lbl{min-width:34px;opacity:.7}
@@ -789,7 +684,8 @@
 .bfx-lab .gal{display:flex;flex-wrap:wrap;gap:6px}
 .bfx-lab .gal figure{margin:0;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 4px}
 .bfx-lab .gal img{width:96px;height:96px}
-.bfx-lab .gal label{font-size:11px;cursor:pointer}`
+.bfx-lab .gal label{font-size:11px;cursor:pointer}
+/* #dev-end */`
       document.head.appendChild(st)
     }
 
@@ -816,7 +712,7 @@
       tabBtn?.remove()
       panel?.remove()
       tabBtn = panel = null
-      if (!cfg.enabled) return
+      if (!cfg.enabled || !DEV) return
       const ref = findBattleTab()
       const box = ref && panelsBox(ref)
       if (!box) return
@@ -2197,6 +2093,7 @@
     return { ensure }
   })()
 
+  // #dev-start
   // ---------- 动画测试: a sandbox for any location, line-up, skill and pose ----------
   const MONSTERS = {"abyssal_imp":["深渊小鬼","magic","fire"],"acrobat":["杂技师","smash","physical"],"alligator":["夏洛克","slash","physical"],"anchor_shark":["持锚鲨","smash","physical"],"aquahorse":["水马","ranged","water"],"black_bear":["黑熊","stab","physical"],"brine_marksman":["海盐射手","ranged","physical"],"butterjerry":["蝶鼠","stab","physical"],"captain_fishhook":["鱼钩船长","slash","physical"],"centaur_archer":["半人马弓箭手","ranged","physical"],"chronofrost_sorcerer":["霜时巫师","magic","water"],"crab":["螃蟹","smash","physical"],"crystal_colossus":["水晶巨像","stab","physical"],"cyclops":["独眼巨人","smash","physical"],"demonic_overlord":["恶魔霸主","magic","fire"],"deranged_jester":["小丑皇","smash","physical"],"dodocamel":["渡渡驼","smash","physical"],"dryad":["树精","magic","nature"],"dusk_revenant":["黄昏亡灵","ranged","physical"],"elementalist":["元素法师","magic","fire"],"enchanted_bishop":["秘法主教","magic","nature"],"enchanted_king":["秘法国王","slash","physical"],"enchanted_knight":["秘法骑士","slash","physical"],"enchanted_pawn":["秘法士兵","smash","physical"],"enchanted_queen":["秘法王后","magic","water"],"enchanted_rook":["秘法堡垒","ranged","physical"],"eye":["独眼","slash","physical"],"eyes":["叠眼","slash","physical"],"flame_sorcerer":["火焰巫师","magic","fire"],"fly":["苍蝇","smash","physical"],"frog":["青蛙","smash","physical"],"frost_sniper":["霜冻狙击手","ranged","water"],"giant_mantis":["巨螳螂","slash","physical"],"giant_scorpion":["巨蝎","stab","physical"],"giant_shoebill":["鲸头鹳","smash","physical"],"gobo_boomy":["轰轰","magic","fire"],"gobo_chieftain":["哥布林酋长","stab","physical"],"gobo_shooty":["咻咻","ranged","physical"],"gobo_slashy":["砍砍","slash","physical"],"gobo_smashy":["锤锤","smash","physical"],"gobo_stabby":["刺刺","stab","physical"],"granite_golem":["花岗岩魔像","smash","physical"],"griffin":["狮鹫","slash","physical"],"grizzly_bear":["棕熊","slash","physical"],"gummy_bear":["软糖熊","smash","physical"],"ice_sorcerer":["冰霜巫师","magic","water"],"infernal_warlock":["地狱术士","magic","fire"],"jackalope":["鹿角兔","magic","nature"],"juggler":["杂耍者","ranged","physical"],"jungle_sprite":["丛林精灵","magic","nature"],"luna_empress":["月神之蝶","magic","nature"],"magician":["魔术师","magic","fire"],"magnetic_golem":["磁力魔像","smash","physical"],"manticore":["狮蝎兽","ranged","physical"],"marine_huntress":["海洋猎手","ranged","water"],"mimic":["宝箱怪","stab","physical"],"myconid":["蘑菇人","magic","nature"],"nom_nom":["咬咬鱼","stab","physical"],"novice_sorcerer":["新手巫师","magic","water"],"panda":["熊猫","smash","physical"],"polar_bear":["北极熊","smash","physical"],"porcupine":["豪猪","ranged","physical"],"pyre_hunter":["火焰猎手","ranged","fire"],"rabid_rabbit":["疯魔兔","slash","physical"],"rat":["杰瑞","stab","physical"],"red_panda":["小熊猫","slash","physical"],"salamander":["火蜥蜴","magic","fire"],"sea_snail":["蜗牛","smash","physical"],"shadow_archer":["暗影弓手","ranged","physical"],"siren":["海妖","magic","water"],"skunk":["臭鼬","slash","physical"],"slimy":["史莱姆","magic","water"],"snake":["蛇","stab","physical"],"soul_hunter":["灵魂猎手","ranged","physical"],"squawker":["鹦鹉","magic","nature"],"stalactite_golem":["钟乳石魔像","stab","physical"],"swampy":["沼泽虫","smash","physical"],"the_kraken":["克拉肯","ranged","physical"],"the_watcher":["观察者","ranged","physical"],"tidal_conjuror":["潮汐召唤师","magic","water"],"treant":["树人","magic","nature"],"trial_badger":["试炼獾","slash","physical"],"trial_beetle":["试炼甲虫","smash","physical"],"trial_chameleon":["试炼变色龙","ranged","physical"],"trial_dragonfly":["试炼蜻蜓","ranged","physical"],"trial_firefly":["试炼萤火虫","magic","fire"],"trial_hedgehog":["试炼刺猬","magic","nature"],"trial_jellyfish":["试炼水母","magic","water"],"trial_wasp":["试炼黄蜂","stab","physical"],"turtle":["忍者龟","smash","physical"],"vampire":["吸血鬼","stab","physical"],"veyes":["复眼","slash","physical"],"werewolf":["狼人","slash","physical"],"zombie":["僵尸","slash","physical"],"zombie_bear":["僵尸熊","stab","physical"]}
   const LOCATIONS = {"aqua_planet":["海洋星球",["sea_snail","crab","aquahorse","nom_nom","turtle","marine_huntress"]],"bear_with_it":["熊熊星球",["gummy_bear","panda","black_bear","grizzly_bear","polar_bear","red_panda"]],"chimerical_den":["奇幻洞穴",["rat","skunk","porcupine","slimy","frog","snake","swampy","alligator","sea_snail","crab","aquahorse","jungle_sprite","myconid","nom_nom","turtle","centaur_archer","gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","eye","butterjerry","eyes","veyes","jackalope","dodocamel","manticore","griffin"]],"enchanted_fortress":["秘法要塞",["novice_sorcerer","ice_sorcerer","flame_sorcerer","panda","black_bear","magnetic_golem","abyssal_imp","elementalist","grizzly_bear","polar_bear","stalactite_golem","soul_hunter","enchanted_pawn","enchanted_knight","enchanted_bishop","enchanted_rook","enchanted_queen","enchanted_king"]],"gobo_planet":["哥布林星球",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","gobo_chieftain"]],"golem_cave":["魔像洞穴",["magnetic_golem","stalactite_golem","granite_golem","crystal_colossus"]],"infernal_abyss":["地狱深渊",["abyssal_imp","soul_hunter","infernal_warlock","demonic_overlord"]],"jungle_planet":["丛林星球",["jungle_sprite","myconid","treant","centaur_archer","luna_empress"]],"pirate_cove":["海盗基地",["eye","eyes","veyes","zombie","magnetic_golem","abyssal_imp","vampire","stalactite_golem","soul_hunter","squawker","werewolf","granite_golem","infernal_warlock","anchor_shark","brine_marksman","tidal_conjuror","captain_fishhook","the_kraken"]],"planet_of_the_eyes":["眼球星球",["eye","eyes","veyes","the_watcher"]],"sinister_circus":["阴森马戏团",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","novice_sorcerer","gummy_bear","ice_sorcerer","flame_sorcerer","panda","black_bear","grizzly_bear","polar_bear","zombie","vampire","rabid_rabbit","elementalist","werewolf","zombie_bear","acrobat","juggler","magician","deranged_jester"]],"smelly_planet":["臭臭星球",["fly","rat","skunk","porcupine","slimy"]],"sorcerers_tower":["巫师之塔",["novice_sorcerer","ice_sorcerer","flame_sorcerer","elementalist","chronofrost_sorcerer"]],"swamp_planet":["沼泽星球",["frog","snake","swampy","alligator","giant_shoebill"]],"twilight_zone":["暮光之地",["zombie","vampire","werewolf","dusk_revenant"]]}
@@ -2512,6 +2409,11 @@
     Lab.startAuto()
   }
 
+  // #dev-end
+  // #release-start
+  // const Lab = { units: { p: [], m: [] }, render() {}, stop() {}, redraw() {}, loc: () => null, tier: () => 0 }
+  // #release-end
+
   // ---------- menu ----------
   let menuIds = []
   function menu() {
@@ -2524,12 +2426,18 @@
         menu()
       })
     menuIds = [
+      // #dev-start
       GM_registerMenuCommand(`当前版本 v${GM_info?.script?.version || "?"}（点击检查素材）`, () => {
         Assets.refresh(true)
         const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ") + ` 纸娃娃:${Assets.get("doll") || 0}`
         alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}`)
       }),
+      // #dev-end
+      // #release-start
+      // GM_registerMenuCommand(`当前版本 v${GM_info?.script?.version || "?"}`, () => Assets.refresh(true)),
+      // #release-end
       toggle("enabled", "战斗动画（舞台 / 叠加层）", () => Stage.ensureTab()),
+      // #dev-start
       GM_registerMenuCommand(`角色形象：${cfg.lookMode === "outfit" ? "按服装" : "按装备"}（点击切换）`, () => {
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"
         saveCfg()
@@ -2547,6 +2455,7 @@
         saveCfg()
         Assets.refresh(true)
       }),
+      // #dev-end
       GM_registerMenuCommand(`动画大小：${cfg.scale}`, () => {
         const v = parseFloat(prompt("动画大小倍率（0.5 ~ 2）", cfg.scale))
         if (v >= 0.3 && v <= 3) {
@@ -2556,8 +2465,8 @@
           menu()
         }
       }),
-      GM_registerMenuCommand("打开动画测试（自动战斗）", demo),
-      toggle("debug", "调试：控制台打印战斗消息"),
+      GM_registerMenuCommand("打开动画测试（自动战斗）", demo), // #dev
+      toggle("debug", "调试：控制台打印战斗消息"), // #dev
     ]
   }
   menu()
@@ -2598,7 +2507,7 @@
                 else if (obj.type === "battle_updated") onBattleUpdated(obj)
                 else onCharacterMessage(obj)
               } catch (e) {
-                if (cfg.debug) console.warn("[战斗动画]", e)
+                if (cfg.debug) console.warn("[战斗动画]", e) // #dev
               }
             }, 0)
           }
@@ -2609,5 +2518,5 @@
   }
   Object.defineProperty(W.MessageEvent.prototype, "data", desc)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll }
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll } // #dev
 })()
