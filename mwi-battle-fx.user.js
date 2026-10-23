@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.10.7
+// @version      0.10.8
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -1131,7 +1131,8 @@
     const HANDS = { "bfx-wpn": [79, 66], "bfx-off": [21, 67] }
     const HELD_SCALE = 0.2
     // two-handed bulwarks are body-sized shields: drawn bigger than the one-handed gear
-    const heldScale = id => HELD_SCALE * (/bulwark/.test(id) ? 1.55 : 1)
+    const isBulwark = id => /bulwark/.test(id)
+    const heldScale = id => HELD_SCALE * (isBulwark(id) ? 2 : 1)
     const PLAYER_SCALE = 0.75
     let glowSeq = 0
     // a big guild roster: effects get cheaper (no canvas shadow blur, fewer sparks, still enhancement auras)
@@ -1232,14 +1233,18 @@
           const [hx, hy] = HANDS[cls]
           const k = heldScale(id)
           const box = document.createElementNS(SVGNS, "svg")
-          attrs(box, { x: hx - pc.grip[0] * k, y: hy - pc.grip[1] * k, width: pc.rect[2] * k, height: pc.rect[3] * k, viewBox: pc.rect.join(" "), overflow: "hidden" })
+          const w = pc.rect[2] * k
+          const h = pc.rect[3] * k
+          // a bulwark stands in front of the body, its foot on the ground; everything else hangs from the hand
+          const [x, y] = isBulwark(id) ? [hx - 8 - w / 2, 98 - h] : [hx - pc.grip[0] * k, hy - pc.grip[1] * k]
+          attrs(box, { x, y, width: w, height: h, viewBox: pc.rect.join(" "), overflow: "hidden" })
           const img = document.createElementNS(SVGNS, "image")
           attrs(img, { href: pc.url, width: pc.W, height: pc.H })
           box.appendChild(img)
           g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
-          if (/bulwark/.test(id)) g.dataset.big = 1
+          if (isBulwark(id)) g.dataset.big = 1
         } else {
           // no drawn piece: the game's item icon
           const w = document.createElementNS(SVGNS, "use")
