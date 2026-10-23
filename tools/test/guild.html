@@ -1,19 +1,23 @@
 <!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
 body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
-.GuildPanel_trial{width:1000px;margin:10px;padding:10px;background:#232945}
-.GuildTrial_body{display:flex;gap:20px}
-.MiniUnit_grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;width:640px}
+.GuildPanel_guildPanel__1IIto{width:1000px;margin:10px;padding:10px;background:#232945}
+.BattlePanel_battleArea__U9hij{display:flex;gap:20px;min-height:200px}
+.MiniUnitGrid_miniUnitGrid__3lJDa{display:grid;grid-template-columns:150px repeat(8,1fr);gap:4px;width:760px}
 .MiniUnit_miniUnit__a{height:34px;background:#2c3354;border-radius:4px;font-size:10px;padding:2px}
-.CombatUnit_combatUnit__b{width:150px;height:150px;background:#2c3354;border-radius:8px}
+.CombatUnit_combatUnit__1m3XT{width:150px;height:150px;background:#2c3354;border-radius:8px}
 </style></head><body>
-<!-- the guild page's tabs; the trial view sits in the 进行中 tab -->
-<div class="GuildPanel_trial">
- <div role="tablist" style="display:flex;gap:10px;border-bottom:1px solid #445;margin-bottom:8px"><span>概览</span><span>成员</span><span style="color:#9cf">进行中</span></div>
- <div class="GuildTrial_body">
-  <div class="CombatUnit_combatUnit__b">自己</div>
-  <div class="MiniUnit_grid" id="grid"></div>
-  <div class="CombatUnit_combatUnit__b">试炼獾</div>
- </div>
+<!-- structure as recorded in the real game (test server, 2026-10-23): the trial in the guild page's 进行中 tab is a
+     BattlePanel whose players area holds a guildPartyArea; the own battle panel may exist elsewhere at the same time -->
+<div style="display:none"><div class="BattlePanel_battlePanel__1yPCP"><div class="BattlePanel_battleArea__U9hij">
+ <div class="BattlePanel_playersArea__vvwlB"><div class="BattlePanel_combatUnitGrid__2hTAM"><div class="CombatUnit_combatUnit__1m3XT"><svg viewBox="0 0 100 100"><use href="/sprites/avatars.svg#dog_5"/></svg></div></div></div>
+ <div class="BattlePanel_monstersArea__2dzrY"><div class="BattlePanel_combatUnitGrid__2hTAM"><div class="CombatUnit_combatUnit__1m3XT"></div></div></div>
+</div></div></div>
+<div class="GuildPanel_guildPanel__1IIto">
+ <div role="tablist" style="display:flex;gap:10px;border-bottom:1px solid #445;margin-bottom:8px"><span>概览</span><span>成员</span><span class="GuildPanel_inProgressTab__2Q5C1" style="color:#9cf">进行中</span></div>
+ <div class="BattlePanel_battlePanel__1yPCP"><div class="BattlePanel_battleArea__U9hij">
+  <div class="BattlePanel_playersArea__vvwlB"><div class="BattlePanel_guildPartyArea__kKY5M"><div class="MiniUnitGrid_miniUnitGrid__3lJDa" id="grid"><div class="CombatUnit_combatUnit__1m3XT">ttttttt1</div></div></div></div>
+  <div class="BattlePanel_monstersArea__2dzrY"><div class="BattlePanel_combatUnitGrid__2hTAM"><div class="CombatUnit_combatUnit__1m3XT"><svg viewBox="0 0 100 100"><use href="/sprites/combat_monsters.svg#trial_badger"/></svg>试炼獾</div></div></div>
+ </div></div>
 </div>
 <script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799',debug:true}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
 <script src="mwi-battle-fx.user.js"></script>
@@ -23,29 +27,30 @@ const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o
 // the game reads every message; the userscript sees them through that read
 ws.addEventListener('message',e=>{void e.data});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const P=(name,style,dt,hrid,hp=1500)=>({name,hrid,character:{id:name},currentHitpoints:hp,currentManapoints:800,combatDetails:{maxHitpoints:hp,maxManapoints:1000,combatStats:{combatStyleHrids:['/combat_styles/'+style],damageType:'/damage_types/'+dt}}});
-// 40 players: 6 tanks (seen casting provoke), 12 melee, 10 ranged, 12 magic
-const roster=[];
-for(let i=0;i<40;i++){const style=i<6?'smash':i<18?['slash','stab','smash'][i%3]:i<28?'ranged':'magic';roster.push(P('P'+i,style,style==='magic'?['fire','water','nature'][i%3]:'physical'))}
-document.getElementById('grid').innerHTML=roster.slice(1).map(p=>`<div class="MiniUnit_miniUnit__a"><span class="MiniUnit_name__c">${p.name}</span></div>`).join('');
+// 40 members; slot 0 is the viewer, the trial view lists slots 1..39 as member cells
+const N=40;
+const skillOf=i=>i<6?'/abilities/provoke':i<18?'/abilities/cleave':i<28?'/abilities/flame_arrow':['/abilities/fireball','/abilities/water_strike','/abilities/entangle'][i%3];
+document.getElementById('grid').insertAdjacentHTML('beforeend',[...Array(N-1)].map((_,k)=>`<div class="MiniUnit_miniUnit__a"><span class="MiniUnit_name__c">P${k+1}</span></div>`).join(''));
+const PM=(i,o)=>({cHP:1500,mHP:1500,cMP:800,mMP:1000,isActive:true,atkCounter:10,dmgCounter:0,critCounter:0,...o});
 async function start(){
- feed({type:'new_guild_battle',players:roster,monsters:[P('Trial Badger','slash','physical','/monsters/trial_badger',400000)]});
- await sleep(1500);
- const pm={};roster.forEach((p,i)=>pm[i]={cHP:1500,cMP:800,atkCounter:10,dmgCounter:0,...(i<6?{abilityHrid:'/abilities/provoke'}:{})});
- feed({type:'guild_battle_updated',pMap:pm,mMap:{0:{cHP:400000,cMP:1000,atkCounter:5,dmgCounter:0}}});
+ feed({type:'init_character_data',character:{name:'ttttttt1'},characterActions:[{actionHrid:'/actions/combat/smelly_planet',difficultyTier:0,isDone:false}],characterItems:[]});
+ // the own battle runs at the same time and must not leak onto the trial stage
+ feed({type:'new_battle',players:[{name:'ttttttt1',currentHitpoints:2000,currentManapoints:1000,combatDetails:{maxHitpoints:2000,maxManapoints:1000,combatStats:{combatStyleHrids:['/combat_styles/smash'],damageType:'/damage_types/physical'}}}],monsters:[{name:'Rat',hrid:'/monsters/rat',currentHitpoints:500,currentManapoints:0,combatDetails:{maxHitpoints:500,maxManapoints:1,combatStats:{combatStyleHrids:['/combat_styles/stab'],damageType:'/damage_types/physical'}}}]});
+ await sleep(500);
+ // joined mid-way: no new_guild_battle, the roster appears from the updates
+ const pm={};for(let i=0;i<N;i++)pm[i]=PM(i,{abilityHrid:skillOf(i)});
+ feed({type:'guild_battle_updated',battleId:1,tier:1,pMap:pm,mMap:{0:{cHP:400000,mHP:400000,cMP:1000,mMP:1000,atkCounter:5,dmgCounter:0,critCounter:0}}});
  let bossHp=400000,c=11;
  for(let t=0;t<14;t++){
   await sleep(450);
-  // a few players act together each tick
-  const acting=[...Array(5)].map(()=>Math.floor(Math.random()*40));
-  const p={};acting.forEach(i=>p[i]={cHP:1500,cMP:800,atkCounter:c});
+  const acting=[...Array(5)].map(()=>Math.floor(Math.random()*N));
+  const p={};acting.forEach(i=>p[i]={cHP:1500,cMP:780,atkCounter:c});
   bossHp-=3000+Math.random()*4000;
-  feed({type:'guild_battle_updated',pMap:p,mMap:{0:{cHP:Math.round(bossHp),dmgCounter:c-10}}});
+  feed({type:'guild_battle_updated',battleId:1,tier:1,pMap:p,mMap:{0:{cHP:Math.round(bossHp),dmgCounter:c-10}}});
+  feed({type:'battle_updated',battleId:1,pMap:{0:{cHP:1990,atkCounter:c}},mMap:{0:{cHP:400-t*20,dmgCounter:t+1}}});
   c++;
  }
- // zoom in on the front line
- const st=document.querySelector('.bfx-stage'), r=st.getBoundingClientRect();
- for(let k=0;k<6;k++){ st.dispatchEvent(new WheelEvent('wheel',{deltaY:-100,clientX:r.left+r.width*0.4,clientY:r.top+r.height*0.75,bubbles:true,cancelable:true})); await sleep(150) }
+ console.log('STAGE', !!document.querySelector('.GuildPanel_guildPanel__1IIto .bfx-stage'), document.querySelectorAll('.bfx-stage').length);
 }
 function back(){}
 </script></body></html>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.10.0
+// @version      0.10.1
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -166,16 +166,57 @@
   // a player seen casting one of these stands with the tanks
   const TANK_ABILITIES = new Set(["provoke", "taunt", "toughness", "spike_shell", "retribution", "guardian_aura", "invincible"])
   function onNewGuildBattle(obj) {
+    gunits.tier = obj.tier ?? gunits.tier
     gunits.p = (obj.players || []).map(unitFrom)
     gunits.m = (obj.monsters || []).map(unitFrom)
     gunits.p.forEach(u => Looks.assignGuild(u))
     if (cfg.enabled) Stage.newBattle("guild")
   }
 
+  // A trial joined mid-way (or a page reload during one) has no new_guild_battle: units are made up from the
+  // update itself, named from the trial view (member cells after the own card; slot 0 = the viewer) and the boss
+  // cards; styles are learnt from the skills seen.
+  function guildDom() {
+    const area = guildArea()
+    if (!area) return { names: [], mons: [] }
+    const names = [...area.querySelectorAll('[class*="MiniUnit_name"]')].map(e => e.textContent.trim())
+    const grid = area.querySelector('[class*="BattlePanel_monstersArea"] [class*="BattlePanel_combatUnitGrid"]')
+    const mons = [...(grid?.children || [])].map(c => (c.querySelector('use[href*="combat_monsters"]')?.getAttribute("href") || "").split("#")[1])
+    return { names, mons }
+  }
+  function fillGuildUnits(obj) {
+    let dom = null
+    let added = false
+    for (const side of ["p", "m"]) {
+      for (const [k, e] of Object.entries(obj[side + "Map"] || {})) {
+        const i = +k
+        if (gunits[side][i]) continue
+        dom ||= guildDom()
+        const own = side === "p" && i === 0 && units.p.find(u => u.name === Looks.me.name)
+        const mon = side === "m" ? dom.mons[i] : null
+        const u = {
+          name: side === "p" ? (i === 0 ? Looks.me.name : dom.names[i - 1]) || `#${i}` : MONSTER_ZH[mon] || mon || "?",
+          hrid: mon ? "/monsters/" + mon : null,
+          hp: e.cHP ?? 1, mp: e.cMP ?? 0, maxHp: e.mHP || e.cHP || 1, maxMp: e.mMP || 1,
+          ability: null, style: own?.style || "slash", element: own?.element || "physical", counters: {}, raw: {}, guessed: true,
+        }
+        for (let n = 0; n < i; n++) gunits[side][n] ||= { name: side === "p" ? `#${n}` : "?", hp: 1, mp: 0, maxHp: 1, maxMp: 1, style: "slash", element: "physical", counters: {}, raw: {}, guessed: true }
+        gunits[side][i] = u
+        if (side === "p") Looks.assignGuild(u)
+        added = true
+      }
+    }
+    if (added) Stage.syncRoster("guild")
+  }
+
   const other = side => (side === "p" ? "m" : "p")
 
   // U: the battle the update belongs to (units = own battle, gunits = guild trial); src: the stage mode it plays in
   function onBattleUpdated(obj, U = units, src = "live") {
+    if (U === gunits) {
+      if (obj.tier !== undefined && obj.tier !== gunits.tier) (gunits.tier = obj.tier), Stage.setBackground()
+      fillGuildUnits(obj)
+    }
     if (!U.p.length && !U.m.length) return
     const changes = [] // {side, i, dHP, dMP, hp, maxHp, acted, prevAbility, died, revived}
     for (const side of ["p", "m"]) {
@@ -207,6 +248,8 @@
         // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
         if (TANK_ABILITIES.has(shortId(e.abilityHrid))) u.tank = true
+        const st = ABILITIES[shortId(e.abilityHrid)]?.[3]
+        if (u.guessed && st) (u.style = st), (u.element = ABILITIES[shortId(e.abilityHrid)][4] || u.element)
         else if (e.isAutoAtk) u.ability = null
         changes.push(c)
       }
@@ -367,10 +410,15 @@
   const pct = (a, b) => Math.max(0, Math.min(100, (a / (b || 1)) * 100)) + "%"
 
   // ---------- the game's battle cards (read only: avatar sprites are taken from them) ----------
+  // The guild page's 进行中 tab shows the running trial in the same BattlePanel as the own battle (its players
+  // area holds a guildPartyArea instead of a card grid); both can run at once, so the two are told apart.
+  const isGuildArea = a => !!(a.querySelector('[class*="BattlePanel_guildPartyArea"]') || a.closest('[class*="GuildPanel_guildPanel"]'))
+  const battleAreas = () => [...document.querySelectorAll('[class*="BattlePanel_battleArea"]')]
+  const ownArea = () => battleAreas().find(a => !isGuildArea(a)) || null
+  const guildArea = () => battleAreas().find(a => isGuildArea(a) && a.offsetParent) || null
   function cardEl(side, i) {
-    const area = document.querySelector(side === "p" ? '[class*="BattlePanel_playersArea"]' : '[class*="BattlePanel_monstersArea"]')
-    let grid = area?.querySelector('[class*="BattlePanel_combatUnitGrid"]')
-    if (!grid) grid = document.querySelectorAll('[class*="BattlePanel_combatUnitGrid"]')[side === "p" ? 0 : 1]
+    const area = ownArea()?.querySelector(side === "p" ? '[class*="BattlePanel_playersArea"]' : '[class*="BattlePanel_monstersArea"]')
+    const grid = area?.querySelector('[class*="BattlePanel_combatUnitGrid"]')
     return grid?.children[i] || null
   }
 
@@ -962,6 +1010,7 @@
       if (mode === "guild") {
         const bosses = [...new Set(shown.m.map(u => nameOf("m", u)).filter(Boolean))]
         text = (zh ? "公会试炼" : "Guild Trial") + (bosses.length ? " · " + bosses.join(" / ") : "")
+        tier = gunits.tier ?? null
       } else if (mode === "test") {
         text = title(Lab.loc())
         tier = Lab.tier()
@@ -2286,6 +2335,16 @@
       return castT + 500
     }
 
+    // the roster grew (guild trial joined mid-way): new players / monsters, nobody walks in again
+    function syncRoster(src) {
+      if (mode !== src || !visible()) return
+      const key = shown.p.map(u => u.name).join("|")
+      if (key !== playersKey || actors.m.length !== shown.m.length) {
+        rebuild(false)
+        for (const side of ["p", "m"]) actors[side].forEach(a => (setBars(a), shown[side][a.i]?.hp <= 0 && die(a, true)))
+        setLocation()
+      }
+    }
     function newBattle(src = "live") {
       if (mode !== src) return
       sideAuras.m = {}
@@ -2325,7 +2384,7 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { play, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    return { play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -2343,7 +2402,7 @@
       if (Stage.modeOf() === "live") Stage.detach()
     }
     function ensure() {
-      const a = cfg.enabled ? document.querySelector('[class*="BattlePanel_battleArea"]') : null
+      const a = cfg.enabled ? ownArea() : null
       if (a !== area) {
         cleanup()
         area = a
@@ -2383,25 +2442,10 @@
   })()
 
   // ---------- guild trials: the stage laid over the trial shown in the guild page's 进行中 tab ----------
-  // The trial view lists the members as small MiniUnit cells next to the boss / own CombatUnit cards; the stage
-  // covers the smallest visible box holding them all (never one that holds the tab bar).
   const GuildLive = (() => {
     let area = null
     let slot = null
     let btn = null
-    const shownEls = sel => [...document.querySelectorAll(sel)].filter(e => e.offsetParent && !e.closest(".bfx-stage"))
-    function findArea() {
-      const cells = shownEls('[class*="MiniUnit_miniUnit"]')
-      if (!cells.length) return null
-      const common = els => {
-        let a = els[0].parentElement
-        while (a && !els.every(e => a.contains(e))) a = a.parentElement
-        return a
-      }
-      const units = shownEls('[class*="CombatUnit_combatUnit"]').filter(e => !e.closest('[class*="BattlePanel_battlePanel"]'))
-      const all = common([...cells, ...units])
-      return all && !all.querySelector('[role="tablist"]') ? all : common(cells)
-    }
     function cleanup() {
       slot?.remove()
       btn?.remove()
@@ -2410,7 +2454,7 @@
       if (Stage.modeOf() === "guild") Stage.detach()
     }
     function ensure() {
-      const a = cfg.enabled && gunits.p.length ? findArea() : null
+      const a = cfg.enabled ? guildArea() : null
       if (a !== area) {
         cleanup()
         area = a
