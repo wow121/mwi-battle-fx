@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.10.10
+// @version      0.10.11
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -1201,9 +1201,9 @@
           const box = document.createElementNS(SVGNS, "svg")
           const w = pc.rect[2] * k
           const h = pc.rect[3] * k
-          // a bulwark stands on the ground at the bearer's front side, behind the body (the face stays clear);
-          // everything else hangs from the hand
-          const [x, y] = isBulwark(id) ? [hx + 7 - w / 2, 98 - h] : [hx - pc.grip[0] * k, hy - pc.grip[1] * k]
+          // a bulwark stands on the ground in front of the bearer, pushed out to the front side so its near edge
+          // only grazes the face; everything else hangs from the hand
+          const [x, y] = isBulwark(id) ? [hx - 15, 98 - h] : [hx - pc.grip[0] * k, hy - pc.grip[1] * k]
           attrs(box, { x, y, width: w, height: h, viewBox: pc.rect.join(" "), overflow: "hidden" })
           const img = document.createElementNS(SVGNS, "image")
           attrs(img, { href: pc.url, width: pc.W, height: pc.H })
@@ -1232,8 +1232,7 @@
         }
         const aura = enchAura(level, [...g.childNodes].filter(ch => !ch.classList?.contains("bfx-glow")))
         if (aura) g.insertBefore(aura, g.firstChild)
-        if (g.dataset.big) node.insertBefore(g, node.firstChild)
-        else node.appendChild(g)
+        node.appendChild(g)
       }
       return { key, node, real: true }
     }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.10.10
+// @version      0.10.11
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -1239,9 +1239,9 @@
           const box = document.createElementNS(SVGNS, "svg")
           const w = pc.rect[2] * k
           const h = pc.rect[3] * k
-          // a bulwark stands on the ground at the bearer's front side, behind the body (the face stays clear);
-          // everything else hangs from the hand
-          const [x, y] = isBulwark(id) ? [hx + 7 - w / 2, 98 - h] : [hx - pc.grip[0] * k, hy - pc.grip[1] * k]
+          // a bulwark stands on the ground in front of the bearer, pushed out to the front side so its near edge
+          // only grazes the face; everything else hangs from the hand
+          const [x, y] = isBulwark(id) ? [hx - 15, 98 - h] : [hx - pc.grip[0] * k, hy - pc.grip[1] * k]
           attrs(box, { x, y, width: w, height: h, viewBox: pc.rect.join(" "), overflow: "hidden" })
           const img = document.createElementNS(SVGNS, "image")
           attrs(img, { href: pc.url, width: pc.W, height: pc.H })
@@ -1270,8 +1270,7 @@
         }
         const aura = enchAura(level, [...g.childNodes].filter(ch => !ch.classList?.contains("bfx-glow")))
         if (aura) g.insertBefore(aura, g.firstChild)
-        if (g.dataset.big) node.insertBefore(g, node.firstChild)
-        else node.appendChild(g)
+        node.appendChild(g)
       }
       return { key, node, real: true }
     }
