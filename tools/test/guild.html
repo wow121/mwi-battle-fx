@@ -1,0 +1,51 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.GuildPanel_trial{width:1000px;margin:10px;padding:10px;background:#232945}
+.GuildTrial_body{display:flex;gap:20px}
+.MiniUnit_grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;width:640px}
+.MiniUnit_miniUnit__a{height:34px;background:#2c3354;border-radius:4px;font-size:10px;padding:2px}
+.CombatUnit_combatUnit__b{width:150px;height:150px;background:#2c3354;border-radius:8px}
+</style></head><body>
+<!-- the guild page's tabs; the trial view sits in the 进行中 tab -->
+<div class="GuildPanel_trial">
+ <div role="tablist" style="display:flex;gap:10px;border-bottom:1px solid #445;margin-bottom:8px"><span>概览</span><span>成员</span><span style="color:#9cf">进行中</span></div>
+ <div class="GuildTrial_body">
+  <div class="CombatUnit_combatUnit__b">自己</div>
+  <div class="MiniUnit_grid" id="grid"></div>
+  <div class="CombatUnit_combatUnit__b">试炼獾</div>
+ </div>
+</div>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799',debug:true}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+// the game reads every message; the userscript sees them through that read
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const P=(name,style,dt,hrid,hp=1500)=>({name,hrid,character:{id:name},currentHitpoints:hp,currentManapoints:800,combatDetails:{maxHitpoints:hp,maxManapoints:1000,combatStats:{combatStyleHrids:['/combat_styles/'+style],damageType:'/damage_types/'+dt}}});
+// 40 players: 6 tanks (seen casting provoke), 12 melee, 10 ranged, 12 magic
+const roster=[];
+for(let i=0;i<40;i++){const style=i<6?'smash':i<18?['slash','stab','smash'][i%3]:i<28?'ranged':'magic';roster.push(P('P'+i,style,style==='magic'?['fire','water','nature'][i%3]:'physical'))}
+document.getElementById('grid').innerHTML=roster.slice(1).map(p=>`<div class="MiniUnit_miniUnit__a"><span class="MiniUnit_name__c">${p.name}</span></div>`).join('');
+async function start(){
+ feed({type:'new_guild_battle',players:roster,monsters:[P('试炼獾','slash','physical','/monsters/trial_badger',400000)]});
+ await sleep(1500);
+ const pm={};roster.forEach((p,i)=>pm[i]={cHP:1500,cMP:800,atkCounter:10,dmgCounter:0,...(i<6?{abilityHrid:'/abilities/provoke'}:{})});
+ feed({type:'guild_battle_updated',pMap:pm,mMap:{0:{cHP:400000,cMP:1000,atkCounter:5,dmgCounter:0}}});
+ let bossHp=400000,c=11;
+ for(let t=0;t<14;t++){
+  await sleep(450);
+  // a few players act together each tick
+  const acting=[...Array(5)].map(()=>Math.floor(Math.random()*40));
+  const p={};acting.forEach(i=>p[i]={cHP:1500,cMP:800,atkCounter:c});
+  bossHp-=3000+Math.random()*4000;
+  feed({type:'guild_battle_updated',pMap:p,mMap:{0:{cHP:Math.round(bossHp),dmgCounter:c-10}}});
+  c++;
+ }
+ // zoom in on the front line
+ const st=document.querySelector('.bfx-stage'), r=st.getBoundingClientRect();
+ for(let k=0;k<6;k++){ st.dispatchEvent(new WheelEvent('wheel',{deltaY:-100,clientX:r.left+r.width*0.4,clientY:r.top+r.height*0.75,bubbles:true,cancelable:true})); await sleep(150) }
+}
+function back(){}
+</script></body></html>

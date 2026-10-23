@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.9.7
+// @version      0.9.8
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -30,7 +30,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = false
   // ---------- settings ----------
-  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300 }
+  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
@@ -155,17 +155,30 @@
     if (cfg.enabled) Stage.newBattle()
   }
 
+  // guild trials: up to ~40 players against the trial boss(es), with their own messages (new_guild_battle /
+  // guild_battle_updated) in the same pMap / mMap shape; slot 0 is the viewer
+  const gunits = { p: [], m: [] }
+  // a player seen casting one of these stands with the tanks
+  const TANK_ABILITIES = new Set(["provoke", "taunt", "toughness", "spike_shell", "retribution", "guardian_aura", "invincible"])
+  function onNewGuildBattle(obj) {
+    gunits.p = (obj.players || []).map(unitFrom)
+    gunits.m = (obj.monsters || []).map(unitFrom)
+    gunits.p.forEach(u => Looks.assignGuild(u))
+    if (cfg.enabled) Stage.newBattle("guild")
+  }
+
   const other = side => (side === "p" ? "m" : "p")
 
-  function onBattleUpdated(obj) {
-    if (!units.p.length && !units.m.length) return
+  // U: the battle the update belongs to (units = own battle, gunits = guild trial); src: the stage mode it plays in
+  function onBattleUpdated(obj, U = units, src = "live") {
+    if (!U.p.length && !U.m.length) return
     const changes = [] // {side, i, dHP, dMP, hp, maxHp, acted, prevAbility, died, revived}
     for (const side of ["p", "m"]) {
       const map = obj[side + "Map"] || {}
       for (const k of Object.keys(map)) {
         const i = +k
         const e = map[k]
-        const u = units[side][i]
+        const u = U[side][i]
         if (!u || !e) continue
         const c = { side, i, dHP: 0, dMP: 0, hp: u.hp, maxHp: u.maxHp, acted: false, struck: false, prevAbility: u.ability, died: false, revived: false }
         if (typeof e.cHP === "number") {
@@ -188,26 +201,27 @@
         for (const key of ["atkCounter", "dmgCounter", "critCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
         // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
+        if (TANK_ABILITIES.has(shortId(e.abilityHrid))) u.tank = true
         else if (e.isAutoAtk) u.ability = null
         changes.push(c)
       }
     }
-    const actions = resolve(changes)
+    const actions = resolve(changes, U)
     // critCounter: whichever side it ticks on (attacker or the one hit), the action's hits were critical
     for (const act of actions) {
       const by = act.actor && changes.find(c => c.side === act.actor.side && c.i === act.actor.i)
       if (act.effect === "damage") for (const t of act.targets) t.crit = (t.crit || !!by?.crit) && t.dHP < 0
     }
-    procs(actions, changes)
-    if (cfg.enabled) Stage.play(actions)
+    procs(actions, changes, U)
+    if (cfg.enabled) Stage.play(actions, src)
   }
 
   // turns raw hp/mp deltas into actions:
   // {actor: {side,i}|null, ab, effect: damage|heal|buff|regen, style, element, targets: [change]}
-  function resolve(changes) {
+  function resolve(changes, U = units) {
     const actions = []
     // with action counters a cast is "acted while an ability was prepared"; without them, an MP drop
-    const countersKnown = changes.some(c => units[c.side][c.i]?.counters?.atkCounter !== undefined)
+    const countersKnown = changes.some(c => U[c.side][c.i]?.counters?.atkCounter !== undefined)
     const casters = changes.filter(c => c.prevAbility && (countersKnown ? c.acted : c.dMP < 0))
     // misses (struck without HP loss) travel with the hits so they still get a "MISS"
     const hurt = changes.filter(c => c.dHP < 0 || (c.struck && c.dHP === 0))
@@ -216,7 +230,7 @@
 
     for (const c of casters) {
       const ab = abilityInfo(c.prevAbility)
-      const u = units[c.side][c.i]
+      const u = U[c.side][c.i]
       let effect = "buff"
       let targets = []
       if (ab.kind === "damage") {
@@ -240,7 +254,7 @@
     const bySrc = new Map()
     for (const t of hurt) {
       if (used.has(t)) continue
-      const foes = units[other(t.side)]
+      const foes = U[other(t.side)]
       const acted = changes.filter(c => c.side === other(t.side) && c.acted && !casterKeys.has(c.side + c.i))
       let src = acted.length ? acted[0].i : -1
       // hurt while acting and no enemy acted: thorns / retribution bounced its own attack back
@@ -262,6 +276,17 @@
         actions.push(a)
       }
       bySrc.get(key).targets.push(t)
+    }
+    // several attackers in one update (guild trials): the first one carries the numbers, the others swing
+    // at the same targets without repeating them
+    for (const side of ["p", "m"]) {
+      const extra = changes.filter(c => c.side === side && c.acted && !casterKeys.has(c.side + c.i) && !bySrc.has(c.side + c.i))
+      const hit = actions.find(a => a.actor?.side === side && !a.ab && a.targets.length)
+      if (!hit) continue
+      for (const c of extra) {
+        const u = U[side][c.i]
+        actions.push({ actor: { side, i: c.i }, ab: null, effect: "damage", style: u.style, element: u.element, targets: hit.targets.map(t => ({ ...t, quiet: true })) })
+      }
     }
     // life drain / regen ticks
     for (const h of healed) if (!used.has(h)) actions.push({ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [h] })
@@ -288,8 +313,8 @@
     return shortId(it.main_hand || it.two_hand)?.replace(/_refined$/, "") || null
   }
   const castDrop = {} // "<player>|<ability>" -> largest MP drop seen; a cast ~10 MP cheaper was rippled
-  function procs(actions, changes) {
-    const holders = units.p.map((u, i) => ({ i, w: weaponOf(u) })).filter(h => PROCS[h.w])
+  function procs(actions, changes, U = units) {
+    const holders = U.p.map((u, i) => ({ i, w: weaponOf(u) })).filter(h => PROCS[h.w])
     if (!holders.length) return
     const flash = (act, h) => (act.procs ||= []).push({ side: "p", i: h.i, color: PROCS[h.w] })
     for (const act of actions) {
@@ -319,9 +344,9 @@
       }
       // a monster hurt by its own attack with no player acting: parried by a living regal sword holder
       if (!a && act.style === "reflect" && act.targets[0]?.side === "m") {
-        const p = holders.find(x => x.w === "regal_sword" && units.p[x.i].hp > 0)
+        const p = holders.find(x => x.w === "regal_sword" && U.p[x.i].hp > 0)
         if (p) {
-          Object.assign(act, { actor: { side: "p", i: p.i }, style: units.p[p.i].style, element: units.p[p.i].element })
+          Object.assign(act, { actor: { side: "p", i: p.i }, style: U.p[p.i].style, element: U.p[p.i].element })
           flash(act, p)
         }
       }
@@ -347,7 +372,7 @@
   // ---------- where we fight: location + difficulty pick the stage background ----------
   const ZONE_LOC = {"abyssal_imp":"infernal_abyss","alligator":"swamp_planet","aqua_planet":"aqua_planet","aquahorse":"aqua_planet","bear_with_it":"bear_with_it","black_bear":"bear_with_it","centaur_archer":"jungle_planet","chimerical_den":"chimerical_den","crab":"aqua_planet","elementalist":"sorcerers_tower","enchanted_fortress":"enchanted_fortress","eye":"planet_of_the_eyes","eyes":"planet_of_the_eyes","flame_sorcerer":"sorcerers_tower","fly":"smelly_planet","frog":"swamp_planet","gobo_boomy":"gobo_planet","gobo_planet":"gobo_planet","gobo_shooty":"gobo_planet","gobo_slashy":"gobo_planet","gobo_smashy":"gobo_planet","gobo_stabby":"gobo_planet","golem_cave":"golem_cave","granite_golem":"golem_cave","grizzly_bear":"bear_with_it","gummy_bear":"bear_with_it","ice_sorcerer":"sorcerers_tower","infernal_abyss":"infernal_abyss","infernal_warlock":"infernal_abyss","jungle_planet":"jungle_planet","jungle_sprite":"jungle_planet","magnetic_golem":"golem_cave","myconid":"jungle_planet","nom_nom":"aqua_planet","novice_sorcerer":"sorcerers_tower","panda":"bear_with_it","pirate_cove":"pirate_cove","planet_of_the_eyes":"planet_of_the_eyes","polar_bear":"bear_with_it","porcupine":"smelly_planet","rat":"smelly_planet","sea_snail":"aqua_planet","sinister_circus":"sinister_circus","skunk":"smelly_planet","slimy":"smelly_planet","smelly_planet":"smelly_planet","snake":"swamp_planet","sorcerers_tower":"sorcerers_tower","soul_hunter":"infernal_abyss","stalactite_golem":"golem_cave","swamp_planet":"swamp_planet","swampy":"swamp_planet","treant":"jungle_planet","turtle":"aqua_planet","twilight_zone":"twilight_zone","vampire":"twilight_zone","veyes":"planet_of_the_eyes","werewolf":"twilight_zone","zombie":"twilight_zone"}
   const MONSTER_LOC = {"abyssal_imp":"infernal_abyss","alligator":"swamp_planet","sea_snail":"aqua_planet","crab":"aqua_planet","aquahorse":"aqua_planet","nom_nom":"aqua_planet","turtle":"aqua_planet","marine_huntress":"aqua_planet","gummy_bear":"bear_with_it","panda":"bear_with_it","black_bear":"bear_with_it","grizzly_bear":"bear_with_it","polar_bear":"bear_with_it","red_panda":"bear_with_it","centaur_archer":"jungle_planet","elementalist":"sorcerers_tower","eye":"planet_of_the_eyes","eyes":"planet_of_the_eyes","flame_sorcerer":"sorcerers_tower","fly":"smelly_planet","frog":"swamp_planet","gobo_boomy":"gobo_planet","gobo_stabby":"gobo_planet","gobo_slashy":"gobo_planet","gobo_smashy":"gobo_planet","gobo_shooty":"gobo_planet","gobo_chieftain":"gobo_planet","magnetic_golem":"golem_cave","stalactite_golem":"golem_cave","granite_golem":"golem_cave","crystal_colossus":"golem_cave","ice_sorcerer":"sorcerers_tower","soul_hunter":"infernal_abyss","infernal_warlock":"infernal_abyss","demonic_overlord":"infernal_abyss","jungle_sprite":"jungle_planet","myconid":"jungle_planet","treant":"jungle_planet","luna_empress":"jungle_planet","novice_sorcerer":"sorcerers_tower","veyes":"planet_of_the_eyes","the_watcher":"planet_of_the_eyes","porcupine":"smelly_planet","rat":"smelly_planet","skunk":"smelly_planet","slimy":"smelly_planet","snake":"swamp_planet","chronofrost_sorcerer":"sorcerers_tower","swampy":"swamp_planet","giant_shoebill":"swamp_planet","zombie":"twilight_zone","vampire":"twilight_zone","werewolf":"twilight_zone","dusk_revenant":"twilight_zone"}
-  const where = { zone: null, tier: 0 }
+  const where = { zone: null, tier: 0, labyrinth: false }
   const shortId = h => (h ? String(h).split("/").pop() : null)
   function combatActionIn(obj) {
     const party = obj.partyInfo?.party
@@ -361,6 +386,7 @@
   }
   // location from the current combat action; when that is unknown, from the monsters on the field
   function stageLocation() {
+    if (where.labyrinth) return "labyrinth"
     const loc = ZONE_LOC[where.zone]
     if (loc) return loc
     const votes = {}
@@ -532,7 +558,19 @@
         }
       }
     }
-    return { onMessage, assign, me }
+    // guild trial players: no battle cards to read; self and opened profiles give the look, the rest get
+    // the generic look for their combat style
+    function assignGuild(u) {
+      const prof = u.name && u.name === me.name ? me : profiles[u.name] || {}
+      const fromBattle = avatarOf(u.raw || {})
+      u.avatar = fromBattle.avatar || prof.avatar || null
+      u.outfit = fromBattle.outfit || prof.outfit || null
+      u.items = prof.items || {}
+      u.enh = prof.enh || {}
+      u.lookId = null
+      if (/shield|bulwark|aegis|buckler/.test(u.items.off_hand || u.items.two_hand || "")) u.tank = true
+    }
+    return { onMessage, assign, assignGuild, me }
   })()
 
   // ---------- paper-doll layers: drawn side-view weapons / off-hands for the held gear ----------
@@ -587,7 +625,10 @@
     const SVGNS = "http://www.w3.org/2000/svg"
     const actors = { p: [], m: [] }
     const fx = [] // canvas effects {t0, dur, draw(ctx, p, now), done}
-    let stageEl, worldEl, canvas, ctx, banner, waitEl, bgEl
+    let stageEl, viewEl, worldEl, canvas, ctx, banner, waitEl, bgEl
+    // guild-trial camera: zoom z (1 = whole field) and pan x / y in stage pixels; cres = canvas resolution factor
+    const view = { z: 1, x: 0, y: 0 }
+    let cres = 1
     // where the stage hangs: "test" = the 动画测试 tab (lab units), "live" = over the game's unit cards
     let host = null
     let mode = ""
@@ -615,7 +656,16 @@
 .bfx-stage{position:relative;isolation:isolate;z-index:0;width:100%;min-height:200px;overflow:hidden;resize:vertical;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:
  radial-gradient(ellipse 60% 30% at 50% 100%,rgba(120,140,255,.18),transparent),
  linear-gradient(180deg,#141b38 0%,#22305e 48%,#3a3a62 64%,#2b2742 65%,#1e1b30 100%)}
+.bfx-view{position:absolute;inset:0;transform-origin:0 0}
 .bfx-world{position:absolute;inset:0}
+.bfx-guild{cursor:grab;touch-action:none}
+.bfx-zoom{display:none;position:absolute;left:4px;top:2px;z-index:20;gap:3px;pointer-events:auto!important}
+.bfx-guild .bfx-zoom{display:flex}
+.bfx-zoom button{width:22px;height:20px;padding:0;font:13px/18px sans-serif;color:#dfe6ff;background:rgba(20,26,52,.85);border:1px solid #4a5590;border-radius:6px;cursor:pointer}
+.bfx-tiny .bfx-name,.bfx-tiny .bfx-chips,.bfx-guild .bfx-p .bfx-hpt{display:none}
+.bfx-guild .bfx-p .bfx-name{font-size:1em}
+.bfx-guild .bfx-p .bfx-hud{width:90%}
+.bfx-guild .bfx-p .bfx-bar{height:.3em;margin-top:.1em}
 .bfx-bg{position:absolute;inset:0;background:center 85%/cover no-repeat;opacity:0;transition:opacity .6s}
 .bfx-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),transparent 30%,transparent 70%,rgba(0,0,0,.35))}
 /* frames are the 512px pose cell plus a 96px margin all round: scale up so the cell fills the actor box */
@@ -789,13 +839,18 @@
       // the stage box never moves; everything that shakes lives in .bfx-world inside it
       stageEl = document.createElement("div")
       stageEl.className = "bfx-stage"
-      stageEl.innerHTML = '<div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div>'
+      // .bfx-view carries the guild-trial zoom / pan, .bfx-world the shakes
+      stageEl.innerHTML =
+        '<div class="bfx-view"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div></div><div class="bfx-banner"></div><div class="bfx-wait">等待战斗…</div>' +
+        '<div class="bfx-zoom"><button data-z="1.25">＋</button><button data-z="0.8">－</button><button data-z="0">⟲</button></div>'
+      viewEl = stageEl.querySelector(".bfx-view")
       worldEl = stageEl.querySelector(".bfx-world")
       bgEl = stageEl.querySelector(".bfx-bg")
       canvas = stageEl.querySelector("canvas")
       ctx = canvas.getContext("2d")
       banner = stageEl.querySelector(".bfx-banner")
       waitEl = stageEl.querySelector(".bfx-wait")
+      zoomControls()
       let hTimer = 0
       new ResizeObserver(() => {
         layout()
@@ -809,15 +864,61 @@
         }, 400)
       }).observe(stageEl)
     }
+    // ----- guild-trial camera: wheel zooms about the cursor, drag pans, double click / ⟲ resets -----
+    function setView(z, x, y) {
+      view.z = Math.max(1, Math.min(4, z))
+      view.x = Math.min(0, Math.max(SW - SW * view.z, x))
+      view.y = Math.min(0, Math.max(SH - SH * view.z, y))
+      if (viewEl) viewEl.style.transform = view.z === 1 ? "" : `translate(${view.x}px,${view.y}px) scale(${view.z})`
+      // names only while the units are big enough on screen to carry them
+      stageEl?.classList.toggle("bfx-tiny", mode === "guild" && (actors.p[0]?.s || 0) * view.z < 90)
+      const res = mode === "guild" ? Math.min(2, Math.ceil(view.z * 2) / 2) : 1
+      if (res !== cres) layout()
+    }
+    function zoomAt(f, mx, my) {
+      const z = Math.max(1, Math.min(4, view.z * f))
+      setView(z, mx - ((mx - view.x) / view.z) * z, my - ((my - view.y) / view.z) * z)
+    }
+    function zoomControls() {
+      const guild = () => mode === "guild"
+      stageEl.addEventListener(
+        "wheel",
+        e => {
+          if (!guild()) return
+          e.preventDefault()
+          const r = stageEl.getBoundingClientRect()
+          zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top)
+        },
+        { passive: false },
+      )
+      let drag = null
+      stageEl.addEventListener("pointerdown", e => {
+        if (!guild() || e.button !== 0 || e.target.closest("button")) return
+        drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }
+        stageEl.setPointerCapture(e.pointerId)
+      })
+      stageEl.addEventListener("pointermove", e => drag && setView(view.z, drag.vx + e.clientX - drag.x, drag.vy + e.clientY - drag.y))
+      stageEl.addEventListener("pointerup", () => (drag = null))
+      stageEl.addEventListener("dblclick", () => guild() && setView(1, 0, 0))
+      stageEl.querySelector(".bfx-zoom").addEventListener("click", e => {
+        const f = +e.target.closest("button")?.dataset.z
+        if (f === 0) setView(1, 0, 0)
+        else if (f) zoomAt(f, SW / 2, SH / 2)
+      })
+    }
     function attach(newHost, newMode) {
       injectCss()
       if (!stageEl) createStage()
       if (host === newHost && mode === newMode && stageEl.parentElement === newHost) return
       host = newHost
       mode = newMode
-      shown = mode === "test" ? Lab.units : units
+      shown = mode === "test" ? Lab.units : mode === "guild" ? gunits : units
       fx.length = 0
-      stageEl.classList.toggle("bfx-live", mode === "live")
+      stageEl.classList.toggle("bfx-live", mode === "live" || mode === "guild")
+      stageEl.classList.toggle("bfx-guild", mode === "guild")
+      view.z = 1
+      view.x = view.y = 0
+      viewEl.style.transform = ""
       stageEl.style.height = mode === "test" ? cfg.stageH + "px" : ""
       host.appendChild(stageEl)
       reload()
@@ -836,6 +937,7 @@
     function reload() {
       if (!stageEl) return
       if (mode === "live") shown.p.forEach((u, i) => Looks.assign(u, i))
+      if (mode === "guild") shown.p.forEach(u => Looks.assignGuild(u))
       playersKey = ""
       rebuild(true)
       setBackground()
@@ -844,8 +946,8 @@
     // location art, the elite / nightmare variant for higher tiers, plus a slight per-tier grade
     function setBackground() {
       if (!bgEl) return
-      const loc = mode === "test" ? Lab.loc() : stageLocation()
-      const t = mode === "test" ? Lab.tier() : where.tier || 0
+      const loc = mode === "test" ? Lab.loc() : mode === "guild" ? "guild_trial" : stageLocation()
+      const t = mode === "test" ? Lab.tier() : mode === "guild" ? 0 : where.tier || 0
       const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
       const name = loc && (Assets.has("bg", loc + band) ? loc + band : Assets.has("bg", loc) ? loc : null)
       const key = name + "|" + t
@@ -1151,12 +1253,18 @@
       SW = r.width
       SH = r.height
       dpr = W.devicePixelRatio || 1
-      canvas.width = Math.round(SW * dpr)
-      canvas.height = Math.round(SH * dpr)
+      // zoomed in, effects are drawn at a higher resolution so they stay sharp
+      cres = mode === "guild" ? Math.min(2, Math.ceil(view.z * 2) / 2) : 1
+      canvas.width = Math.round(SW * dpr * cres)
+      canvas.height = Math.round(SH * dpr * cres)
       // each side stands in a row on the same ground line, first unit nearest the middle;
       // every other unit steps a little back so a crowded row still reads
       const ground = SH * 0.84
       for (const side of ["p", "m"]) {
+        if (side === "p" && mode === "guild") {
+          guildLayout(ground)
+          continue
+        }
         const list = actors[side]
         const n = list.length
         // shrink with the head count so neighbours overlap by at most ~30%
@@ -1172,6 +1280,35 @@
           Object.assign(a.el.style, { left: a.x + "px", top: a.y + "px", width: s + "px", height: s + "px", zIndex: 100 - back * 10 - k })
         })
       }
+    }
+    // guild trials: the whole roster in formation, tanks in front, then melee, ranged and magic at the back.
+    // Each group fills columns of up to `rows`; back rows stand higher and a little to the left.
+    const ROLE_ORDER = ["tank", "melee", "ranged", "magic"]
+    const roleOf = u => (u?.tank ? "tank" : u?.style === "ranged" ? "ranged" : u?.style === "magic" ? "magic" : "melee")
+    function guildLayout(ground) {
+      const list = actors.p
+      const n = list.length
+      if (!n) return
+      const rows = n <= 4 ? 1 : n <= 10 ? 2 : n <= 18 ? 3 : n <= 30 ? 4 : 5
+      const groups = ROLE_ORDER.map(r => list.filter(a => roleOf(shown.p[a.i]) === r)).filter(g => g.length)
+      const cols = groups.reduce((c, g) => c + Math.ceil(g.length / rows), 0)
+      const s = Math.min(SH * 0.4, (SW * 0.46) / (cols * 0.68 + (groups.length - 1) * 0.3 + 0.9)) * cfg.scale
+      const dx = s * 0.68
+      const dy = rows > 1 ? Math.min(s * 0.32, (SH * 0.42) / (rows - 1)) : 0
+      let col = 0
+      for (const g of groups) {
+        g.forEach((a, k) => {
+          const c = col + Math.floor(k / rows)
+          const r = k % rows
+          a.s = s
+          a.x = SW * 0.46 - s / 2 - c * dx - r * s * 0.15
+          a.y = ground - r * dy
+          // the HUD scales with the unit (the camera zoom enlarges both together)
+          Object.assign(a.el.style, { left: a.x + "px", top: a.y + "px", width: s + "px", height: s + "px", zIndex: 500 - r * 40 - Math.round(c), fontSize: s * 0.16 + "px" })
+        })
+        col += Math.ceil(g.length / rows) + 0.3
+      }
+      stageEl.classList.toggle("bfx-tiny", s * view.z < 90)
     }
     const actorOf = r => r && actors[r.side]?.[r.i]
     const mid = a => ({ x: a.x, y: a.y - a.s * 0.5 })
@@ -1214,7 +1351,7 @@
       raf = 0
       if (!ctx) return
       const t = now()
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.setTransform(dpr * cres, 0, 0, dpr * cres, 0, 0)
       ctx.clearRect(0, 0, SW, SH)
       for (let k = 0; k < fx.length; k++) {
         const f = fx[k]
@@ -1733,7 +1870,7 @@
     function impact(a, t, style, element, big, noBurst) {
       const color = ELEMENT_COLOR[element] || ELEMENT_COLOR.physical
       const m = mid(a)
-      if (t && !t.dHP) {
+      if (t && !t.dHP && !t.quiet) {
         // miss / zero damage: a quick sidestep instead of a flinch
         a.hit.animate([{ transform: "none" }, { transform: `translateX(${-a.dir * a.s * 0.18}px) translateY(-6%)`, offset: 0.35 }, { transform: "none" }], { duration: 320, easing: "ease-out" })
         number(a, "MISS", "miss")
@@ -1766,7 +1903,7 @@
         ringFx(m.x, m.y, a.s * 0.1, a.s * 0.7, "#ffe27a", 300, 0.9, 3)
         a.hit.animate([{ transform: "none" }, { transform: `translateX(${-a.dir * a.s * 0.2}px) rotate(${-a.dir * 10}deg)`, offset: 0.2 }, { transform: "none" }], { duration: 380, easing: "ease-out" })
       }
-      if (t) {
+      if (t && !t.quiet) {
         number(a, fmt(t.dHP), t.crit ? "crit" : big ? "big" : "")
         setHp(a, t)
         if (t.died) later(160, () => die(a))
@@ -2202,9 +2339,74 @@
         area.appendChild(slot)
       }
       area.style.minHeight = cfg.liveH + "px"
-      if (!Stage.isTestActive()) Stage.attach(slot, "live")
+      if (!Stage.isTestActive() && !GuildLive.active()) Stage.attach(slot, "live")
     }
     return { ensure }
+  })()
+
+  // ---------- guild trials: the stage laid over the trial shown in the guild page's 进行中 tab ----------
+  // The trial view lists the members as small MiniUnit cells next to the boss / own CombatUnit cards; the stage
+  // covers the smallest visible box holding them all (never one that holds the tab bar).
+  const GuildLive = (() => {
+    let area = null
+    let slot = null
+    let btn = null
+    const shownEls = sel => [...document.querySelectorAll(sel)].filter(e => e.offsetParent && !e.closest(".bfx-stage"))
+    function findArea() {
+      const cells = shownEls('[class*="MiniUnit_miniUnit"]')
+      if (!cells.length) return null
+      const common = els => {
+        let a = els[0].parentElement
+        while (a && !els.every(e => a.contains(e))) a = a.parentElement
+        return a
+      }
+      const units = shownEls('[class*="CombatUnit_combatUnit"]').filter(e => !e.closest('[class*="BattlePanel_battlePanel"]'))
+      const all = common([...cells, ...units])
+      return all && !all.querySelector('[role="tablist"]') ? all : common(cells)
+    }
+    function cleanup() {
+      slot?.remove()
+      btn?.remove()
+      if (area) area.style.minHeight = ""
+      slot = btn = null
+      if (Stage.modeOf() === "guild") Stage.detach()
+    }
+    function ensure() {
+      const a = cfg.enabled && gunits.p.length ? findArea() : null
+      if (a !== area) {
+        cleanup()
+        area = a
+      }
+      if (!area) return
+      if (!btn?.isConnected) {
+        btn = document.createElement("button")
+        btn.className = "bfx-toggle"
+        btn.addEventListener("click", e => {
+          e.stopPropagation()
+          cfg.guildOverlay = !cfg.guildOverlay
+          saveCfg()
+          ensure()
+        })
+        if (getComputedStyle(area).position === "static") area.style.position = "relative"
+        area.appendChild(btn)
+      }
+      btn.textContent = cfg.guildOverlay ? "切换到原版" : "切换到动画"
+      if (!cfg.guildOverlay) {
+        slot?.remove()
+        slot = null
+        area.style.minHeight = ""
+        if (Stage.modeOf() === "guild") Stage.detach()
+        return
+      }
+      if (!slot?.isConnected) {
+        slot = document.createElement("div")
+        slot.className = "bfx-live-slot"
+        area.appendChild(slot)
+      }
+      area.style.minHeight = cfg.guildH + "px"
+      if (!Stage.isTestActive()) Stage.attach(slot, "guild")
+    }
+    return { ensure, active: () => !!slot?.isConnected }
   })()
 
   const Lab = { units: { p: [], m: [] }, render() {}, stop() {}, redraw() {}, loc: () => null, tier: () => 0 }
@@ -2237,13 +2439,13 @@
   }
   menu()
   Stage.start()
-  setInterval(() => Live.ensure(), 1000)
+  setInterval(() => (GuildLive.ensure(), Live.ensure()), 1000)
   // always fetch a fresh manifest on page load: a cached one from an older release lacks the new art
   Assets.refresh(true)
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
-  const WANTED = /^(new_battle|battle_updated|init_character_data|profile_shared|items_updated|actions_updated)$|party/
+  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated)$|party/
   function onCharacterMessage(obj) {
     Looks.onMessage(obj)
     const act = combatActionIn(obj)
@@ -2271,6 +2473,13 @@
                 const obj = JSON.parse(msg)
                 if (obj.type === "new_battle") onNewBattle(obj)
                 else if (obj.type === "battle_updated") onBattleUpdated(obj)
+                else if (obj.type === "new_guild_battle") onNewGuildBattle(obj)
+                else if (obj.type === "guild_battle_updated") onBattleUpdated(obj, gunits, "guild")
+                else if (obj.type === "labyrinth_updated") {
+                  // labyrinth fights are ordinary battles; only the backdrop changes
+                  where.labyrinth = !!obj.labyrinth?.isActive
+                  Stage.setBackground()
+                }
                 else onCharacterMessage(obj)
               } catch (e) {
               }
