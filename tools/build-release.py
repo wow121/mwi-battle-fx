@@ -25,6 +25,13 @@ DESC = (
     "右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。"
 )
 
+DESC_EN = (
+    "Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters "
+    "and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth "
+    "and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Read-only: "
+    "it only listens to game messages and never changes game data; art loads from a CDN."
+)
+
 MARK = re.compile(r"^\s*(?://|/\*)\s*#(dev-start|dev-end|release-start|release-end)\s*(?:\*/)?(.*)$")
 
 
@@ -54,7 +61,8 @@ def build(src: str) -> str:
     head, sep, body = text.partition("// ==/UserScript==")
     head = re.sub(r"^// @name .*$", "// @name         MWI 战斗动画", head, flags=re.M)
     head = re.sub(r"^// @namespace .*$", "// @namespace    mwi-battle-fx-release", head, flags=re.M)
-    head = re.sub(r"^// @description .*$", "// @description  " + DESC, head, flags=re.M)
+    head = re.sub(r"^// @description .*$", "// @description  " + DESC + "\n// @description:en  " + DESC_EN, head, flags=re.M)
+    head = re.sub(r"^(// @name +.*)$", r"\1\n// @name:en      MWI Battle FX", head, count=1, flags=re.M)
     # no update URLs: Greasy Fork (which syncs this file) serves its own and forbids pointing users elsewhere;
     # a copy installed from GitHub keeps updating from the address it was installed from
     head = re.sub(r"^// @(updateURL|downloadURL)\s.*\n", "", head, flags=re.M)

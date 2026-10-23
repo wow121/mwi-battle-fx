@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.10.11
+// @version      0.11.0
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -122,7 +122,9 @@
     } catch {
       return true
     }
-  }
+  }  // UI text in the game's language: Chinese for a zh UI, English otherwise
+  const L = (zh, en) => (zhUI() ? zh : en)
+
   // what a unit is called on the stage: monsters by their official zh name in a zh UI (the server sends English)
   const nameOf = (side, u) => (side === "m" && zhUI() && MONSTER_ZH[shortId(u?.hrid)]) || u?.name || ""
   function abilityInfo(hrid) {
@@ -868,7 +870,7 @@
       let labeled = false
       for (let n; (n = tw.nextNode()); ) {
         if (!n.nodeValue.trim()) continue
-        n.nodeValue = labeled ? "" : zhUI() ? "动画测试" : "FX Lab"
+        n.nodeValue = labeled ? "" : L("动画测试", "FX Lab")
         labeled = true
       }
       ref.after(tabBtn)
@@ -947,7 +949,7 @@
       stageEl.className = "bfx-stage"
       // .bfx-view carries the guild-trial zoom / pan, .bfx-world the shakes
       stageEl.innerHTML =
-        '<div class="bfx-view"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div></div><div class="bfx-banner"></div><div class="bfx-loc"></div><div class="bfx-wait">等待战斗…</div>' +
+        '<div class="bfx-view"><div class="bfx-world"><div class="bfx-bg"></div><canvas></canvas></div></div><div class="bfx-banner"></div><div class="bfx-loc"></div><div class="bfx-wait"></div>' +
         '<div class="bfx-zoom"><button data-z="1.25">＋</button><button data-z="0.8">－</button><button data-z="0">⟲</button></div>'
       viewEl = stageEl.querySelector(".bfx-view")
       worldEl = stageEl.querySelector(".bfx-world")
@@ -957,6 +959,7 @@
       banner = stageEl.querySelector(".bfx-banner")
       waitEl = stageEl.querySelector(".bfx-wait")
       locEl = stageEl.querySelector(".bfx-loc")
+      waitEl.textContent = L("等待战斗…", "Waiting for battle…")
       zoomControls()
       let hTimer = 0
       new ResizeObserver(() => {
@@ -1060,12 +1063,12 @@
       let tier = null
       if (mode === "guild") {
         const bosses = [...new Set(shown.m.map(u => nameOf("m", u)).filter(Boolean))]
-        text = (zh ? "公会试炼" : "Guild Trial") + (bosses.length ? " · " + bosses.join(" / ") : "")
+        text = L("公会试炼", "Guild Trial") + (bosses.length ? " · " + bosses.join(" / ") : "")
         tier = gunits.tier ?? null
       } else if (mode === "test") {
         text = title(Lab.loc())
         tier = Lab.tier()
-      } else if (where.labyrinth) text = zh ? "迷宫" : "Labyrinth"
+      } else if (where.labyrinth) text = L("迷宫", "Labyrinth")
       else {
         const zone = where.zone && ZONE_ZH[where.zone] ? where.zone : stageLocation()
         text = zone ? title(zone) : ""
@@ -1778,22 +1781,22 @@
         if (kind === "arrow") {
           // shaft, coloured fletching, bright head
           const k = cfg.scale * size
-          const L = 24 * k
+          const len = 24 * k
           c.translate(x, y)
           c.rotate(ang)
           c.lineCap = "round"
           c.strokeStyle = "#f4e6c8"
           c.lineWidth = 2.2 * k
           c.beginPath()
-          c.moveTo(-L, 0)
+          c.moveTo(-len, 0)
           c.lineTo(0, 0)
           c.stroke()
           c.fillStyle = color
           c.beginPath()
-          c.moveTo(-L - 7 * k, -4.5 * k)
-          c.lineTo(-L + 6 * k, 0)
-          c.lineTo(-L - 7 * k, 4.5 * k)
-          c.lineTo(-L - 3 * k, 0)
+          c.moveTo(-len - 7 * k, -4.5 * k)
+          c.lineTo(-len + 6 * k, 0)
+          c.lineTo(-len - 7 * k, 4.5 * k)
+          c.lineTo(-len - 3 * k, 0)
           c.closePath()
           c.fill()
           c.fillStyle = "#fff"
@@ -1946,7 +1949,7 @@
       const crit = kind === "crit"
       n.className = "bfx-num" + (crit ? " bfx-crit" : "")
       n.textContent = text
-      if (crit) n.insertAdjacentHTML("afterbegin", `<small>${zhUI() ? "暴击" : "CRIT"}</small>`)
+      if (crit) n.insertAdjacentHTML("afterbegin", `<small>${L("暴击", "CRIT")}</small>`)
       n.style.color = kind === "heal" ? "#7dffa5" : kind === "miss" ? "#c8d2e8" : crit ? (a.side === "p" ? "#ff7a4a" : "#ffd23a") : a.side === "p" ? "#ffb0a8" : "#fff"
       n.style.fontSize = 16 * cfg.scale * (crit ? 1.75 : kind === "big" ? 1.25 : 1) + "px"
       worldEl.appendChild(n)
@@ -1967,7 +1970,7 @@
     function showBanner(a, ab) {
       const u = shown[a.side][a.i]
       const who = nameOf(a.side, u)
-      banner.textContent = (who ? who + "：" : "") + ab.name
+      banner.textContent = (who ? who + L("：", ": ") : "") + ab.name
       banner.style.color = ab.kind === "heal" ? ELEMENT_COLOR.heal : ab.kind === "damage" ? ELEMENT_COLOR[ab.element] : ELEMENT_COLOR.buff
       banner.getAnimations().forEach(x => x.cancel())
       banner.animate(
@@ -2570,7 +2573,7 @@
         if (getComputedStyle(panel).position === "static") panel.style.position = "relative"
         panel.appendChild(btn)
       }
-      btn.textContent = cfg.overlay ? "切换到原版" : "切换到动画"
+      btn.textContent = cfg.overlay ? L("切换到原版", "Original view") : L("切换到动画", "Battle FX view")
       if (!cfg.overlay) {
         slot?.remove()
         slot = null
@@ -2621,7 +2624,7 @@
         if (getComputedStyle(area).position === "static") area.style.position = "relative"
         area.appendChild(btn)
       }
-      btn.textContent = cfg.guildOverlay ? "切换到原版" : "切换到动画"
+      btn.textContent = cfg.guildOverlay ? L("切换到原版", "Original view") : L("切换到动画", "Battle FX view")
       if (!cfg.guildOverlay) {
         slot?.remove()
         slot = null
@@ -2975,7 +2978,7 @@
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
   function demo() {
-    if (!Stage.open()) return alert("先进入战斗页面（能看到“交战”标签）")
+    if (!Stage.open()) return alert(L("先进入战斗页面（能看到“交战”标签）", "Open the combat page first (the Battle tab)"))
     Lab.startAuto()
   }
 
@@ -3060,16 +3063,16 @@
       })
     menuIds = [
       // #dev-start
-      GM_registerMenuCommand(`当前版本 v${GM_info?.script?.version || "?"}（点击检查素材）`, () => {
+      GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}（点击检查素材）`, `Version ${GM_info?.script?.version || "?"} (check assets)`), () => {
         Assets.refresh(true)
         const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ") + ` 纸娃娃:${Assets.get("doll") || 0}`
         alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}`)
       }),
       // #dev-end
       // #release-start
-      // GM_registerMenuCommand(`当前版本 v${GM_info?.script?.version || "?"}`, () => Assets.refresh(true)),
+      // GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
       // #release-end
-      toggle("enabled", "战斗动画（舞台 / 叠加层）", () => Stage.ensureTab()),
+      toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
       // #dev-start
       GM_registerMenuCommand(`角色形象：${cfg.lookMode === "outfit" ? "按服装" : "按装备"}（点击切换）`, () => {
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"
@@ -3089,8 +3092,8 @@
         Assets.refresh(true)
       }),
       // #dev-end
-      GM_registerMenuCommand(`动画大小：${cfg.scale}`, () => {
-        const v = parseFloat(prompt("动画大小倍率（0.5 ~ 2）", cfg.scale))
+      GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
+        const v = parseFloat(prompt(L("动画大小倍率（0.5 ~ 2）", "Animation size (0.5 – 2)"), cfg.scale))
         if (v >= 0.3 && v <= 3) {
           cfg.scale = v
           saveCfg()
@@ -3098,9 +3101,9 @@
           menu()
         }
       }),
-      GM_registerMenuCommand("打开动画测试（自动战斗）", demo), // #dev
-      GM_registerMenuCommand(Recorder.active() ? "⏹ 停止录制并下载文件" : "⏺ 录制战斗消息（迷宫 / 公会战）", () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
-      toggle("debug", "调试：控制台打印战斗消息"), // #dev
+      GM_registerMenuCommand(L("打开动画测试（自动战斗）", "Open the FX lab (auto battle)"), demo), // #dev
+      GM_registerMenuCommand(Recorder.active() ? L("⏹ 停止录制并下载文件", "⏹ Stop recording and download") : L("⏺ 录制战斗消息（迷宫 / 公会战）", "⏺ Record battle messages (labyrinth / guild)"), () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
+      toggle("debug", L("调试：控制台打印战斗消息", "Debug: log battle messages")), // #dev
     ]
   }
   menu()
