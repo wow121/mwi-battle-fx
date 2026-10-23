@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs tools/test/mock.html in headless Chrome on the Windows box and brings the frames back.
 # usage: run-mock.sh <out_dir>     (frames land in <out_dir>/frames/f####_<ms>.jpg)
-# The mock serves the current userscript + assets/ + the game's sprite sheets (avatars, outfits,
+# The mock serves the current userscript + assets/ + the game's sprite sheets (avatars, outfits, items,
 # monsters) from the newest mwi-gamedata archive, feeds fake battle messages, then drives the lab.
 set -eu
 OUT=$1
@@ -13,7 +13,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/sprites"
 cp "$REPO/tools/test/mock.html" "$REPO/tools/test/drive.mjs" "$REPO/mwi-battle-fx.user.js" "$TMP/"
-cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits}.svg "$TMP/sprites/"
+cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items}.svg "$TMP/sprites/"
 cp -r "$REPO/assets" "$TMP/"
 tar -cf "$TMP/in.tar" -C "$TMP" mock.html drive.mjs mwi-battle-fx.user.js sprites assets
 ssh "${SSHO[@]}" "$HOST" "rmdir /s /q C:\\Users\\ruixi\\fs-mine\\bfx-test 2>nul & mkdir C:\\Users\\ruixi\\fs-mine\\bfx-test"

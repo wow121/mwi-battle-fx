@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.9.0
+// @version      0.9.1
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -667,6 +667,20 @@
 @keyframes bfx-bob{0%,100%{transform:translateY(0) scale(1,1)}50%{transform:translateY(-3%) scale(1.025,.975)}}
 .bfx-dead .bfx-idle{animation-play-state:paused}
 .bfx-sprite svg{width:100%;height:100%;display:block;overflow:visible}
+/* held weapon / off-hand on the game look: turned on the hand by pose (svg user units) */
+.bfx-wpn,.bfx-off{transition:transform .14s ease-out}
+.bfx-wpn{transform-origin:64px 72px}
+.bfx-off{transform-origin:20px 78px}
+[data-pose=windup] .bfx-wpn{transform:rotate(-60deg)}
+[data-pose=strike] .bfx-wpn{transform:translate(4px,4px) rotate(75deg)}
+[data-pose=strike] .bfx-off{transform:translateX(4px)}
+[data-style=ranged][data-pose=windup] .bfx-wpn{transform:translateX(-3px) rotate(-10deg)}
+[data-style=ranged][data-pose=strike] .bfx-wpn{transform:translateX(-6px)}
+[data-style=magic][data-pose=windup] .bfx-wpn,[data-pose=cast] .bfx-wpn{transform:translateY(-12px) rotate(-25deg)}
+[data-style=magic][data-pose=strike] .bfx-wpn{transform:translate(6px,-4px) rotate(30deg)}
+[data-pose=hurt] .bfx-wpn{transform:rotate(-25deg)}
+[data-pose=hurt] .bfx-off{transform:rotate(12deg)}
+[data-pose=dead] .bfx-wpn{transform:translate(8px,16px) rotate(100deg)}
 .bfx-hud{position:absolute;left:50%;top:100%;width:min(84%,140px);transform:translateX(-50%);margin-top:2px}
 .bfx-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-size:11px;font-weight:600;text-shadow:0 1px 2px #000,0 0 3px #000}
 .bfx-bar{position:relative;height:4px;margin-top:2px;background:rgba(0,0,0,.6);border-radius:2px;overflow:visible;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
@@ -890,6 +904,24 @@
     // ----- sprites: the game's own svg sprite sheets -----
     const hrefOf = u => u.getAttribute("href") || u.getAttribute("xlink:href") || ""
     let monsterSheet = ""
+    const sheets = {}
+    const sheetAt = {}
+    const sheetsSaved = GM_getValue("battle_fx_sheets_v1", {}) // last seen urls: the items sheet may not be on screen yet
+    // avatars / avatar_outfits / items: "<name>_sprite.<hash>.svg" in the game, "<name>.svg" in the mock
+    // held icons on the 100-unit avatar box: [x, y, size]; the weapon sits in the front hand, the off-hand at the back
+    const HELD = { "bfx-wpn": [58, 30, 46], "bfx-off": [4, 50, 34] }
+    function sheet(name) {
+      if (sheets[name]) return sheets[name]
+      if (now() - (sheetAt[name] ?? -1e9) > 3000) {
+        sheetAt[name] = now()
+        const url = sheetUrl(new RegExp("(^|/)" + name + "(_sprite)?[^#/]*\\.svg"))
+        if (url) {
+          if (sheetsSaved[name] !== url) GM_setValue("battle_fx_sheets_v1", Object.assign(sheetsSaved, { [name]: url }))
+          return (sheets[name] = url)
+        }
+      }
+      return sheetsSaved[name] || ""
+    }
     function sheetUrl(re) {
       for (const u of document.querySelectorAll("use")) {
         const h = hrefOf(u)
@@ -918,9 +950,39 @@
           : `<path d="M18 92 Q14 40 50 30 Q86 40 82 92 Z" fill="${c}" stroke="#0006" stroke-width="2"/><circle cx="38" cy="55" r="5" fill="#fff"/><circle cx="38" cy="55" r="2.5" fill="#000"/><circle cx="62" cy="55" r="5" fill="#fff"/><circle cx="62" cy="55" r="2.5" fill="#000"/>`
       return s
     }
-    // monsters: sheet + hrid (cards may still show the previous wave); players: the avatar/outfit layers on their card
+    // the game's own look for a player: avatar + outfit from their card (live) or the ids we know (lab),
+    // holding the weapon / off-hand icons when we know the gear (self, or a profile the viewer has opened)
+    function gameLook(i) {
+      const u = shown.p[i]
+      const card = mode === "live" ? cardEl("p", i) : null
+      let hrefs = card ? [...card.querySelectorAll("use")].map(hrefOf).filter(h => /avatar/.test(h) && !/background|border/.test(h)) : []
+      if (!hrefs.length && u?.avatar && sheet("avatars")) {
+        hrefs = [sheet("avatars") + "#" + u.avatar]
+        if (u.outfit && sheet("avatar_outfits")) hrefs.push(sheet("avatar_outfits") + "#" + u.outfit)
+      }
+      if (!hrefs.length) return null
+      const it = u?.items || {}
+      const held = sheet("items") ? [["bfx-off", it.off_hand], ["bfx-wpn", it.main_hand || it.two_hand]].filter(x => x[1]) : []
+      const node = svgOf(hrefs)
+      for (const [cls, id] of held) {
+        const g = document.createElementNS(SVGNS, "g")
+        g.setAttribute("class", cls)
+        const w = document.createElementNS(SVGNS, "use")
+        w.setAttribute("href", sheet("items") + "#" + id)
+        const [x, y, size] = HELD[cls]
+        for (const [k, v] of Object.entries({ x, y, width: size, height: size })) w.setAttribute(k, v)
+        g.appendChild(w)
+        node.appendChild(g)
+      }
+      return { key: hrefs.join() + "|" + held.join(), node, real: true }
+    }
+    // monsters: sheet + hrid (cards may still show the previous wave); players: their game look
     function spriteFor(side, i) {
       const u = shown[side][i]
+      if (side === "p") {
+        const look = gameLook(i)
+        if (look) return look
+      }
       if (side === "m" && u?.hrid) {
         monsterSheet ||= sheetUrl(/combat_monsters[^#]*\.svg/)
         if (monsterSheet) {
@@ -944,23 +1006,24 @@
         return Assets.has("m", id) ? "m/" + id : null
       }
       if (u?.lookId) return "p/" + u.lookId
-      // no art made for this exact look: the paper doll, then a generic look for the combat style
-      if (Doll.ready()) return null
+      // no art made for this exact look: the game's own look, then a generic look for the combat style
+      if (gameLook(i)) return null
       const d = "default_" + (u?.style || "slash")
       return Assets.has("p", d) ? "p/" + d : null
     }
     const frameUrl = (a, pose) => Assets.url(`${a.art}/${pose}.webp`)
     // swaps to a pose frame; ms > 0 falls back to idle (or dead) afterwards
     function setPose(a, pose, ms) {
-      if (a.doll) {
+      if (!a.art) {
+        // svg sprites: the whole body moves elsewhere; here only the held weapon swings (css by data-pose)
         clearTimeout(a.poseTimer)
         if (a.dead && pose !== "dead") return
-        const style = shown[a.side][a.i]?.style
-        a.doll.pose(pose, style)
-        if (ms > 0) a.poseTimer = setTimeout(() => a.doll.pose(a.dead ? "dead" : "idle", style), ms)
+        a.spriteEl.dataset.pose = pose
+        a.spriteEl.dataset.style = shown[a.side][a.i]?.style || ""
+        if (ms > 0) a.poseTimer = setTimeout(() => (a.spriteEl.dataset.pose = a.dead ? "dead" : "idle"), ms)
         return
       }
-      if (!a.art || !a.img) return
+      if (!a.img) return
       clearTimeout(a.poseTimer)
       if (a.dead && pose !== "dead") return
       showFrame(a, pose)
@@ -971,20 +1034,7 @@
     }
     function refreshSprite(a) {
       const art = artFor(a.side, a.i)
-      if (!art && a.side === "p" && Doll.ready()) {
-        const d = Doll.keyOf(shown.p[a.i]) !== a.doll?.key && Doll.build(shown.p[a.i])
-        if (d) {
-          a.doll = d
-          a.art = a.img = null
-          d.pose(a.dead ? "dead" : "idle", shown.p[a.i]?.style)
-          a.spriteEl.replaceChildren(d.el)
-          a.el.classList.add("bfx-art")
-          a.real = true
-        }
-        if (a.doll) return
-      }
       if (art && art !== a.art) {
-        a.doll = null
         a.art = art
         a.img = document.createElement("img")
         a.img.decoding = "async"
@@ -995,9 +1045,11 @@
         a.real = true
         return
       }
-      if (a.real) return
+      if (a.art) return
+      // svg sprites follow the unit (new wave, gear learned later) but never fall back from a real look
       const sp = spriteFor(a.side, a.i)
-      if (sp.key === a.spriteKey) return
+      if (sp.key === a.spriteKey || (a.real && !sp.real)) return
+      a.el.classList.remove("bfx-art")
       a.spriteEl.replaceChildren(sp.node)
       a.spriteKey = sp.key
       a.real = sp.real
@@ -1946,13 +1998,10 @@
         bgKey = ""
         setBackground()
       })
-      Doll.onLoad(() => {
-        Lab.redraw()
-        if (mode) actors.p.forEach(a => ((a.art = null), (a.real = false), refreshSprite(a)))
-      })
+      Doll.onLoad(() => Lab.redraw())
     }
 
-    const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.doll = null, a.real = false, refreshSprite(a))))
+    const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
     return { play, newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
@@ -2046,7 +2095,7 @@
         style: pl.style,
         element: pl.style === "magic" ? ABILITIES[magicSkill]?.[4] || "fire" : "physical",
         lookId: pl.look === "doll" ? null : pl.look,
-        // 纸娃娃: the chosen avatar / outfit / equipment, all slots worn whatever the look mode
+        // 游戏形象: the chosen avatar / outfit / held gear
         ...(pl.look === "doll" ? { lab: true, avatar: pl.doll?.avatar, outfit: pl.doll?.outfit, items: { ...pl.doll?.items } } : {}),
         counters: {},
       }
@@ -2196,7 +2245,7 @@
         )
 
       const looks = Assets.list("p")
-      const lookOptions = [...(Doll.ready() ? [["doll", "纸娃娃"]] : []), ...(looks.length ? looks : [pl0Look()]).map(id => [id, id.replace(/^default_/, "通用·")])]
+      const lookOptions = [...(Doll.ready() ? [["doll", "游戏形象"]] : []), ...(looks.length ? looks : [pl0Look()]).map(id => [id, id.replace(/^default_/, "通用·")])]
       st.players.forEach((pl, i) => {
         const r = row(`${i + 1}号`)
         r.append(
@@ -2254,8 +2303,8 @@
     }
 
     const pl0Look = () => st.players[0]?.look || "default_slash"
-    // 纸娃娃 controls: avatar, outfit and one pick per visible slot (both weapon slots share one list)
-    const DOLL_SLOTS = [["head", "头部"], ["body", "身体"], ["legs", "腿部"], ["feet", "脚部"], ["hands", "手部"], ["weapon", "武器"], ["off_hand", "副手"], ["back", "背部"]]
+    // 游戏形象 controls: avatar, outfit and the held gear (both weapon slots share one list)
+    const DOLL_SLOTS = [["weapon", "武器"], ["off_hand", "副手"]]
     function dollRow(pl, i) {
       pl.doll ||= { avatar: "person_default", outfit: "", items: {} }
       const r = row("")
