@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.10.5
+// @version      0.10.6
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -787,6 +787,9 @@
 [data-style=stab][data-pose=strike] .bfx-wpn{transform:translateX(16px) rotate(88deg)}
 [data-style=smash][data-pose=windup] .bfx-wpn{transform:translateY(-8px) rotate(-125deg)}
 [data-style=smash][data-pose=strike] .bfx-wpn{transform:translateY(6px) rotate(125deg)}
+/* bulwarks bash: drawn back, then the whole shield shoved forward (no overhead swing) */
+.bfx-sprite[data-pose=windup] .bfx-wpn[data-big]{transform:translateX(-6px) rotate(-8deg)}
+.bfx-sprite[data-pose=strike] .bfx-wpn[data-big]{transform:translateX(14px) rotate(5deg)}
 [data-style=ranged][data-pose=windup] .bfx-wpn{transform:translateX(-3px) rotate(-10deg)}
 [data-style=ranged][data-pose=strike] .bfx-wpn{transform:translateX(-6px)}
 [data-style=magic][data-pose=windup] .bfx-wpn,[data-pose=cast] .bfx-wpn{transform:translateY(-12px) rotate(-25deg)}
@@ -1126,6 +1129,8 @@
     // drawn held pieces (the paper-doll weapon / off-hand layers): grip on the hand, scaled from rig pixels
     const HANDS = { "bfx-wpn": [79, 66], "bfx-off": [21, 67] }
     const HELD_SCALE = 0.2
+    // two-handed bulwarks are body-sized shields: drawn bigger than the one-handed gear
+    const heldScale = id => HELD_SCALE * (/bulwark/.test(id) ? 1.55 : 1)
     const PLAYER_SCALE = 0.75
     let glowSeq = 0
     // a big guild roster: effects get cheaper (no canvas shadow blur, fewer sparks, still enhancement auras)
@@ -1224,7 +1229,7 @@
         if (pc) {
           // the drawn piece, cropped from its layer sheet, its grip in the hand
           const [hx, hy] = HANDS[cls]
-          const k = HELD_SCALE
+          const k = heldScale(id)
           const box = document.createElementNS(SVGNS, "svg")
           attrs(box, { x: hx - pc.grip[0] * k, y: hy - pc.grip[1] * k, width: pc.rect[2] * k, height: pc.rect[3] * k, viewBox: pc.rect.join(" "), overflow: "hidden" })
           const img = document.createElementNS(SVGNS, "image")
@@ -1233,6 +1238,7 @@
           g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
+          if (/bulwark/.test(id)) g.dataset.big = 1
         } else {
           // no drawn piece: the game's item icon
           const w = document.createElementNS(SVGNS, "use")
@@ -2637,14 +2643,25 @@
       tier: 0,
       monsters: ["granite_golem", "magnetic_golem", "stalactite_golem", "", ""],
       players: [
-        { look: "default_slash", style: "slash", skills: ["cleave", "maim", "berserk", "fierce_aura"] },
-        { look: "default_ranged", style: "ranged", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "speed_aura"] },
-        { look: "default_magic", style: "magic", skills: ["fireball", "entangle", "toxic_pollen", "heal"] },
+        { look: "doll", style: "slash", skills: ["cleave", "maim", "berserk", "fierce_aura"], doll: { avatar: "blue_person_1", outfit: "warrior_1", items: { main_hand: "holy_sword", off_hand: "knights_aegis" }, enh: 10, enhOff: 8 } },
+        { look: "doll", style: "ranged", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "speed_aura"], doll: { avatar: "green_person_2", outfit: "ranger_1", items: { two_hand: "cursed_bow" }, enh: 12 } },
+        { look: "doll", style: "magic", skills: ["fireball", "entangle", "toxic_pollen", "heal"], doll: { avatar: "purple_person_1", outfit: "mage_1", items: { main_hand: "blazing_trident", off_hand: "bishops_codex" }, enh: 15, enhOff: 5 } },
       ],
       gallery: "magnetic_golem",
     }
     const st = { ...structuredClone(DEF), ...GM_getValue("battle_fx_lab_v1", {}) }
     const save = () => GM_setValue("battle_fx_lab_v1", st)
+    // older saves used the generic looks: those units switch to the game look with this style's preset gear
+    if (!st.v) {
+      st.players.forEach(pl => {
+        if (pl.look !== "doll") Object.assign(pl, { look: "doll", doll: structuredClone(DEF.players.find(d => d.style === pl.style)?.doll || DEF.players[0].doll) })
+      })
+      st.v = 2
+      save()
+    }
+    // the combat style a weapon fights with (names follow the game's weapon families)
+    const styleOfWeapon = id =>
+      /sword|claymore|scythe/.test(id) ? "slash" : /spear|dirk|dagger/.test(id) ? "stab" : /mace|flail|bulwark|club|hammer/.test(id) ? "smash" : /bow/.test(id) ? "ranged" : /staff|trident|wand/.test(id) ? "magic" : null
     const lab = { p: [], m: [] }
     let root = null
     let autoTimer = 0
@@ -2661,7 +2678,7 @@
         element: pl.style === "magic" ? ABILITIES[magicSkill]?.[4] || "fire" : "physical",
         lookId: pl.look === "doll" ? null : pl.look,
         // 游戏形象: the chosen avatar / outfit / held gear
-        ...(pl.look === "doll" ? { lab: true, avatar: pl.doll?.avatar, outfit: pl.doll?.outfit, items: { ...pl.doll?.items }, enh: { main_hand: pl.doll?.enh || 0, two_hand: pl.doll?.enh || 0, off_hand: pl.doll?.enh || 0 } } : {}),
+        ...(pl.look === "doll" ? { lab: true, avatar: pl.doll?.avatar, outfit: pl.doll?.outfit, items: { ...pl.doll?.items }, enh: { main_hand: pl.doll?.enh || 0, two_hand: pl.doll?.enh || 0, off_hand: pl.doll?.enhOff ?? pl.doll?.enh ?? 0 } } : {}),
         counters: {},
       }
     }
@@ -2891,13 +2908,21 @@
               delete pl.doll.items.main_hand
               delete pl.doll.items.two_hand
               if (v) pl.doll.items[Doll.slotOf(v)] = v
-            } else if (v) pl.doll.items[slot] = v
-            else delete pl.doll.items[slot]
+              // a two-handed weapon leaves no hand for the off-hand; the unit fights in the weapon's style
+              if (Doll.slotOf(v) === "two_hand") delete pl.doll.items.off_hand
+              if (styleOfWeapon(v)) pl.style = styleOfWeapon(v)
+              draw()
+            } else if (v) {
+              pl.doll.items[slot] = v
+              if (pl.doll.items.two_hand) (delete pl.doll.items.two_hand), draw()
+            } else delete pl.doll.items[slot]
           })),
         )
       }
-      // one enhancement level for the held gear, to preview the aura tiers
-      r.appendChild(select([0, 5, 8, 10, 12, 15, 20].map(n => [n, "强化 +" + n]), pl.doll.enh || 0, set(v => (pl.doll.enh = +v))))
+      // enhancement levels of the weapon and the off-hand, to preview the aura tiers
+      const levels = [0, 5, 8, 10, 12, 15, 20]
+      r.appendChild(select(levels.map(n => [n, "武器 +" + n]), pl.doll.enh || 0, set(v => (pl.doll.enh = +v))))
+      r.appendChild(select(levels.map(n => [n, "副手 +" + n]), pl.doll.enhOff ?? pl.doll.enh ?? 0, set(v => (pl.doll.enhOff = +v))))
       r.appendChild(
         button("随机", () => {
           const any = arr => (arr.length ? pick(arr) : "")
@@ -2908,6 +2933,8 @@
             const k = any(fits)
             if (k) pl.doll.items[Doll.slotOf(k)] = k
           }
+          if (pl.doll.items.two_hand) delete pl.doll.items.off_hand
+          pl.style = styleOfWeapon(pl.doll.items.main_hand || pl.doll.items.two_hand || "") || pl.style
           save()
           draw()
           reset()

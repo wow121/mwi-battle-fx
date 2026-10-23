@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx-release
-// @version      0.10.5
+// @version      0.10.6
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -764,6 +764,9 @@
 [data-style=stab][data-pose=strike] .bfx-wpn{transform:translateX(16px) rotate(88deg)}
 [data-style=smash][data-pose=windup] .bfx-wpn{transform:translateY(-8px) rotate(-125deg)}
 [data-style=smash][data-pose=strike] .bfx-wpn{transform:translateY(6px) rotate(125deg)}
+/* bulwarks bash: drawn back, then the whole shield shoved forward (no overhead swing) */
+.bfx-sprite[data-pose=windup] .bfx-wpn[data-big]{transform:translateX(-6px) rotate(-8deg)}
+.bfx-sprite[data-pose=strike] .bfx-wpn[data-big]{transform:translateX(14px) rotate(5deg)}
 [data-style=ranged][data-pose=windup] .bfx-wpn{transform:translateX(-3px) rotate(-10deg)}
 [data-style=ranged][data-pose=strike] .bfx-wpn{transform:translateX(-6px)}
 [data-style=magic][data-pose=windup] .bfx-wpn,[data-pose=cast] .bfx-wpn{transform:translateY(-12px) rotate(-25deg)}
@@ -1090,6 +1093,8 @@
     // drawn held pieces (the paper-doll weapon / off-hand layers): grip on the hand, scaled from rig pixels
     const HANDS = { "bfx-wpn": [79, 66], "bfx-off": [21, 67] }
     const HELD_SCALE = 0.2
+    // two-handed bulwarks are body-sized shields: drawn bigger than the one-handed gear
+    const heldScale = id => HELD_SCALE * (/bulwark/.test(id) ? 1.55 : 1)
     const PLAYER_SCALE = 0.75
     let glowSeq = 0
     // a big guild roster: effects get cheaper (no canvas shadow blur, fewer sparks, still enhancement auras)
@@ -1188,7 +1193,7 @@
         if (pc) {
           // the drawn piece, cropped from its layer sheet, its grip in the hand
           const [hx, hy] = HANDS[cls]
-          const k = HELD_SCALE
+          const k = heldScale(id)
           const box = document.createElementNS(SVGNS, "svg")
           attrs(box, { x: hx - pc.grip[0] * k, y: hy - pc.grip[1] * k, width: pc.rect[2] * k, height: pc.rect[3] * k, viewBox: pc.rect.join(" "), overflow: "hidden" })
           const img = document.createElementNS(SVGNS, "image")
@@ -1197,6 +1202,7 @@
           g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
+          if (/bulwark/.test(id)) g.dataset.big = 1
         } else {
           // no drawn piece: the game's item icon
           const w = document.createElementNS(SVGNS, "use")
