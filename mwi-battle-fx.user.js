@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.10.3
+// @version      0.10.4
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -968,7 +968,7 @@
       if (viewEl) viewEl.style.transform = view.z === 1 ? "" : `translate(${view.x}px,${view.y}px) scale(${view.z})`
       // names only while the units are big enough on screen to carry them
       stageEl?.classList.toggle("bfx-tiny", mode === "guild" && (actors.p[0]?.s || 0) * view.z < 90)
-      const res = mode === "guild" ? Math.min(2, Math.ceil(view.z * 2) / 2) : 1
+      const res = mode === "guild" && !crowded() ? Math.min(2, Math.ceil(view.z * 2) / 2) : 1
       if (res !== cres) layout()
     }
     function zoomAt(f, mx, my) {
@@ -1121,6 +1121,8 @@
     const HELD_SCALE = 0.2
     const PLAYER_SCALE = 0.75
     let glowSeq = 0
+    // a big guild roster: effects get cheaper (no canvas shadow blur, fewer sparks, still enhancement auras)
+    const crowded = () => mode === "guild" && shown.p.length > 12
     function sheet(name) {
       if (sheets[name]) return sheets[name]
       if (now() - (sheetAt[name] ?? -1e9) > 3000) {
@@ -1169,7 +1171,11 @@
     function enchAura(level, content) {
       const tier = ENCH.find(([n]) => level >= n)
       if (!tier || !content.length) return null
-      const [, color, radius, blur, breathe] = tier
+      const [, tierColor, radius, blur, tierBreathe] = tier
+      // crowded: still auras (svg animations repaint the blurred filter on every frame), rainbow shown as gold
+      const still = crowded()
+      const color = still && tierColor === "rainbow" ? "#ffd75a" : tierColor
+      const breathe = still ? 0 : tierBreathe
       const id = "bfx-ench" + ++glowSeq
       const g = document.createElementNS(SVGNS, "g")
       g.setAttribute("class", "bfx-ench")
@@ -1184,7 +1190,8 @@
     }
     // the game's own look for a player: avatar + outfit from their card (live) or the ids we know (lab),
     // holding the weapon / off-hand icons when we know the gear (self, or a profile the viewer has opened)
-    function gameLook(i) {
+    // build = false: only the key (what the look is made of), so an unchanged look costs no svg work
+    function gameLook(i, build = true) {
       const u = shown.p[i]
       const card = mode === "live" ? cardEl("p", i) : null
       let hrefs = card ? [...card.querySelectorAll("use")].map(hrefOf).filter(h => /avatar/.test(h) && !/background|border/.test(h)) : []
@@ -1199,6 +1206,8 @@
         ["bfx-off", it.off_hand, enh.off_hand || 0],
         ["bfx-wpn", it.main_hand || it.two_hand, (it.main_hand ? enh.main_hand : enh.two_hand) || 0],
       ].filter(x => x[1] && (Doll.held(x[1]) || sheet("items")))
+      const key = hrefs.join() + "|" + held.join() + (Doll.ready() ? "|d" : "") + (crowded() ? "|c" : "")
+      if (!build) return { key, real: true, build: () => gameLook(i).node }
       const node = svgOf(hrefs)
       const attrs = (el, o) => Object.entries(o).forEach(([k, v]) => el.setAttribute(k, v))
       for (const [cls, id, level] of held) {
@@ -1239,13 +1248,13 @@
         if (aura) g.insertBefore(aura, g.firstChild)
         node.appendChild(g)
       }
-      return { key: hrefs.join() + "|" + held.join() + (Doll.ready() ? "|d" : ""), node, real: true }
+      return { key, node, real: true }
     }
     // monsters: sheet + hrid (cards may still show the previous wave); players: their game look
     function spriteFor(side, i) {
       const u = shown[side][i]
       if (side === "p") {
-        const look = gameLook(i)
+        const look = gameLook(i, false)
         if (look) return look
       }
       if (side === "m" && u?.hrid) {
@@ -1272,7 +1281,7 @@
       }
       if (u?.lookId) return "p/" + u.lookId
       // no art made for this exact look: the game's own look, then a generic look for the combat style
-      if (gameLook(i)) return null
+      if (gameLook(i, false)) return null
       const d = "default_" + (u?.style || "slash")
       return Assets.has("p", d) ? "p/" + d : null
     }
@@ -1323,7 +1332,7 @@
       const sp = spriteFor(a.side, a.i)
       if (sp.key === a.spriteKey || (a.real && !sp.real)) return
       a.el.classList.remove("bfx-art")
-      a.spriteEl.replaceChildren(sp.node)
+      a.spriteEl.replaceChildren(sp.node || sp.build())
       a.spriteKey = sp.key
       a.real = sp.real
     }
@@ -1397,9 +1406,13 @@
       if (!r.width) return
       SW = r.width
       SH = r.height
-      dpr = W.devicePixelRatio || 1
-      // zoomed in, effects are drawn at a higher resolution so they stay sharp
-      cres = mode === "guild" ? Math.min(2, Math.ceil(view.z * 2) / 2) : 1
+      dpr = crowded() ? Math.min(1.5, W.devicePixelRatio || 1) : W.devicePixelRatio || 1
+      // zoomed in, effects are drawn at a higher resolution so they stay sharp (not for a crowd)
+      cres = mode === "guild" && !crowded() ? Math.min(2, Math.ceil(view.z * 2) / 2) : 1
+      // a crowd draws its effects without shadow blur, the costliest canvas operation: an own (no-op)
+      // shadowBlur on the context hides the real one
+      if (crowded()) Object.defineProperty(ctx, "shadowBlur", { configurable: true, get: () => 0, set: () => {} })
+      else delete ctx.shadowBlur
       canvas.width = Math.round(SW * dpr * cres)
       canvas.height = Math.round(SH * dpr * cres)
       // each side stands in a row on the same ground line, first unit nearest the middle;
@@ -1530,7 +1543,7 @@
     }
     function burst(x, y, o = {}) {
       const { n = 14, color = "#fff", speed = 140, life = 520, size = 3, gravity = 260, spread = Math.PI * 2, angle = -Math.PI / 2, shape = "dot", delay = 0 } = o
-      const ps = Array.from({ length: Math.round(n * cfg.scale) || 1 }, () => {
+      const ps = Array.from({ length: Math.round(n * cfg.scale * (crowded() ? 0.5 : 1)) || 1 }, () => {
         const a = angle + (Math.random() - 0.5) * spread
         const v = speed * (0.35 + Math.random() * 0.85) * cfg.scale
         return { vx: Math.cos(a) * v, vy: Math.sin(a) * v, s: size * (0.6 + Math.random() * 0.8) * cfg.scale, l: 0.6 + Math.random() * 0.4 }
@@ -1990,6 +2003,11 @@
     function renderStatus(a) {
       const t = now()
       const auras = a.dead ? [] : Object.keys(AURA).filter(k => sideAuras[a.side][k] > t)
+      const chips = [...auras.map(k => [k, "buff"]), ...Object.entries(a.status).filter(([, v]) => v.until > t && !a.dead).map(([k, v]) => [k, v.kind])]
+      // runs every second for every unit: nothing is rebuilt (and no ring animation restarts) unless it changed
+      const sig = auras.join() + "|" + chips.join() + "|" + Math.round(a.s)
+      if (sig === a.statusSig) return
+      a.statusSig = sig
       a.ringsEl.replaceChildren(
         ...auras.map((k, n) => {
           const r = document.createElement("div")
@@ -1999,7 +2017,6 @@
           return r
         }),
       )
-      const chips = [...auras.map(k => [k, "buff"]), ...Object.entries(a.status).filter(([, v]) => v.until > t && !a.dead).map(([k, v]) => [k, v.kind])]
       renderLook(a, chips.filter(([, kind]) => kind === "buff").map(([k]) => k))
       a.chipsEl.replaceChildren(
         ...chips.map(([k, kind]) => {
