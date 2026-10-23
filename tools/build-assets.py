@@ -5,6 +5,7 @@ usage: <raw_dir>/venv/bin/python build-assets.py <raw_dir> <repo_dir>   (needs P
   p_<look>.png           -> assets/p/<look>/<pose>.webp      (3x2 pose sheet, keyed)
   bg_<loc>[__tier].png   -> assets/bg/<loc>[__tier].webp
   fx_<effect>.png        -> assets/fx/<effect>.webp          (4x2 animation frames on black, drawn additively)
+  d_<a|o|i>_<id>.png     -> assets/doll/<id>.webp + doll/index.json   (paper-doll layer drawn on the mannequin)
 tools/flip.txt lists monster poses the generator drew facing the wrong way; they are mirrored.
 Each pose frame is its 512px cell plus a MARGIN on every side, so weapons and swings that cross the
 cell edge survive; pieces of neighbouring poses are dropped by assigning connected blobs to cells.
@@ -141,7 +142,269 @@ def cut_sheet(src, outdir, key, flip=frozenset()):
         os.remove(marker)
 
 
+
+
+# ---- paper doll: each sheet is one layer painted on the mannequin from tools/doll.py ----
+DOLL_SRC = os.path.join(RAW, "doll")
+D = 1024  # mannequin canvas; pieces are stored at half size
+SLOT_OF = {}
+_slots = os.path.join(RAW, "doll", "slots.json")
+if os.path.exists(_slots):
+    SLOT_OF = json.load(open(_slots))
+RGB = {"green": (0, 255, 0), "magenta": (255, 0, 255), "blue": (0, 0, 255), "cyan": (0, 255, 255)}
+
+
+def shift(a, dy, dx, fill=0):
+    out = np.full_like(a, fill)
+    h, w = a.shape[:2]
+    out[max(0, dy) : h + min(0, dy), max(0, dx) : w + min(0, dx)] = a[max(0, -dy) : h + min(0, -dy), max(0, -dx) : w + min(0, -dx)]
+    return out
+
+
+def grow_labels(lab, rounds):
+    """Unlabelled pixels take a neighbour's label, ring by ring (nearest part)."""
+    lab = lab.copy()
+    for _ in range(rounds):
+        empty = lab == 0
+        if not empty.any():
+            break
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = shift(lab, dy, dx)
+            take = empty & (n > 0) & (lab == 0)
+            lab[take] = n[take]
+    return lab
+
+
+def fill_from(rgb, have, region, rounds=80):
+    """Paints region pixels with the average colour of already painted neighbours, ring by ring."""
+    rgb = rgb.astype(np.float32).copy()
+    have = have.copy()
+    todo = region & ~have
+    for _ in range(rounds):
+        if not todo.any():
+            break
+        acc = np.zeros_like(rgb)
+        cnt = np.zeros(have.shape, np.float32)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+            h = shift(have, dy, dx, False)
+            acc += shift(rgb, dy, dx) * h[..., None]
+            cnt += h
+        new = todo & (cnt > 0)
+        rgb[new] = acc[new] / cnt[new][:, None]
+        have |= new
+        todo &= ~new
+    return rgb, have
+
+
+_tmpl = {}
+
+
+def template():
+    if not _tmpl:
+        lab = np.asarray(Image.open(os.path.join(DOLL_SRC, "labels.png")))
+        rig = json.load(open(os.path.join(DOLL_SRC, "rig.json")))
+        _tmpl.update(lab=lab, rig=rig, order=rig["order"], near=grow_labels(lab[::4, ::4], 200).repeat(4, 0).repeat(4, 1))
+    return _tmpl
+
+
+def key_alpha(rgb, color):
+    dist = np.abs(rgb - np.array(RGB[color], np.int16)).sum(axis=2)
+    return np.clip((dist - 110) / 140.0, 0, 1)
+
+
+def seg_alpha(rgb, c0, c1):
+    p0, p1 = np.array(RGB[c0], np.float32), np.array(RGB[c1], np.float32)
+    d = p1 - p0
+    t = np.clip(((rgb - p0) @ d) / (d @ d), 0, 1)
+    near = p0 + t[..., None] * d
+    dist = np.abs(rgb - near).sum(axis=2)
+    return np.clip((dist - 110) / 140.0, 0, 1)
+
+
+def fit(fg, sil):
+    """Best small translation of the drawn silhouette onto the mannequin (the generator rarely drifts)."""
+    # below the neck only: hair, ears and hats vary, the body is what the generator keeps in place
+    a, b = fg[480::8, ::8], sil[480::8, ::8]
+    best, bd = -1, (0, 0)
+    for dy in range(-5, 6):
+        for dx in range(-5, 6):
+            s = (shift(a, dy, dx, False) & b).sum() - 0.5 * (shift(a, dy, dx, False) & ~b).sum()
+            if s > best:
+                best, bd = s, (dy * 8, dx * 8)
+    return bd, (a & b).sum() / max(1, (a | b).sum())
+
+
+def weapon_dir(m, name, fist):
+    """Where the weapon points, as an angle from straight down (+ = forward): from the fist toward its mass,
+    or along its long axis for weapons gripped in the middle (bows, crossbows, bulwarks)."""
+    ys, xs = np.nonzero(m[::2, ::2])
+    xs, ys = xs * 2.0 - fist[0], ys * 2.0 - fist[1]
+    if not len(xs):
+        return [0, 0]
+    cx, cy = xs.mean(), ys.mean()
+    held_mid = any(k in name for k in ("bow", "bulwark", "defender")) or np.hypot(cx, cy) < 70
+    if held_mid:
+        cov = np.cov(np.stack([xs - cx, ys - cy]))
+        w, v = np.linalg.eigh(cov)
+        vx, vy = v[:, 1]
+        if "crossbow" in name:
+            vx, vy = (vx, vy) if vx > 0 else (-vx, -vy)
+        else:
+            vx, vy = (vx, vy) if vy < 0 else (-vx, -vy)
+        cx, cy = vx, vy
+    return [round(float(np.degrees(np.arctan2(cx, cy))), 1), int(held_mid)]
+
+
+def cut_doll(src, name, keys, slot, rects, report, dirs):
+    out = os.path.join(ASSETS, "doll", name + ".webp")
+    T = template()
+    order = T["order"]
+    bg, doll = keys.split(":") if ":" in keys else ("green", "magenta")
+    im = Image.open(src).convert("RGB").resize((D, D), Image.LANCZOS)
+    rgb = np.asarray(im).astype(np.int16)
+    a_bg = key_alpha(rgb, bg)
+    (dy, dx), iou = fit(a_bg > 0.5, T["lab"] > 0)
+    if dy or dx:
+        rgb, a_bg = shift(rgb, dy, dx, 0), shift(a_bg, dy, dx, 0.0)
+        rgb[a_bg == 0] = RGB[bg]
+    # the mannequin's edge blends both key colours: key the whole segment between them, but only where the
+    # two meet (greys and lilacs elsewhere lie on that segment too and are real paint)
+    if slot == "avatar":
+        alpha = a_bg
+    else:
+        a_doll = key_alpha(rgb, doll)
+        alpha = np.minimum(a_bg, a_doll)
+        seam = dilate(a_bg < 0.05, 5) & dilate(a_doll < 0.05, 5)
+        alpha = np.where(seam, np.minimum(alpha, seg_alpha(rgb, bg, doll)), alpha)
+    # despill: pull key colours out of the antialiased edge band
+    band = dilate(alpha < 0.98, 3) & (alpha > 0)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    for k in {bg, doll}:
+        if k == "green":
+            g = np.where(band, np.minimum(g, np.maximum(r, b)), g)
+        elif k == "magenta":
+            ex = np.where(band, np.clip(np.minimum(r, b) - g, 0, None), 0)
+            r, b = r - ex, b - ex
+        elif k == "blue":
+            b = np.where(band, np.minimum(b, np.maximum(r, g)), b)
+        else:
+            ex = np.where(band, np.clip(np.minimum(g, b) - r, 0, None), 0)
+            g, b = g - ex, b - ex
+    rgb = np.clip(np.stack([r, g, b], axis=2), 0, 255)
+    fg = alpha > 0.04
+    report.append(f"{name}\t{slot}\tdrift={dx},{dy}\tiou={iou:.2f}\tfg={fg.mean():.3f}")
+    if fresh(out, src) and name in rects.get("_done", {}) and (slot not in ("main_hand", "two_hand") or name in dirs):
+        return
+    # which piece each drawn pixel belongs to
+    lab = np.where(T["lab"] > 0, T["lab"], T["near"])
+    pname = np.array([""] + order, object)[lab]
+    pieces = {}
+    if slot in ("main_hand", "two_hand"):
+        fist = T["rig"]["pivots"]["fist"]
+        dirs[name] = weapon_dir(fg, name, fist)
+        rgb, pieces["weapon"] = bridge_grip(rgb, fg, key_alpha(rgb, doll) < 0.5, fist)
+    elif slot == "off_hand":
+        pieces["off"] = fg
+    elif slot == "back":
+        pieces["back"] = fg
+    elif slot == "head":
+        pieces["head"] = fg
+    else:
+        for p in ("head", "torso", "arm", "leg"):
+            pieces[p] = fg & (pname == p)
+        if slot == "body":  # a long hem moves with the torso
+            pieces["torso"] |= fg & np.isin(pname, ["leg", "legB"])
+            pieces.pop("leg")
+        if slot in ("feet", "legs"):
+            pieces.pop("head")
+        pieces = {k: v for k, v in pieces.items() if v.sum() > 150}
+        # parts hidden behind a nearer part (torso under the arm and chin, leg tops under the torso) are
+        # painted in from their own colours, so nothing gapes when the parts rotate
+        for p, m in list(pieces.items()):
+            region = template_mask(p) & fg & ~m
+            if region.any():
+                rgb_f, have = fill_from(rgb, m, region)
+                pieces[p] = have
+                rgb = np.where((region & have)[..., None], rgb_f, rgb).astype(np.int16)
+    # pack the pieces (half size) side by side
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    tiles, x = [], 0
+    for p, m in pieces.items():
+        ys, xs = np.nonzero(m)
+        if not len(ys):
+            continue
+        y0, y1, x0, x1 = ys.min() & ~1, ys.max() + 2, xs.min() & ~1, xs.max() + 2
+        # painted-in pixels are opaque; the rest keep their keyed edge
+        a = np.where(m & ~fg, 1.0, np.where(dilate(m, 1), alpha, 0))
+        tile = np.dstack([rgb, a * 255]).astype(np.uint8)[y0:y1, x0:x1]
+        t = Image.fromarray(tile, "RGBA").resize(((x1 - x0) // 2, (y1 - y0) // 2), Image.LANCZOS)
+        tiles.append((p, t, x0 // 2, y0 // 2))
+    H = max(t.height for _, t, _, _ in tiles)
+    atlas = Image.new("RGBA", (sum(t.width + 2 for _, t, _, _ in tiles), H))
+    rect = {}
+    for p, t, dx2, dy2 in tiles:
+        atlas.paste(t, (x, 0))
+        rect[p] = [int(v) for v in (x, 0, t.width, t.height, dx2, dy2)]
+        x += t.width + 2
+    atlas.save(out, quality=88, method=4)
+    rects[name] = rect
+
+
+def bridge_grip(rgb, fg, man, fist):
+    """The mannequin's arm is painted over the shaft; once the arm moves on its own that gap would show, so the
+    shaft is continued under the arm, as wide as it is just outside it."""
+    H, W = fg.shape
+    gy, gx = np.mgrid[0:H, 0:W]
+    gx, gy = gx - fist[0], gy - fist[1]
+    # the arm as drawn (the generator's fist is a little bigger than the template's)
+    arm = dilate(man | template_mask("arm"), 6) & (np.hypot(gx, gy) < 200)
+    near = fg & ~arm & (np.hypot(gx, gy) < 160)
+    if near.sum() < 50:
+        return rgb, fg
+    # the shaft's own axis, from the paint right around the hand
+    px, py = gx[near].astype(np.float64), gy[near].astype(np.float64)
+    w, v = np.linalg.eigh(np.cov(np.stack([px - px.mean(), py - py.mean()])))
+    ux, uy = v[:, 1]
+    along, perp = gx * ux + gy * uy, gx * -uy + gy * ux
+    lo, hi = np.percentile(perp[near], [5, 95])
+    if hi - lo > 60:  # a broad blade or shield, not a shaft: leave it
+        return rgb, fg
+    a0, a1 = along[near].min(), along[near].max()
+    # repaint the band under the arm, also the shaft's own edge there (it carries the arm's fringe)
+    region = arm & (perp >= lo) & (perp <= hi) & (along >= a0) & (along <= a1)
+    if not region.any():
+        return rgb, fg
+    # a shaft looks the same all along: paint each pixel with the shaft's median colour at its offset
+    bins = np.round(perp[near] - lo).astype(int)
+    cols = rgb[near]
+    prof = np.zeros((bins.max() + 1, 3), np.int16)
+    ok = np.zeros(bins.max() + 1, bool)
+    for i in range(bins.max() + 1):
+        sel = bins == i
+        if sel.sum() >= 3:
+            prof[i], ok[i] = np.median(cols[sel], axis=0), True
+    idx = np.clip(np.round(perp[region] - lo).astype(int), 0, bins.max())
+    good = ok[idx]
+    ys, xs = np.nonzero(region)
+    rgb = rgb.copy()
+    rgb[ys[good], xs[good]] = prof[idx[good]]
+    painted = np.zeros_like(fg)
+    painted[ys[good], xs[good]] = True
+    return rgb, (fg & ~region) | painted
+
+
+_tm = {}
+
+
+def template_mask(p):
+    """The whole shape of a part, also where a nearer part is drawn over it."""
+    if p not in _tm:
+        _tm[p] = np.asarray(Image.open(os.path.join(DOLL_SRC, f"mask_{p}.png"))) > 127
+    return _tm[p]
+
+
 manifest = {"poses": POSES, "frame": {"cell": CELL, "margin": MARGIN}, "m": [], "p": [], "bg": [], "fx": []}
+doll_sheets = []
 for f in sorted(os.listdir(SHEETS)):
     if not f.endswith(".png"):
         continue
@@ -167,6 +430,31 @@ for f in sorted(os.listdir(SHEETS)):
             im = Image.open(src).convert("RGB")
             im.resize((1024, round(im.height * 1024 / im.width)), Image.LANCZOS).save(out, quality=82, method=4)
         manifest["fx"].append(name[3:])
+    elif name.startswith("d_"):
+        doll_sheets.append((name, src))
+# paper-doll layers: one atlas per layer, rects in doll/index.json
+if doll_sheets:
+    ipath = os.path.join(ASSETS, "doll", "index.json")
+    old = json.load(open(ipath, encoding="utf-8")) if os.path.exists(ipath) else {}
+    rects = dict(old.get("layers", {}))
+    rects["_done"] = dict(rects)
+    dirs = dict(old.get("dirs", {}))
+    report = []
+    for name, src in doll_sheets:
+        kind, key = name[2], name[4:]
+        slot = {"a": "avatar", "o": "outfit"}.get(kind) or SLOT_OF.get(key, "body")
+        try:
+            cut_doll(src, key if kind == "i" else kind + "_" + key, keys.get(name, "green:magenta"), slot, rects, report, dirs)
+        except Exception as e:  # one bad sheet must not stop the build
+            report.append(f"{name}\tERROR {e!r}")
+    rects.pop("_done")
+    names = os.path.join(DOLL_SRC, "names.json")
+    names = json.load(open(names, encoding="utf-8")) if os.path.exists(names) else {}
+    index = {"rig": template()["rig"], "slots": SLOT_OF, "names": names, "dirs": dirs, "layers": rects}
+    json.dump(index, open(ipath + ".tmp", "w", encoding="utf-8"), separators=(",", ":"), ensure_ascii=False)
+    os.replace(ipath + ".tmp", ipath)
+    open(os.path.join(REPO, "doll-report.tsv"), "w").write("\n".join(report) + "\n")
+    manifest["doll"] = len(rects)
 # shipped mirroring, so the userscript's gallery can show and edit absolute flips
 manifest["flips"] = {k: sorted(v) for k, v in sorted(FLIP.items())}
 json.dump(manifest, open(os.path.join(ASSETS, "manifest.json"), "w"), separators=(",", ":"))

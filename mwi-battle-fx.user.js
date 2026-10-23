@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.8.5
+// @version      0.9.0
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
@@ -343,7 +343,7 @@
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
     const url = path => (manifest?.rev && !cfg.assetBase ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
-    return { refresh, has, url, list: kind => manifest?.[kind] || [], onChange: f => listeners.push(f) }
+    return { refresh, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -403,7 +403,7 @@
       for (const u of cardEl("p", i)?.querySelectorAll("use") || []) {
         const h = u.getAttribute("href") || u.getAttribute("xlink:href") || ""
         if (/avatar_outfits/.test(h)) out.outfit = h.split("#")[1]
-        else if (/avatars?_/.test(h) && !/background|border/.test(h)) out.avatar = h.split("#")[1]
+        else if (/avatars?[_.]/.test(h) && !/background|border/.test(h)) out.avatar = h.split("#")[1]
       }
       return out
     }
@@ -460,6 +460,151 @@
     return { onMessage, assign, exportMissing, me }
   })()
 
+  // ---------- paper doll: any player built from avatar / outfit / equipment layers on one rig ----------
+  // Every layer (assets/doll/<id>.webp) was generated on the same mannequin and cut into rig pieces
+  // (head, torso, arm, leg, weapon, off-hand, back), so all layers line up; poses turn the parts on their pivots.
+  const Doll = (() => {
+    const LAYERS = ["legs", "feet", "body", "hands", "head", "back", "main_hand", "two_hand", "off_hand"]
+    // part -> [pivot, piece, angle key]; back to front. The back arm and leg reuse the front pieces.
+    const PARTS = [
+      ["back", "neck", "back", "torso"],
+      ["armB", "shoulder", "arm", "armB"],
+      ["legB", "hip", "leg", "legB"],
+      ["leg", "hip", "leg", "leg"],
+      ["torso", "hip", "torso", "torso"],
+      ["off", "shoulder", "off", "armB"],
+      ["head", "neck", "head", "head"],
+      ["weapon", "shoulder", "weapon", "arm"],
+      ["arm", "shoulder", "arm", "arm"],
+    ]
+    const ON_TORSO = new Set(["back", "armB", "off", "head", "weapon", "arm"])
+    // limb angles in degrees from straight down, + = forward; torso / head: + = lean forward;
+    // tip = where the weapon points (turned in the fist); weapons gripped in the middle keep their own angle:
+    // bows and bulwarks upright, crossbows level
+    const REST = { torso: 0, head: 0, arm: 46, armB: -28, leg: 9, legB: -9, tip: 160 }
+    const POSES = {
+      idle: {},
+      windup: { torso: -6, arm: 150, armB: -40 },
+      strike: { torso: 10, head: 4, arm: 75, armB: -50, leg: 28, legB: -22 },
+      windup_slash: { torso: -8, arm: 165, armB: -35, leg: 14, legB: -14, tip: 235 },
+      strike_slash: { torso: 12, head: 5, arm: 55, armB: -55, leg: 30, legB: -24, tip: 85 },
+      windup_smash: { torso: -12, head: -4, arm: 175, armB: 150, tip: 215 },
+      strike_smash: { torso: 16, head: 6, arm: 35, armB: 20, leg: 24, legB: -26, tip: 60 },
+      windup_stab: { torso: -6, arm: 10, armB: -40, leg: 16, legB: -16, tip: 95 },
+      strike_stab: { torso: 12, head: 4, arm: 92, armB: -60, leg: 34, legB: -30, tip: 92 },
+      windup_ranged: { torso: -4, arm: 92, armB: 85, tip: 180 },
+      strike_ranged: { torso: -2, arm: 92, armB: 35, tip: 180 },
+      windup_magic: { torso: -5, arm: 120, armB: -30, tip: 165 },
+      strike_magic: { torso: 8, head: 4, arm: 105, armB: -45, leg: 18, legB: -12, tip: 130 },
+      cast: { torso: -4, head: -8, arm: 150, armB: 130, tip: 175 },
+      hurt: { torso: -14, head: -14, arm: 20, armB: -50, leg: 2, legB: -22 },
+      dead: { head: 12, arm: 5, armB: -5, leg: 2, legB: -2 },
+    }
+    let index = null
+    let loading = false
+    const listeners = []
+    function load() {
+      if (index || loading || !Assets.get("doll")) return
+      loading = true
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: Assets.url("doll/index.json"),
+        timeout: 20000,
+        onload: r => {
+          loading = false
+          try {
+            index = JSON.parse(r.responseText)
+            listeners.forEach(f => f())
+          } catch (e) {
+            if (cfg.debug) console.warn("[战斗动画] doll index", e)
+          }
+        },
+        onerror: () => (loading = false),
+        ontimeout: () => (loading = false),
+      })
+    }
+    Assets.onChange(load)
+    const ready = () => (load(), !!index)
+    const base = id => id && String(id).replace(/_refined$/, "")
+    // the layers a unit wears, bottom first; unknown avatars wear the default body
+    function layersOf(u) {
+      const L = index.layers
+      const out = []
+      const add = id => id && L[id] && !out.includes(id) && out.push(id)
+      add("a_" + (L["a_" + u.avatar] ? u.avatar : "person_default"))
+      add("o_" + u.outfit)
+      const slots = cfg.lookMode === "outfit" && !u.lab ? ["main_hand", "two_hand", "off_hand"] : LAYERS
+      for (const sl of slots) add(base(u.items?.[sl]))
+      return out
+    }
+    const pct = v => (v / index.rig.canvas) * 100
+    function transformOf(part, pose, style, weapon) {
+      const p = { ...REST, ...POSES[pose], ...POSES[pose + "_" + style] }
+      const [, pivot, piece, key] = PARTS.find(x => x[0] === part)
+      const { pivots, angles } = index.rig
+      const around = (pt, deg) => (deg ? `translate(${pct(pt[0])}%,${pct(pt[1])}%) rotate(${deg}deg) translate(${-pct(pt[0])}%,${-pct(pt[1])}%)` : "")
+      let t = part === "torso" || ON_TORSO.has(part) ? around(pivots.hip, p.torso) : ""
+      if (key === "head") t += " " + around(pivots[pivot], p.head)
+      else if (key !== "torso") {
+        // pieces were drawn with the limb at its mannequin angle; the back limbs borrow the front pieces
+        const drawn = piece === "off" ? angles.armB : angles[piece] ?? 0
+        t += " " + around(pivots[pivot], -(p[key] - drawn))
+        if (part === "weapon") {
+          const [dir, mid] = index.dirs?.[weapon] || [p.tip, 0]
+          const want = mid ? (/crossbow/.test(weapon) ? 90 : 180) : p.tip
+          t += " " + around(pivots.fist, -(want - dir - (p.arm - drawn)))
+        }
+      }
+      return t.trim() || "none"
+    }
+    const keyOf = u => (ready() && u ? layersOf(u).join("+") : "")
+    function build(u) {
+      if (!ready() || !u) return null
+      const layers = layersOf(u)
+      const key = layers.join("+")
+      const el = document.createElement("div")
+      el.className = "bfx-doll"
+      const half = index.rig.canvas / 2
+      const groups = {}
+      for (const [part, , piece] of PARTS) {
+        const g = document.createElement("div")
+        g.className = "bfx-dg bfx-dg-" + part
+        for (const id of layers) {
+          const rects = index.layers[id]
+          const r = rects[piece]
+          if (!r) continue
+          const W = Math.max(...Object.values(rects).map(x => x[0] + x[2])) + 2
+          const H = Math.max(...Object.values(rects).map(x => x[1] + x[3]))
+          const [sx, sy, w, h, dx, dy] = r
+          const box = document.createElement("div")
+          box.className = "bfx-pc"
+          Object.assign(box.style, { left: (dx / half) * 100 + "%", top: (dy / half) * 100 + "%", width: (w / half) * 100 + "%", height: (h / half) * 100 + "%" })
+          const img = document.createElement("img")
+          img.decoding = "async"
+          img.src = Assets.url("doll/" + id + ".webp")
+          Object.assign(img.style, { left: (-sx / w) * 100 + "%", top: (-sy / h) * 100 + "%", width: (W / w) * 100 + "%", height: (H / h) * 100 + "%" })
+          box.appendChild(img)
+          g.appendChild(box)
+        }
+        if (g.childNodes.length) el.appendChild((groups[part] = g))
+      }
+      let cur = ""
+      const weapon = layers.find(id => index.dirs?.[id])
+      return {
+        key,
+        el,
+        pose(name, style) {
+          const k = name + "|" + style
+          if (k === cur) return
+          cur = k
+          for (const part in groups) groups[part].style.transform = transformOf(part, POSES[name] ? name : "idle", style, weapon)
+        },
+      }
+    }
+    const list = prefix => (index ? Object.keys(index.layers).filter(k => (prefix ? k.startsWith(prefix) : !/^[ao]_/.test(k))) : [])
+    return { ready, build, keyOf, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
+  })()
+
   // ---------- side-view stage: Slay-the-Spire style, heroes on the left, monsters on the right ----------
   const Stage = (() => {
     const SVGNS = "http://www.w3.org/2000/svg"
@@ -497,7 +642,12 @@
 .bfx-bg{position:absolute;inset:0;background:center 85%/cover no-repeat;opacity:0;transition:opacity .6s}
 .bfx-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),transparent 30%,transparent 70%,rgba(0,0,0,.35))}
 /* frames are the 512px pose cell plus a 96px margin all round: scale up so the cell fills the actor box */
-.bfx-sprite img{position:absolute;left:-18.75%;top:-18.75%;width:137.5%;height:137.5%;display:block}
+.bfx-doll{position:absolute;inset:0;transform:translateY(6%)}
+.bfx-dg{position:absolute;inset:0;transform-origin:0 0;transition:transform .14s ease-out}
+.bfx-dg-armB,.bfx-dg-legB{filter:brightness(.72) saturate(.85)}
+.bfx-pc{position:absolute;overflow:hidden}
+.bfx-sprite .bfx-pc img{position:absolute;max-width:none;display:block}
+.bfx-sprite>img{position:absolute;left:-18.75%;top:-18.75%;width:137.5%;height:137.5%;display:block}
 .bfx-art .bfx-shadow{bottom:2%;height:10%;width:56%}
 .bfx-rings{position:absolute;left:50%;bottom:0;width:0;height:0}
 .bfx-ring{position:absolute;border-radius:50%;border:2px solid;transform:translate(-50%,-50%);animation:bfx-ring 2.4s ease-in-out infinite}
@@ -794,12 +944,22 @@
         return Assets.has("m", id) ? "m/" + id : null
       }
       if (u?.lookId) return "p/" + u.lookId
+      // no art made for this exact look: the paper doll, then a generic look for the combat style
+      if (Doll.ready()) return null
       const d = "default_" + (u?.style || "slash")
       return Assets.has("p", d) ? "p/" + d : null
     }
     const frameUrl = (a, pose) => Assets.url(`${a.art}/${pose}.webp`)
     // swaps to a pose frame; ms > 0 falls back to idle (or dead) afterwards
     function setPose(a, pose, ms) {
+      if (a.doll) {
+        clearTimeout(a.poseTimer)
+        if (a.dead && pose !== "dead") return
+        const style = shown[a.side][a.i]?.style
+        a.doll.pose(pose, style)
+        if (ms > 0) a.poseTimer = setTimeout(() => a.doll.pose(a.dead ? "dead" : "idle", style), ms)
+        return
+      }
       if (!a.art || !a.img) return
       clearTimeout(a.poseTimer)
       if (a.dead && pose !== "dead") return
@@ -811,7 +971,20 @@
     }
     function refreshSprite(a) {
       const art = artFor(a.side, a.i)
+      if (!art && a.side === "p" && Doll.ready()) {
+        const d = Doll.keyOf(shown.p[a.i]) !== a.doll?.key && Doll.build(shown.p[a.i])
+        if (d) {
+          a.doll = d
+          a.art = a.img = null
+          d.pose(a.dead ? "dead" : "idle", shown.p[a.i]?.style)
+          a.spriteEl.replaceChildren(d.el)
+          a.el.classList.add("bfx-art")
+          a.real = true
+        }
+        if (a.doll) return
+      }
       if (art && art !== a.art) {
+        a.doll = null
         a.art = art
         a.img = document.createElement("img")
         a.img.decoding = "async"
@@ -868,6 +1041,7 @@
         real: false,
         art: null,
         img: null,
+        doll: null,
         poseTimer: 0,
       }
       refreshSprite(a)
@@ -1425,6 +1599,7 @@
       a.status = {}
       renderStatus(a)
       const m = mid(a)
+      setPose(a, "dead")
       if (!quiet && !sprite("death", m.x, m.y - a.s * 0.15, a.s * 1.1, { dur: 1000 })) burst(m.x, m.y, { n: 18, color: "#ddd", speed: 90, gravity: -80, life: 800, size: 3 })
       if (a.art) {
         // the generated "defeated" frame; monsters then fade out like in Slay the Spire
@@ -1463,6 +1638,7 @@
       a.deathAnim?.cancel()
       a.deathAnim = null
       if (a.art) showFrame(a, "idle")
+      setPose(a, "idle")
       if (!quiet && !sprite("revive", a.x, a.y, a.s * 2, { dur: 1100, anchor: "bottom" })) {
         pillarFx(a.x, a.y, a.s * 0.9, a.s * 2.2, "#fff6c0", 900)
         burst(a.x, a.y - a.s * 0.3, { n: 18, color: "#fff6c0", speed: 80, gravity: -140, life: 900, size: 2.5 })
@@ -1770,10 +1946,14 @@
         bgKey = ""
         setBackground()
       })
+      Doll.onLoad(() => {
+        Lab.redraw()
+        if (mode) actors.p.forEach(a => ((a.art = null), (a.real = false), refreshSprite(a)))
+      })
     }
 
-    const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, refreshSprite(a))))
-    return { play, newBattle, layout, open, start, ensureTab, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.doll = null, a.real = false, refreshSprite(a))))
+    return { play, newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -1865,7 +2045,9 @@
         hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000,
         style: pl.style,
         element: pl.style === "magic" ? ABILITIES[magicSkill]?.[4] || "fire" : "physical",
-        lookId: pl.look,
+        lookId: pl.look === "doll" ? null : pl.look,
+        // 纸娃娃: the chosen avatar / outfit / equipment, all slots worn whatever the look mode
+        ...(pl.look === "doll" ? { lab: true, avatar: pl.doll?.avatar, outfit: pl.doll?.outfit, items: { ...pl.doll?.items } } : {}),
         counters: {},
       }
     }
@@ -2014,10 +2196,11 @@
         )
 
       const looks = Assets.list("p")
+      const lookOptions = [...(Doll.ready() ? [["doll", "纸娃娃"]] : []), ...(looks.length ? looks : [pl0Look()]).map(id => [id, id.replace(/^default_/, "通用·")])]
       st.players.forEach((pl, i) => {
         const r = row(`${i + 1}号`)
         r.append(
-          select((looks.length ? looks : [pl.look]).map(id => [id, id.replace(/^default_/, "通用·")]), pl.look, v => ((pl.look = v), save(), reset())),
+          select(lookOptions, pl.look, v => ((pl.look = v), save(), draw(), reset())),
           select(STYLES.map(x => [x, STYLE_ZH[x]]), pl.style, v => ((pl.style = v), save(), reset())),
           ...[0, 1, 2, 3].map(k => select(skillOptions(), pl.skills[k] || "", v => ((pl.skills[k] = v), save(), draw()))),
           button("普攻", () => act("p", i, null)),
@@ -2029,6 +2212,7 @@
             reset()
           }),
         )
+        if (pl.look === "doll" && Doll.ready()) dollRow(pl, i)
       })
 
       const r3 = row("操作")
@@ -2069,6 +2253,51 @@
       }
     }
 
+    const pl0Look = () => st.players[0]?.look || "default_slash"
+    // 纸娃娃 controls: avatar, outfit and one pick per visible slot (both weapon slots share one list)
+    const DOLL_SLOTS = [["head", "头部"], ["body", "身体"], ["legs", "腿部"], ["feet", "脚部"], ["hands", "手部"], ["weapon", "武器"], ["off_hand", "副手"], ["back", "背部"]]
+    function dollRow(pl, i) {
+      pl.doll ||= { avatar: "person_default", outfit: "", items: {} }
+      const r = row("")
+      const ids = prefix => Doll.list(prefix).map(k => k.slice(2)).sort()
+      const set = fn => v => (fn(v), save(), reset())
+      r.append(
+        select(ids("a_").map(k => [k, "头像·" + k]), pl.doll.avatar, set(v => (pl.doll.avatar = v))),
+        select([["", "服装·无"], ...ids("o_").map(k => [k, "服装·" + k])], pl.doll.outfit, set(v => (pl.doll.outfit = v))),
+      )
+      const items = Doll.list()
+      for (const [slot, label] of DOLL_SLOTS) {
+        const fits = items.filter(k => (slot === "weapon" ? /^(main|two)_hand$/.test(Doll.slotOf(k)) : Doll.slotOf(k) === slot))
+        fits.sort((a, b) => Doll.nameOf(a).localeCompare(Doll.nameOf(b), "zh"))
+        const cur = slot === "weapon" ? pl.doll.items.main_hand || pl.doll.items.two_hand : pl.doll.items[slot]
+        r.appendChild(
+          select([["", label + "·无"], ...fits.map(k => [k, Doll.nameOf(k)])], cur || "", set(v => {
+            if (slot === "weapon") {
+              delete pl.doll.items.main_hand
+              delete pl.doll.items.two_hand
+              if (v) pl.doll.items[Doll.slotOf(v)] = v
+            } else if (v) pl.doll.items[slot] = v
+            else delete pl.doll.items[slot]
+          })),
+        )
+      }
+      r.appendChild(
+        button("随机", () => {
+          const any = arr => (arr.length ? pick(arr) : "")
+          pl.doll = { avatar: any(ids("a_")), outfit: Math.random() < 0.5 ? any(ids("o_")) : "", items: {} }
+          for (const [slot] of DOLL_SLOTS) {
+            if (Math.random() < 0.25) continue
+            const fits = items.filter(k => (slot === "weapon" ? /^(main|two)_hand$/.test(Doll.slotOf(k)) : Doll.slotOf(k) === slot))
+            const k = any(fits)
+            if (k) pl.doll.items[Doll.slotOf(k)] = k
+          }
+          save()
+          draw()
+          reset()
+        }),
+      )
+    }
+
     // builds the controls in the tab panel and returns the element the stage hangs in
     function render(panel) {
       root = panel.querySelector(".bfx-lab")
@@ -2086,7 +2315,7 @@
       return slot
     }
     const stop = () => setAuto(false)
-    return { units: lab, render, stop, loc: () => st.loc, tier: () => st.tier, startAuto: () => setAuto(true) }
+    return { units: lab, render, stop, redraw: () => draw(), loc: () => st.loc, tier: () => st.tier, startAuto: () => setAuto(true) }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
@@ -2109,7 +2338,7 @@
     menuIds = [
       GM_registerMenuCommand(`当前版本 v${GM_info?.script?.version || "?"}（点击检查素材）`, () => {
         Assets.refresh(true)
-        const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ")
+        const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ") + ` 纸娃娃:${Assets.get("doll") || 0}`
         alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}`)
       }),
       toggle("enabled", "战斗动画（舞台 / 叠加层）", () => Stage.ensureTab()),
@@ -2192,5 +2421,5 @@
   }
   Object.defineProperty(W.MessageEvent.prototype, "data", desc)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage }
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll }
 })()
