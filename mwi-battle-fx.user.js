@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.7
+// @version      0.12.8
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3017,6 +3017,11 @@
 .bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
   text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
 .bfxl-big{position:absolute;left:0;top:0}
+.bfxl-mats{position:absolute;left:4%;right:4%;display:flex;justify-content:center;gap:1px;transform:translateY(-100%);pointer-events:none;z-index:1}
+.bfxl-mat{position:relative;width:19px;height:19px;filter:drop-shadow(0 1px 1px #0008)}
+.bfxl-mat svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-mat b{position:absolute;right:-3px;bottom:-4px;font:700 8px sans-serif;color:#fff;text-shadow:0 0 2px #000,0 0 2px #000}
+.bfxl-mat.short{opacity:.55;filter:grayscale(.7)}
 .bfxl-rune{position:absolute;left:8%;top:-8px;width:84%;aspect-ratio:1;border-radius:50%;border:2px solid var(--enh,#7fd0ff);box-shadow:0 0 8px var(--enh,#7fd0ff),inset 0 0 8px var(--enh,#7fd0ff);background:repeating-conic-gradient(#ffffff55 0 3deg,transparent 3deg 24deg);animation:bfxl-rune 7s linear infinite;pointer-events:none}
 .st3 .bfxl-rune,.st4 .bfxl-rune{animation-duration:4s;border-width:3px}
 .st5 .bfxl-rune{animation:bfxl-rune 3s linear infinite,bfxl-hue 2s linear infinite;border-width:3px}
@@ -3215,7 +3220,7 @@
       const id = shortId(cur.actionHrid)
       const work = hashItem(cur.primaryItemHash)?.id
       const me = Looks.me
-      const key = [cur.id, id, work, tools[skill], toolEnh[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
+      const key = [cur.id, id, work, tools[skill], toolEnh[skill], !!gameData(), me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
       el.querySelector(".bfxl-name").textContent = actionName()
       el.querySelector(".bfxl-ico").title = actionName()
       el.querySelector(".bfxl-count").textContent = cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
@@ -3291,6 +3296,26 @@
         w.className = "bfxl-work"
         w.appendChild(svgUse("items", kind === "make" ? id : work))
         target.appendChild(w)
+        // what goes in, laid out on the table top
+        const mats = materials()
+        if (mats.length) {
+          const row = document.createElement("div")
+          row.className = "bfxl-mats"
+          row.style.top = (TABLE_TOP[skill] ?? 0.35) * 100 + "%"
+          const [x0, x1] = TABLE_X[skill] || [0.04, 0.96]
+          Object.assign(row.style, { left: x0 * 100 + "%", right: (1 - x1) * 100 + "%" })
+          for (const [mid, n] of mats) {
+            const m = document.createElement("div")
+            m.className = "bfxl-mat"
+            m.dataset.id = mid
+            m.dataset.n = n
+            m.appendChild(svgUse("items", mid))
+            if (n > 1) m.insertAdjacentHTML("beforeend", `<b>${n >= 1000 ? fmt(n) : n}</b>`)
+            row.appendChild(m)
+          }
+          target.appendChild(row)
+          markShort()
+        }
         if (kind === "enhancing") {
           // a slowly turning rune circle on the altar, sparks circling the item
           const rune = document.createElement("div")
@@ -3421,9 +3446,10 @@
         if (!h?.actionDetailMap) return null
         // only what the info lines need
         const actions = {}
-        for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9 }
+        const pairs = list => (list || []).map(x => [shortId(x.itemHrid), x.count])
+        for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9, inputs: pairs(a.inputItems), upgrade: shortId(a.upgradeItemHrid) || null }
         const items = {}
-        for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate }
+        for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate, bulk: it.alchemyDetail?.bulkMultiplier || 1, costs: pairs(it.enhancementCosts) }
         gd = { actions, items, enhance: h.enhancementLevelSuccessRateTable || [] }
       } catch (e) {
         if (cfg.debug) console.warn("[生活动画] initClientData", e) // #dev
@@ -3505,6 +3531,60 @@
     }
     // the item's level over it; the altar's runes and sparks in the colour of the level it is going for, more
     // sparks for higher levels, turning hues from +15
+    // where the table top is on each drawn station (fraction of its height from the top)
+    const TABLE_TOP = { cheesesmithing: 0.44, crafting: 0.4, tailoring: 0.4, cooking: 0.28, brewing: 0.36, alchemy: 0.42, enhancing: 0.5 }
+    // and its left / right ends where that is not the whole width (the anvil stands left of the furnace)
+    const TABLE_X = { cheesesmithing: [0, 0.55] }
+    // [item, count] going in per action: the recipe (and the item it upgrades); for enhancing the item's costs and the
+    // protection; for alchemy the item in its batch size and the catalyst
+    function materials() {
+      const g = gameData()
+      if (!g || !cur) return []
+      const skill = skillOf(cur.actionHrid)
+      const kind = SKILL[skill][2]
+      const work = hashItem(cur.primaryItemHash)
+      const extra = hashItem(cur.secondaryItemHash)
+      let out = []
+      if (kind === "make") {
+        const a = g.actions[cur.actionHrid]
+        out = [...(a?.inputs || [])]
+        if (a?.upgrade) out.unshift([a.upgrade, 1])
+      } else if (kind === "enhancing") {
+        out = [...(g.items[work?.id]?.costs || [])]
+        if (extra) out.push([extra.id, 1])
+      } else if (kind === "alchemy" && work) {
+        out = [[work.id, g.items[work.id]?.bulk || 1]]
+        if (extra) out.push([extra.id, 1])
+      }
+      return out.filter(([id]) => id).slice(0, 5)
+    }
+    // the inventory runs short of one: shown faded
+    function markShort() {
+      // #dev-start
+      if (labState) return
+      // #dev-end
+      for (const m of el?.querySelectorAll(".bfxl-mat") || []) {
+        const prefix = `/item_locations/inventory::/items/${m.dataset.id}::`
+        const have = Object.entries(inv).reduce((t, [k, c]) => (k.startsWith(prefix) ? t + c : t), 0)
+        m.classList.toggle("short", m.dataset.id !== "coin" && have < +m.dataset.n)
+      }
+    }
+    // the table's materials are used up (shrink into the middle) and laid out again
+    function useMaterials(delay) {
+      const mats = [...el.querySelectorAll(".bfxl-mat")]
+      mats.forEach((m, i) =>
+        m.animate(
+          [
+            { transform: "none", opacity: 1 },
+            { transform: `translate(${(mats.length / 2 - i - 0.5) * 12}px,-6px) scale(.2)`, opacity: 0, offset: 0.35 },
+            { transform: "translateY(-8px) scale(.6)", opacity: 0, offset: 0.7 },
+            { transform: "none", opacity: 1 },
+          ],
+          { duration: 1100, delay: delay + i * 40, easing: "ease-in-out" },
+        ),
+      )
+      later(delay + 1100, markShort)
+    }
     function showEnh() {
       const t = el?.querySelector(".bfxl-enh")
       if (!t) return
@@ -3691,6 +3771,8 @@
       idlePose(now)
       const work = el.querySelector(".bfxl-work")
       if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
+      // the product to come firms up over the action
+      if (work && SKILL[skill][2] === "make") work.style.opacity = 0.3 + 0.6 * Math.min(1, t)
       // enhancing: the item charges up in the colour of the level it is going for
       if (work && skill === "enhancing") {
         const c = enhTint(enhLevel + 1)
@@ -4072,11 +4154,13 @@
       const target = el.querySelector(".bfxl-target")
       let delay = 0
       if (kind === "make") {
-        // inputs fly from the hero into the station
-        costs.forEach((c, i) => pop("-" + fmt(c.n), 100, 60 + i * 6, cx - 120, cy - 70, 650, { icon: c.id, color: "#ffb0a0", size: 11, delay: i * 90, from: 1 }))
+        // the table's materials go in (or, without game data, the costs fly in from the hero)
+        if (el.querySelector(".bfxl-mat")) useMaterials(0)
+        else costs.forEach((c, i) => pop("-" + fmt(c.n), 100, 60 + i * 6, cx - 120, cy - 70, 650, { icon: c.id, color: "#ffb0a0", size: 11, delay: i * 90, from: 1 }))
         delay = 420
         target.animate([{ transform: "scale(1)" }, { transform: "scale(1.08,0.94)" }, { transform: "scale(1)" }], { duration: 300, delay })
       }
+      if (kind === "enhancing" || kind === "alchemy") useMaterials(150)
       if (kind === "enhancing") {
         const [b, a] = enh
         showEnh()
