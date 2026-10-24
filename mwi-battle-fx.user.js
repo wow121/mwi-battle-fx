@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.3
+// @version      0.13.4
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2984,7 +2984,7 @@
       st.id = "bfxl-css"
       st.textContent = `
 .bfxl{position:fixed;z-index:1100;width:340px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
-  box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;transform-origin:0 0;user-select:none}
+  box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;user-select:none}
 .bfxl-grip{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:5;background:linear-gradient(135deg,transparent 50%,#8a93b8 50%,#8a93b8 60%,transparent 60%,transparent 72%,#8a93b8 72%,#8a93b8 82%,transparent 82%)}
 .bfxl.icon .bfxl-grip{display:none}
 .bfxl-head{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 9px;background:#262d47;cursor:move}
@@ -2992,8 +2992,9 @@
 .bfxl-count{opacity:.75;white-space:nowrap}
 .bfxl-head button{background:none;border:0;color:#ccd;cursor:pointer;font-size:14px;line-height:1;padding:0 3px}
 .bfxl-head button:hover{color:#fff}
-.bfxl.min .bfxl-scene,.bfxl.min .bfxl-bar{display:none}
-.bfxl-scene{position:relative;height:150px;overflow:hidden}
+.bfxl.min .bfxl-view,.bfxl.min .bfxl-bar{display:none}
+.bfxl-view{position:relative;overflow:hidden;height:150px}
+.bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0}
 .bfxl-scene svg{position:absolute;overflow:visible}
 .bfxl-hero{position:absolute;left:62px;bottom:10px;width:96px;height:96px}
 .bfxl-hero>svg{left:0;top:0;width:100%;height:100%}
@@ -3080,7 +3081,7 @@
 .bfxl-ico{display:none;width:46px;height:46px;border-radius:50%;cursor:pointer;position:relative;box-shadow:0 3px 10px #0008}
 .bfxl-ico svg{position:absolute;left:7px;top:7px;width:32px;height:32px;border-radius:50%;background:#1b2033}
 .bfxl.icon{width:46px;border-radius:50%;background:none;box-shadow:none;overflow:visible}
-.bfxl.icon .bfxl-head,.bfxl.icon .bfxl-scene,.bfxl.icon .bfxl-bar,.bfxl.icon .bfxl-lab{display:none}
+.bfxl.icon .bfxl-head,.bfxl.icon .bfxl-view,.bfxl.icon .bfxl-bar,.bfxl.icon .bfxl-lab{display:none}
 .bfxl.icon .bfxl-ico{display:block}
 .bfxl-lab{background:#20263c;padding:6px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px}
 .bfxl-lab select{background:#141828;color:#ddd;border:1px solid #445;border-radius:3px;font-size:11px;max-width:120px}
@@ -3101,7 +3102,7 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
       // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
@@ -3234,12 +3235,15 @@
     // the window's scale: its share of the screen's width over the 340 px it is laid out in
     const winScale = () => (Math.min(0.5, Math.max(0.12, cfg.lifeW || 0.2)) * innerWidth) / 340
     // keeps the window on screen; dragged spots are kept, double-clicking the title bar goes back to the default
+    // only the picture is scaled: the title bar, bars, bonus lines and buttons keep their size
     function place() {
       if (!el) return
-      const s = cfg.lifeIcon ? Math.min(1.2, winScale()) : winScale()
-      el.style.transform = `scale(${s})`
-      const w = (cfg.lifeIcon ? 46 : 340) * s
-      const h = el.offsetHeight * s
+      const s = winScale()
+      el.style.width = cfg.lifeIcon ? "" : 340 * s + "px"
+      el.querySelector(".bfxl-view").style.height = 150 * s + "px"
+      el.querySelector(".bfxl-scene").style.transform = `scale(${s})`
+      const w = cfg.lifeIcon ? 46 : 340 * s
+      const h = el.offsetHeight
       const [x, y] = cfg.lifePos || defaultPos(w, h)
       el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
       el.style.top = Math.max(0, Math.min(innerHeight - Math.min(h, 40), y)) + "px"
@@ -4249,7 +4253,7 @@
       return b
     }
     function shake(px, ms) {
-      el.querySelector(".bfxl-scene").animate(
+      el.querySelector(".bfxl-view").animate(
         [0, 1, 2, 3, 4, 5].map(i => ({ transform: i === 5 ? "none" : `translate(${(i % 2 ? -1 : 1) * px * (1 - i / 5)}px,${(i % 3 - 1) * px * 0.6}px)` })),
         { duration: ms },
       )

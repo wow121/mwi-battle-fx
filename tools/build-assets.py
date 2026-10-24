@@ -445,7 +445,7 @@ def tool_geo(path, kind):
     """Where a drawn tool is held: [grip x, grip y (0..1 of the frame), direction from the grip to the tool's mass in
     degrees (screen coords, y down), reach from the grip (0..1 of the frame width)]. Most tools were drawn with the
     handle's end at the bottom left: the grip is a bit up the handle from it. The teapot is held by its side handle
-    (its leftmost part), the alembic by its neck (its top)."""
+    (its leftmost part), the alembic (a still) by the neck under its head."""
     a = np.asarray(Image.open(path).convert("RGBA"))[..., 3] > 128
     h, w = a.shape
     ys, xs = np.nonzero(a)
@@ -456,9 +456,15 @@ def tool_geo(path, kind):
         band = xs <= xs.min() + (xs.max() - xs.min()) * 0.08
         gx, gy = xs[band].mean(), ys[band].mean()
     elif kind == "alembic":
-        # the top of the flask's neck: the highest part above its middle (the tube curls off to a side)
-        col = np.abs(xs - cx) < w * 0.06
-        gx, gy = cx, ys[col].min() + (ys.max() - ys.min()) * 0.05
+        # the neck between the flask and the still head: the narrowest row in the upper part, counting only the
+        # columns around the middle (the spout reaches off to the right)
+        top, bot = ys.min(), ys.max()
+        x0, x1 = int(cx - w * 0.2), int(cx + w * 0.2)
+        rows = range(int(top + (bot - top) * 0.15), int(top + (bot - top) * 0.6))
+        widths = [(a[y, x0:x1].sum(), y) for y in rows]
+        _, gy = min(widths)
+        xs_row = np.nonzero(a[gy, x0:x1])[0]
+        gx = x0 + xs_row.mean() if len(xs_row) else cx
     else:
         i = np.argmax(ys - xs)
         ex, ey = xs[i], ys[i]

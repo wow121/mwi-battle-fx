@@ -82,7 +82,7 @@ TOOLS = {
     "needle": "a big sewing needle",
     "spatula": "a cooking spatula",
     "pot": "a brewing teapot exactly like the attached icons (one side handle, a lid, a spout), with no other handle",
-    "alembic": "an alchemy alembic flask",
+    "alembic": "a small handheld glass alembic, a distillation still (NOT a gourd or a bottle): a round-bottomed glass flask holding coloured liquid, topped by a domed still head from which a long thin glass spout angles down to the RIGHT, with metal fittings (as in the attached icons, which show a still and its spout)",
     "enhancer": "an enhancing tool (as in the attached icons)",
 }
 
@@ -184,7 +184,7 @@ groups["lg_stations"] = {"grid": [4, 2], "dir": "station", "ids": [s for s, _ in
 HELD = "drawn as held in a hand, seen from the side: the handle toward the BOTTOM-LEFT of its cell and the working end toward the TOP-RIGHT, tilted 45 degrees, all eight at the same size and the same angle, the end of the handle at the same spot in every cell"
 HELD_KIND = {
     "pot": "standing upright in side view with its spout pointing to the RIGHT and its single handle on the LEFT, all eight at the same size",
-    "alembic": "standing upright in side view, all eight at the same size",
+    "alembic": "standing upright in side view with its spout pointing down to the RIGHT, the tier shown by the colours of its metal fittings and liquid, all eight at the same size",
 }
 for kind, desc in TOOLS.items():
     cells = [f"the {t} tier (attached icon {k + 1})" for k, t in enumerate(TIERS)]
