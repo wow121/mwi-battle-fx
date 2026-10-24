@@ -205,10 +205,12 @@ OBSTACLES = {
     "alchemy": ("a dark sigil lock carved on a stone slab", ["dark", "a third of its runes lit", "mostly lit", "fully lit and dissolving into light"]),
     "enhancing": ("a seal stone with runes on a pedestal", ["dull grey", "faint blue runes", "bright purple runes", "blazing golden, cracking open"]),
 }
+# drawn in the guild trial backdrop's painted style (the first, icon-styled set looked plain)
+GUILD_STYLE = "the richly detailed painted style of the attached guild trial backdrop (soft painterly shading, warm light, many small crafted details), not a flat icon"
 for skill, (what, stages) in PROJECTS.items():
     cells = [f"stage {k + 1}: {st}" for k, st in enumerate(stages)]
-    prompt = f"Image: a GIANT COOPERATIVE GUILD PROJECT for a cute 2D side-view idle game, in {STYLE}: {what}, shown in four stages of completion. The SAME object, same size and same position in every cell, drawn big (filling most of its cell), seen from the side, standing on the ground line.\n" + grid(2, 2, cells, "magenta", "")
-    job("lg_proj_" + skill, prompt, [os.path.join(REF, f"s_{skill}.png")], "magenta")
+    prompt = f"Image: a GRAND COOPERATIVE GUILD PROJECT for a 2D side-view idle game, in {GUILD_STYLE}: {what}, shown in four stages of completion. Make it monumental and intricate: ornate carving and metalwork, ropes, pulleys, banners with the guild's cow emblem, tool racks, crates and barrels of supplies around its base, little lanterns, so it looks like the work of a whole guild. No people. The SAME object, same size and same position in every cell, drawn big (filling most of its cell), seen from the side, standing on the ground line.\n" + grid(2, 2, cells, "magenta", "")
+    job("lg_proj_" + skill, prompt, [os.path.join(SHEETS, "bg_guild_trial.png"), os.path.join(REF, f"s_{skill}.png")], "magenta")
     groups["lg_proj_" + skill] = {"grid": [2, 2], "dir": "project", "ids": [f"{skill}_{k + 1}" for k in range(4)], "out": 512}
 for skill, (what, stages) in OBSTACLES.items():
     cells = [f"stage {k + 1}: {st}" for k, st in enumerate(stages)]
