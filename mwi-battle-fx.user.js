@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.4
+// @version      0.12.5
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3283,7 +3283,7 @@
       const target = el?.querySelector(".bfxl-target")
       if (!target || !cur) return 62
       const kind = SKILL[skillOf(cur.actionHrid)][2]
-      if (kind === "alchemy" || kind === "enhancing") return 70 // casts from a step away
+      if (kind === "enhancing") return 70 // the horn is blown from a step away
       const reach = held ? TOOL_REACH[held.kind] || 44 : 30
       const front = target.offsetLeft + target.offsetWidth * (kind === "gather" ? 0.2 : 0.1)
       return Math.max(4, Math.min(150, front - HAND[0] - reach * 0.45))
