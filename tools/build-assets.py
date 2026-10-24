@@ -438,7 +438,7 @@ TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
 LIFE_MARGIN = 24
 _groups = os.path.join(RAW, "life-groups.json")
 GROUPS = json.load(open(_groups)) if os.path.exists(_groups) else {}
-life = {"bg": [], "t": [], "plant": [], "station": [], "tool": [], "prop": [], "tool_geo": {}}
+life = {"bg": [], "t": [], "plant": [], "station": [], "tool": [], "prop": [], "project": [], "obstacle": [], "gate": [], "tool_geo": {}}
 
 
 def tool_geo(path, kind):
@@ -515,7 +515,7 @@ for f in sorted(os.listdir(SHEETS)):
         g = GROUPS[name]
         outs = [os.path.join(ASSETS, "life", g["dir"], i + ".webp") for i in g["ids"]]
         if not all(fresh(o, src) for o in outs):
-            cut_cells(src, keys.get(name, "magenta"), tuple(g["grid"]), outs, LIFE_MARGIN, 256)
+            cut_cells(src, keys.get(name, "magenta"), tuple(g["grid"]), outs, LIFE_MARGIN, g.get("out", 256))
         life[g["dir"]] += g["ids"]
         if g["dir"] == "tool":
             for i, o in zip(g["ids"], outs):

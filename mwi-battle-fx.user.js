@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.9
+// @version      0.14.0
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -481,8 +481,13 @@
     return null
   }
   // location from the current combat action; when that is unknown, from the monsters on the field
+  // the labyrinth's backdrop by depth: floors 1-4, 5-8, 9-12, 13-16, 17+ (falls back to the one labyrinth backdrop)
+  function labyrinthBg(floor) {
+    const d = "labyrinth_d" + Math.min(5, Math.max(1, Math.ceil((floor || 1) / 4)))
+    return Assets.has("bg", d) ? d : "labyrinth"
+  }
   function stageLocation() {
-    if (where.labyrinth) return "labyrinth"
+    if (where.labyrinth) return labyrinthBg(where.floor)
     const loc = ZONE_LOC[where.zone]
     if (loc) return loc
     const votes = {}
@@ -1146,7 +1151,7 @@
       } else if (mode === "test") {
         text = title(Lab.loc())
         tier = Lab.tier()
-      } else if (where.labyrinth) text = L("迷宫", "Labyrinth")
+      } else if (where.labyrinth) text = L("迷宫", "Labyrinth") + (where.floor ? L(` · 第${where.floor}层`, ` · Floor ${where.floor}`) : "")
       else {
         const zone = where.zone && ZONE_ZH[where.zone] ? where.zone : stageLocation()
         text = zone ? title(zone) : ""
@@ -2982,11 +2987,14 @@
         enhLevel = a
         cur = trial.cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/${skill}_essence::${a}` }
         showEnh()
+        trialStage(true)
         if (a > b) enhSuccess(b, a)
         else enhFail(b, a, false)
         return
       }
       const gain = (obj.currentWorkValue || 0) - (prev.currentWorkValue || 0)
+      trialStage(true)
+      if (gain > 0) produceArc()
       if (gain > 0) {
         const double = obj.progressPerAction && gain >= obj.progressPerAction * 1.9
         pop(`+${fmt(gain)} ${L("进度", "progress")}`, cx - 20, cy - 30, 30, -60, 1500, { color: "#ffd75a", size: double ? 15 : 13, glow: double ? "#ffb300" : null })
@@ -3008,6 +3016,7 @@
       if (!t || t.ended) return
       t.ended = performance.now()
       if (t === trial && visible() && !cfg.lifeIcon) {
+        trialFinale(ok)
         const [cx, cy] = targetAt()
         const b = banner(ok ? (t.from === "guild" ? L("试炼完成！", "Trial cleared!") : L("房间通关！", "Room cleared!")) : why || L("试炼结束", "Trial over"), ok ? "#ffd75a" : "#ff7a6a")
         if (ok) {
@@ -3289,6 +3298,12 @@
 .bfxl-slot{position:absolute;width:18px;height:18px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 1px #0009)}
 .bfxl-slot svg{position:absolute;left:0;top:0;width:100%;height:100%}
 .bfxl-slot b{position:absolute;left:50%;top:100%;transform:translateX(-50%);font:700 8.5px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000,0 0 1px #000}
+.bfxl-target.proj{width:180px;height:120px;right:auto;left:100px;bottom:2px}
+.bfxl-target.obst{width:150px;height:100px;right:62px;bottom:4px}
+.bfxl-target.source{right:150px}
+.bfxl-project{position:absolute;width:150px;height:100px;right:6px;bottom:2px;pointer-events:none}
+.bfxl-gate{position:absolute;width:126px;height:84px;right:-8px;bottom:4px;pointer-events:none}
+.bfxl-target img.stage,.bfxl-project img.stage,.bfxl-gate img.stage{position:absolute;left:-3.125%;top:-4.6875%;width:106.25%;height:109.375%;pointer-events:none}
 .bfxl-mates{position:absolute;inset:0;pointer-events:none;z-index:1}
 .bfxl-mate{position:absolute;width:96px;height:96px;transform:scale(.82);transform-origin:50% 100%;filter:brightness(.92)}
 .bfxl-mate>svg{position:absolute;left:0;top:0;width:100%;height:100%}
@@ -3619,6 +3634,165 @@
       if (tier) node.classList.add("ench" + tier)
       return { node, held: { kind, geo } }
     }
+    // ----- trial scenes -----
+    // A guild trial is everyone's one big project (lg_proj_*: 4 stages of the same thing) that grows with the
+    // progress; for milking and foraging the members work a cow / a field in front of it and the produce flies into
+    // it. A labyrinth room is an obstacle (lg_obst_*, 4 stages) before the room's exit gate (lg_gate, 4 stages).
+    let tstage = null // { stages: [img], gate: [img], shown, source: el | null, project: el }
+    const SOURCE_SKILLS = new Set(["milking", "foraging"])
+    function stageImgs(box, path) {
+      return [1, 2, 3, 4].map(k => {
+        const im = img(`${path}_${k}`, "stage")
+        im.style.visibility = k === 1 ? "visible" : "hidden"
+        box.appendChild(im)
+        return im
+      })
+    }
+    function buildTrialScene(skill, id, target) {
+      const guild = trial.from === "guild"
+      const dir = guild ? "project" : "obstacle"
+      if (!art(dir, skill + "_1")) return false
+      const scene = el.querySelector(".bfxl-scene")
+      tstage = { shown: -1, gateShown: -1, source: null }
+      if (guild && SOURCE_SKILLS.has(skill)) {
+        // the cow / field the members work, the vat / wagon behind it on the right
+        const project = document.createElement("div")
+        project.className = "bfxl-project"
+        scene.insertBefore(project, target)
+        tstage.stages = stageImgs(project, `${dir}/${skill}`)
+        tstage.project = project
+        target.classList.add("source")
+        if (art("t", id)) {
+          target.classList.add("cow")
+          posed = { kind: "cow", imgs: {}, until: 0, base: "idle", next: performance.now() + 3000 }
+          for (const p of COW_POSES) {
+            const im = img(`t/${id}/${p}`, "pose")
+            im.style.visibility = p === "idle" ? "visible" : "hidden"
+            posed.imgs[p] = im
+            target.appendChild(im)
+          }
+        } else if (art("plant", id)) {
+          target.classList.add("plant")
+          target.appendChild(img("plant/" + id, "cell"))
+        } else target.appendChild(svgUse("items", id))
+        tstage.source = target
+      } else {
+        target.classList.add(guild ? "proj" : "obst")
+        tstage.stages = stageImgs(target, `${dir}/${skill}`)
+        tstage.project = target
+      }
+      if (!guild && art("gate", "gate_1")) {
+        const gate = document.createElement("div")
+        gate.className = "bfxl-gate"
+        scene.insertBefore(gate, el.querySelector(".bfxl-store"))
+        tstage.gate = stageImgs(gate, "gate/gate")
+      }
+      if (skill === "enhancing") {
+        const t = document.createElement("div")
+        t.className = "bfxl-enh"
+        target.appendChild(t)
+      }
+      trialStage(false)
+      return true
+    }
+    const trialProgress = d => (d.targetLevel !== null && d.targetLevel !== undefined ? (d.currentEnhLevel || 0) / (d.targetLevel || 1) : d.targetWorkValue ? (d.currentWorkValue || 0) / d.targetWorkValue : d.currentProgress || 0)
+    // the stage the progress has reached (the last one only when it is through); the gate opens a crack near the end
+    function trialStage(show) {
+      if (!tstage || !trial) return
+      const p = trialProgress(trial.data)
+      const k = p >= 1 ? 3 : p >= 2 / 3 ? 2 : p >= 1 / 3 ? 1 : 0
+      if (k !== tstage.shown && !(k === 3 && show)) {
+        const was = tstage.shown
+        tstage.shown = k
+        tstage.stages.forEach((im, i) => (im.style.visibility = i === k ? "visible" : "hidden"))
+        if (show && was >= 0 && k > was) {
+          const box = tstage.project
+          box.animate([{ filter: "brightness(2.2)", transform: "scale(1.06)" }, { filter: "none", transform: "none" }], { duration: 600, easing: "ease-out" })
+          const [x, y] = boxAt(box)
+          burst(trial.skill, x, y, 14, true)
+          banner(L(`阶段 ${k + 1} / 4`, `Stage ${k + 1} / 4`), "#ffd75a")
+        }
+      }
+      if (tstage.gate) {
+        const g = p >= 1 ? 3 : p >= 2 / 3 ? 1 : 0
+        if (g !== tstage.gateShown && !(g === 3 && show)) {
+          tstage.gateShown = g
+          tstage.gate.forEach((im, i) => (im.style.visibility = i === g ? "visible" : "hidden"))
+        }
+      }
+    }
+    // the middle of an element in scene pixels
+    function boxAt(e) {
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const r = e.getBoundingClientRect()
+      return [(r.left - s.left + r.width / 2) / curScale, (r.top - s.top + r.height / 2) / curScale]
+    }
+    // produce flying from the cow / field into the vat / wagon
+    function produceArc() {
+      if (!tstage?.source) return
+      const [x0, y0] = boxAt(tstage.source)
+      const [x1, y1] = boxAt(tstage.project)
+      const item = trial.skill === "milking" ? "milk" : gameData()?.actions[cur.actionHrid]?.drops?.[0]?.[0] || "apple"
+      for (let i = 0; i < 3; i++) {
+        const p = fxEl("bfxl-big", "width:18px;height:18px")
+        p.appendChild(svgUse("items", item))
+        p.animate(
+          [{ transform: `translate(${x0 - 9}px,${y0 - 30}px) scale(.6)`, opacity: 0 }, { transform: `translate(${(x0 + x1) / 2 - 9}px,${Math.min(y0, y1) - 60}px) scale(1)`, opacity: 1, offset: 0.5 }, { transform: `translate(${x1 - 9}px,${y1 - 20}px) scale(.5)`, opacity: 0 }],
+          { duration: 800, delay: i * 120, easing: "ease-in-out", fill: "backwards" },
+        ).onfinish = gone(p)
+      }
+    }
+    // the end of a trial: the last stage with each project's own flourish, or the gate thrown open and the hero
+    // walking out through it; a failed room shuts its gate
+    function trialFinale(ok) {
+      if (!tstage) return false
+      const box = tstage.project
+      const [x, y] = boxAt(box)
+      const showLast = () => {
+        tstage.shown = 3
+        tstage.stages.forEach((im, i) => (im.style.visibility = i === 3 ? "visible" : "hidden"))
+        box.animate([{ filter: "brightness(2.5)", transform: "scale(1.08)" }, { filter: "none", transform: "none" }], { duration: 800, easing: "ease-out" })
+        burst("enhancing", x, y - 10, 20, true)
+      }
+      if (!ok) {
+        if (tstage.gate) tstage.gate.forEach((im, i) => (im.style.visibility = i === 0 ? "visible" : "hidden"))
+        const f = fxEl("bfxl-dim", "background:#600")
+        f.animate([{ opacity: 0 }, { opacity: 0.5 }, { opacity: 0 }], { duration: 900 }).onfinish = gone(f)
+        shake(3, 400)
+        return true
+      }
+      if (trial.from === "guild" && trial.skill === "woodcutting") {
+        // the old tree comes down
+        const st = tstage.stages[2]
+        st.animate([{ transform: "rotate(0)" }, { transform: "rotate(78deg)" }], { duration: 900, easing: "cubic-bezier(.5,0,1,1)", fill: "forwards" }).onfinish = () => {
+          st.getAnimations().forEach(a => a.cancel())
+          showLast()
+          shake(6, 500)
+          FX.dust ||= [["#c9a77a", "#8b6b4a", "#e8d3b0"], "chip"]
+          burst("dust", x + 40, y + 40, 24, true)
+          banner("Timber!", "#ffe27a")
+        }
+        st.style.transformOrigin = "75% 92%"
+        return true
+      }
+      showLast()
+      if (trial.skill === "tailoring") box.animate([{ transform: "scaleY(.6)" }, { transform: "scaleY(1.05)" }, { transform: "none" }], { duration: 700, easing: "ease-out" })
+      if (trial.skill === "brewing" || trial.skill === "cooking") {
+        FX.steam ||= [["#ffffffc0", "#ffe9c9b0"], "puff"]
+        for (let i = 0; i < 3; i++) later(i * 250, () => burst("steam", x + (Math.random() - 0.5) * 60, y - 30, 8, true))
+      }
+      if (tstage.gate) {
+        // the gate swings open, the hero walks out through it
+        ;[1, 2, 3].forEach((g, i) => later(250 * i, () => tstage?.gate.forEach((im, j) => (im.style.visibility = j === g ? "visible" : "hidden"))))
+        const gate = el.querySelector(".bfxl-gate")
+        later(800, () => {
+          const rays = fxEl("bfxl-rays", `left:${boxAt(gate)[0] - 60}px;top:${boxAt(gate)[1] - 60}px`)
+          rays.animate([{ transform: "scale(.3)", opacity: 0 }, { transform: "rotate(60deg) scale(1)", opacity: 1, offset: 0.3 }, { transform: "rotate(120deg) scale(1.1)", opacity: 0 }], { duration: 1600 }).onfinish = gone(rays)
+          walk.moves = [{ to: gate.offsetLeft + gate.offsetWidth / 2 - 48, speed: 120, then: () => el.querySelector(".bfxl-hero").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, fill: "forwards" }) }]
+        })
+      }
+      return true
+    }
     // the guild members working the trial with the viewer: in a staggered row behind, a bit smaller, named. Their
     // tools come from their profile (opened once, as for the battle stage), else they hold the viewer's kind of tool
     function buildMates(skill) {
@@ -3650,7 +3824,10 @@
         m.appendChild(name)
         box.appendChild(m)
       })
-      el.querySelector(".bfxl-scene").insertBefore(box, el.querySelector(".bfxl-hero"))
+      // with a cow / field in front they stand behind it, else just behind the hero
+      const back = tstage?.source
+      if (back) box.style.zIndex = 0
+      el.querySelector(".bfxl-scene").insertBefore(box, back ? el.querySelector(".bfxl-target") : el.querySelector(".bfxl-hero"))
     }
     // the static parts: background, hero, the thing being worked on; rebuilt when any of them changes
     function setScene() {
@@ -3672,12 +3849,13 @@
       el.querySelector(".bfxl-fx").innerHTML = ""
       const bg = kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill
       // trials: the battle stage's labyrinth / guild trial backdrops
-      const trialBg = trial && (trial.from === "lab" ? "labyrinth" : "guild_trial")
+      const trialBg = trial && (trial.from === "lab" ? labyrinthBg(labyrinth?.currentFloor) : "guild_trial")
       if (trialBg && Assets.has("bg", trialBg)) scene.style.background = `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
       else scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
       // hero: avatar + outfit, the skill's tool in the front hand
       const hero = el.querySelector(".bfxl-hero")
       hero.innerHTML = ""
+      hero.getAnimations().forEach(a => a.cancel()) // e.g. faded out through a labyrinth gate
       const body = document.createElementNS(SVGNS, "svg")
       body.setAttribute("viewBox", "0 0 100 100")
       for (const [sh, sid] of [["avatars", me.avatar], ["avatar_outfits", me.outfit]]) {
@@ -3691,13 +3869,16 @@
       const tool = made.node
       held = made.held
       hero.appendChild(tool)
-      buildMates(skill)
       // target: the cow / tree / field, or the skill's station with the item on it
       const target = el.querySelector(".bfxl-target")
       target.innerHTML = ""
       target.className = "bfxl-target"
       posed = null
-      if (kind === "gather") {
+      tstage = null
+      el.querySelectorAll(".bfxl-project,.bfxl-gate").forEach(e => e.remove())
+      if (cur.trial && buildTrialScene(skill, id, target)) {
+        // a trial's own scene: the guild's big project, or the labyrinth room's obstacle before its gate
+      } else if (kind === "gather") {
         if (art("t", id)) {
           // the cow / tree pose frames, all loaded up front and switched by visibility
           const cow = id.endsWith("cow")
@@ -3765,6 +3946,7 @@
         }
       }
       showEnh()
+      buildMates(skill) // after the target: the trial's layout decides where they stand
       buildStage(kind, target)
       relayout()
       if (walk.action !== cur.id) {
@@ -4335,10 +4517,29 @@
       }
       // the mates: in a staggered row behind the hero's work spot
       const wx = workX()
+      const proj = tstage && !tstage.source ? tstage.project : null
       for (const m of el.querySelectorAll(".bfxl-mate")) {
         const i = +m.dataset.i
-        m.style.left = Math.max(-24, wx - 42 * (i + 1)) + "px"
-        m.style.bottom = 16 + 7 * (i % 2) + "px"
+        if (proj && i % 2 === 0) {
+          // the far side of the project, mirrored
+          const k = i / 2
+          m.style.left = Math.min(340 - 70, proj.offsetLeft + proj.offsetWidth * 0.82 - 20 + 26 * k) + "px"
+          m.style.bottom = 10 + 8 * k + "px"
+          m.style.transform = "scale(-.82,.82)"
+          m.querySelector("b").style.transform = "translateX(-50%) scaleX(-1)"
+        } else if (tstage?.source) {
+          // a cow / field in front: the others work in a row further back, smaller
+          m.style.left = 4 + 62 * i + "px"
+          m.style.bottom = 60 + "px"
+          m.style.transform = "scale(.62)"
+          m.querySelector("b").style.transform = ""
+        } else {
+          const k = proj ? (i - 1) / 2 : i
+          m.style.left = Math.max(-24, wx - 42 * (k + 1)) + "px"
+          m.style.bottom = 16 + 7 * (k % 2) + "px"
+          m.style.transform = ""
+          m.querySelector("b").style.transform = ""
+        }
       }
       if (hero) {
         hero.style.left = walk.x + "px"
@@ -4945,7 +5146,13 @@
       const enh = skill === "enhancing"
       const ppa = 160
       const msg = { trialHrid: "/guild_skilling/" + skill, tier: 1, successRate: 0.75, efficiency: 0.4, doubleProgressChance: 0.1, progressPerAction: ppa, targetLevel: enh ? 5 : null, actionTimeMs: labState.dur * 1000, timeoutAt: new Date(Date.now() + 600e3).toISOString(), targetWorkValue: enh ? 0 : ppa * 10, currentWorkValue: 0, currentEnhLevel: 0, actionCounter: 0 }
-      if (from === "lab") labyrinth = { isActive: true, pathData: [{ x: 0, y: 0 }], roomData: [[{ roomType: "/labyrinth_room_types/skilling", skillHrid: "/skills/" + skill, recommendedLevel: 80 }]] }
+      if (from === "lab") labyrinth = { isActive: true, currentFloor: 1 + ((Math.random() * 20) | 0), pathData: [{ x: 0, y: 0 }], roomData: [[{ roomType: "/labyrinth_room_types/skilling", skillHrid: "/skills/" + skill, recommendedLevel: 80 }]] }
+      else {
+        // three made-up members
+        const looks = [["green_person_2", "anchorbound_equipment", "奶牛大王"], ["purple_person_1", "", "BigShield"], ["blue_person_3", "cow_suit", "RizeBelieve"]]
+        looks.forEach(([a, o, name], i) => (guildChars[-1 - i] = { name, avatarHrid: "/avatars/" + a, avatarOutfitHrid: o ? "/avatar_outfits/" + o : "" }))
+        msg.participantIds = [myId, -1, -2, -3]
+      }
       delete trials[from]
       onTrial(from, { ...msg })
       labTrialTimer = setInterval(() => {
@@ -5499,6 +5706,7 @@
           else if (obj.type === "labyrinth_updated") {
             // labyrinth fights are ordinary battles; only the backdrop changes
             where.labyrinth = !!obj.labyrinth?.isActive
+            where.floor = obj.labyrinth?.currentFloor || 0
             Stage.setBackground()
             Life.onMessage(obj) // the skilling rooms are the window's
           }

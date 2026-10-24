@@ -180,6 +180,60 @@ prompt = f"Image: WORK STATIONS for a cute 2D side-view idle game, in {STYLE}; t
 job("lg_stations", prompt, [os.path.join(REF, f"s_{s}.png") for s, _ in STATIONS], "magenta")
 groups["lg_stations"] = {"grid": [4, 2], "dir": "station", "ids": [s for s, _ in STATIONS]}
 
+# ---- trials: a guild skilling trial is one big shared project, a labyrinth skilling room an obstacle before a gate
+PROJECTS = {
+    "woodcutting": ("a gigantic ancient guild tree, as tall as the cell", ["untouched", "a deep axe notch cut into the left of its trunk, wood chips around", "cut nearly through, leaning slightly to the right", "felled: lying on its side, with the fresh stump left standing"]),
+    "milking": ("a big wooden guild milk vat (a barrel tub with a little ladder and the guild's banner)", ["empty", "a third full of milk", "two thirds full of creamy milk", "overflowing with milk and foam"]),
+    "foraging": ("a big wooden harvest wagon", ["empty", "a third full of mixed fruits, grain and berries", "heaped high with produce", "overflowing with produce, a guild flag on top"]),
+    "cheesesmithing": ("a giant cheese-metal guild statue of a cow knight being forged inside wooden scaffolding", ["only the base block inside bare scaffolding", "the lower half built up", "almost complete, scaffolding still around", "finished and gleaming, the scaffolding gone"]),
+    "crafting": ("a wooden ship being built on a slipway", ["only the keel and the ribs", "the hull half planked", "fully planked with its mast up", "finished with sails and flags"]),
+    "tailoring": ("a giant guild tapestry on a tall wooden loom frame", ["only the bare warp threads", "a third woven from the bottom", "two thirds woven", "finished, a vivid tapestry of a cow and a star"]),
+    "cooking": ("a giant celebration cake on a sturdy table", ["one base layer", "two layers", "three layers with frosting", "a finished tower cake with fruit, cream and candles"]),
+    "brewing": ("a huge copper tea urn on a stove", ["cold, dull and empty", "warming up with a little steam", "bubbling with steam", "glowing, with swirls of fragrant aroma"]),
+    "alchemy": ("a giant alchemy circle on the ground (seen from the side, flat on the floor) around a crystal pedestal", ["faint dark lines", "the outer ring glowing", "two rings glowing", "fully blazing, a big crystal floating over the pedestal"]),
+    "enhancing": ("a guild relic: a giant sword set in a stone on a grand altar", ["dull and dusty", "a faint blue glow", "a bright purple glow", "awakened, blazing with golden and rainbow light"]),
+}
+OBSTACLES = {
+    "milking": ("a huge stone-horned labyrinth guardian cow blocking the way", ["standing angry, horns down", "calmer, eyes half closed", "content, being milked happily", "lying asleep to the side, the way free"]),
+    "woodcutting": ("thick thorny vines and roots grown over a doorway", ["covering it completely", "a third cut away", "mostly cut away", "only cut stumps left"]),
+    "foraging": ("a dense thicket of glowing labyrinth mushrooms and brambles", ["dense and blocking", "a third picked", "mostly picked", "only a few stems left"]),
+    "cheesesmithing": ("the gear mechanism of a door made of cheese-metal", ["broken, gears scattered on the floor", "a third of the gears back in place", "mostly assembled", "complete and turning, glowing"]),
+    "crafting": ("a wooden bridge over a dark pit", ["collapsed, broken planks", "the frame rebuilt", "half planked", "complete and sturdy"]),
+    "tailoring": ("a big rope net blocking a doorway that must be rewoven into a rope ladder", ["torn and tangled", "a third rewoven", "mostly rewoven", "a finished rope ladder"]),
+    "cooking": ("a hungry stone guardian face carved in the wall, its mouth open, a big empty bowl before it", ["the bowl empty, the face frowning", "the bowl a third full of food", "the bowl nearly full, the face smiling", "the bowl overflowing, the face beaming"]),
+    "brewing": ("a dried-up magical fountain", ["dry and cracked", "a trickle of glowing tea", "half full", "full and sparkling"]),
+    "alchemy": ("a dark sigil lock carved on a stone slab", ["dark", "a third of its runes lit", "mostly lit", "fully lit and dissolving into light"]),
+    "enhancing": ("a seal stone with runes on a pedestal", ["dull grey", "faint blue runes", "bright purple runes", "blazing golden, cracking open"]),
+}
+for skill, (what, stages) in PROJECTS.items():
+    cells = [f"stage {k + 1}: {st}" for k, st in enumerate(stages)]
+    prompt = f"Image: a GIANT COOPERATIVE GUILD PROJECT for a cute 2D side-view idle game, in {STYLE}: {what}, shown in four stages of completion. The SAME object, same size and same position in every cell, drawn big (filling most of its cell), seen from the side, standing on the ground line.\n" + grid(2, 2, cells, "magenta", "")
+    job("lg_proj_" + skill, prompt, [os.path.join(REF, f"s_{skill}.png")], "magenta")
+    groups["lg_proj_" + skill] = {"grid": [2, 2], "dir": "project", "ids": [f"{skill}_{k + 1}" for k in range(4)], "out": 512}
+for skill, (what, stages) in OBSTACLES.items():
+    cells = [f"stage {k + 1}: {st}" for k, st in enumerate(stages)]
+    prompt = f"Image: an OBSTACLE in a labyrinth room for a cute 2D side-view idle game, in {STYLE}, cleared with the {skill} skill: {what}, shown in four stages. The SAME thing, same size and same position in every cell, drawn big, seen from the side, on the ground line.\n" + grid(2, 2, cells, "magenta", "")
+    job("lg_obst_" + skill, prompt, [os.path.join(REF, f"s_{skill}.png")], "magenta")
+    groups["lg_obst_" + skill] = {"grid": [2, 2], "dir": "obstacle", "ids": [f"{skill}_{k + 1}" for k in range(4)], "out": 512}
+prompt = f"Image: the EXIT GATE of a labyrinth room for a cute 2D side-view idle game, in {STYLE}: a heavy carved stone double door in an arch, shown in four stages. The SAME gate, same size and same position in every cell, seen from the front.\n" + grid(2, 2, ["shut, its runes dark", "slightly open, a crack of light", "half open, light pouring out", "wide open, bright light beyond"], "magenta", "")
+job("lg_gate", prompt, [os.path.join(SHEETS, "bg_labyrinth.png")], "magenta")
+groups["lg_gate"] = {"grid": [2, 2], "dir": "gate", "ids": [f"gate_{k + 1}" for k in range(4)], "out": 512}
+
+# labyrinth backdrops by depth (the battle stage's too): floors 1-4, 5-8, 9-12, 13-16, 17-20
+DEPTHS = [
+    "the upper halls: worn mossy stone walls, torches, roots breaking through the ceiling, a calm green-gold light",
+    "a flooded crypt: knee-deep dark water on the edges, glowing blue fungi on the walls, dripping arches",
+    "a crystal cavern: towering amethyst and sapphire crystals growing out of the stone, cold purple light",
+    "the molten depths: lava channels along the walls, blackened forge-like stonework, orange embers in the air",
+    "the abyssal bottom: crumbling ruins floating over a starry void, cracks of violet light, an eerie silence",
+]
+for k, desc in enumerate(DEPTHS):
+    prompt = f"""Image: a wide BATTLE BACKGROUND for a Slay-the-Spire-style 2D side-view battle screen, in a flat vector game art style with clean shapes, soft cel shading and atmospheric depth (match the attached background's art style exactly; it is the labyrinth's first level, this one is deeper).
+Location: inside an ancient magical labyrinth, {desc}.
+Composition: landscape 1536x1024, camera at eye level looking from the side. A flat walkable floor runs across the bottom ~28% of the image where characters will stand. Keep the middle area uncluttered and a bit softer; put landmarks toward the back and the left and right edges. No characters, no creatures, no text, no UI.
+"""
+    job(f"bg_labyrinth_d{k + 1}", prompt, [os.path.join(SHEETS, "bg_labyrinth.png")], "none")
+
 # how each tool is drawn, so the userscript can find the grip (see tool_geo in build-assets.py)
 HELD = "drawn as held in a hand, seen from the side: the handle toward the BOTTOM-LEFT of its cell and the working end toward the TOP-RIGHT, tilted 45 degrees, all eight at the same size and the same angle, the end of the handle at the same spot in every cell"
 HELD_KIND = {
