@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.3
+// @version      0.12.4
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2748,11 +2748,11 @@
     const TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
     // what a drop is worth a show (per-action chances, game v1.20260927.0): essences 1.7-70%, artisan's crates
     // 0.01-0.19%, meteorite caches 0.02-0.04% (gathering only), the three skill relics 0.0025-0.003%; transmuting
-    // can give a philosopher's stone (6.5-58% by item) or its crushed shards (25%)
-    const RARE = /treasure_chest|artisans_crate|meteorite_cache|butter_of_proficiency|branch_of_insight|thread_of_expertise|philosophers_/
+    // can give a philosopher's stone (6.5-58% by item; its crushed shards, 25%, are an ordinary gain)
+    const RARE = /treasure_chest|artisans_crate|meteorite_cache|butter_of_proficiency|branch_of_insight|thread_of_expertise|^philosophers_stone$/
     const MINOR = /essence/
     function rarity(id) {
-      if (/philosophers_/.test(id)) return "sage"
+      if (id === "philosophers_stone") return "sage"
       if (/butter_of_proficiency|branch_of_insight|thread_of_expertise/.test(id)) return "legend"
       if (/meteorite_cache/.test(id)) return "meteor"
       if (/artisans_crate|treasure_chest/.test(id)) return "crate"
@@ -2777,6 +2777,7 @@
 
     const inv = {} // "<location>::<item>::<enh>" -> count
     const tools = {} // skill -> tool item id
+    const toolEnh = {} // skill -> its enhancement level
     const skills = {} // skill hrid -> { level, experience }
     let queue = [] // the character's actions, not done, by ordinal
     let cur = null // the running one (queue[0])
@@ -2807,8 +2808,10 @@
         const loc = shortId(it.itemLocationHrid) || ""
         if (withTools && loc.endsWith("_tool")) {
           const s = loc.replace(/_tool$/, "")
-          if (it.count > 0) tools[s] = shortId(it.itemHrid)
-          else if (tools[s] === shortId(it.itemHrid)) delete tools[s]
+          if (it.count > 0) {
+            tools[s] = shortId(it.itemHrid)
+            toolEnh[s] = it.enhancementLevel || 0
+          } else if (tools[s] === shortId(it.itemHrid)) delete tools[s]
         }
       }
     }
@@ -2981,7 +2984,17 @@
 .bfxl-target.station.drawn{width:84px;height:112px;bottom:6px;right:36px}
 .bfxl-target.station.drawn img.cell{left:-6.25%;top:-4.7%;width:112.5%;height:109.4%}
 .bfxl-target.station.drawn .bfxl-work{top:-12%;left:22%;width:56%;height:42%}
+.bfxl-target.station.drawn.crafting{width:76px;height:101px}
+.bfxl-target.station.drawn.brewing{width:72px;height:96px}
 .bfxl-tool.drawn{z-index:1}
+.bfxl-tool.ench5 img{filter:drop-shadow(0 0 2px #6fb6ff) drop-shadow(0 0 4px #6fb6ff)}
+.bfxl-tool.ench8 img{filter:drop-shadow(0 0 2px #c07bff) drop-shadow(0 0 5px #c07bff)}
+.bfxl-tool.ench10 img{animation:bfxl-b10 2.4s ease-in-out infinite}
+.bfxl-tool.ench12 img{animation:bfxl-b12 1.4s ease-in-out infinite}
+.bfxl-tool.ench15 img{animation:bfxl-b15 1.6s linear infinite}
+@keyframes bfxl-b10{0%,100%{filter:drop-shadow(0 0 2px #ffa53a) drop-shadow(0 0 3px #ffa53a)}50%{filter:drop-shadow(0 0 3px #ffa53a) drop-shadow(0 0 8px #ffa53a)}}
+@keyframes bfxl-b12{0%,100%{filter:drop-shadow(0 0 2px #ff5a3c) drop-shadow(0 0 4px #ffd75a)}50%{filter:drop-shadow(0 0 4px #ff5a3c) drop-shadow(0 0 10px #ffd75a)}}
+@keyframes bfxl-b15{0%{filter:drop-shadow(0 0 3px #ff4d4d) drop-shadow(0 0 7px #ff4d4d)}17%{filter:drop-shadow(0 0 3px #ffb84d) drop-shadow(0 0 7px #ffb84d)}33%{filter:drop-shadow(0 0 3px #fff04d) drop-shadow(0 0 7px #fff04d)}50%{filter:drop-shadow(0 0 3px #4dff88) drop-shadow(0 0 7px #4dff88)}67%{filter:drop-shadow(0 0 3px #4dc3ff) drop-shadow(0 0 7px #4dc3ff)}83%{filter:drop-shadow(0 0 3px #b84dff) drop-shadow(0 0 7px #b84dff)}100%{filter:drop-shadow(0 0 3px #ff4d4d) drop-shadow(0 0 7px #ff4d4d)}}
 .bfxl-hero{z-index:2}
 .bfxl-carry{position:absolute;left:30%;top:-26%;width:40%;height:40%;filter:drop-shadow(0 2px 2px #0006)}
 .bfxl-carry svg{left:0;top:0;width:100%;height:100%}
@@ -2996,6 +3009,7 @@
 .bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
   text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
 .bfxl-big{position:absolute;left:0;top:0}
+.bfxl-wave{width:16px;height:16px;border-radius:50%;border:2px solid #9fe0ff;box-shadow:0 0 6px #7fd0ff,inset 0 0 4px #7fd0ff}
 .bfxl-big svg{position:static!important;width:100%;height:100%}
 .bfxl-meteor{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle,#fff6c0 0%,#ffb030 45%,#ff5a1a 75%);box-shadow:0 0 10px #ff7a1a,0 0 22px #ff4a00}
 .bfxl-meteor::after{content:"";position:absolute;left:14px;top:4px;width:60px;height:8px;border-radius:4px;background:linear-gradient(90deg,#ffb030cc,#ff5a1a55,transparent)}
@@ -3166,7 +3180,7 @@
       const id = shortId(cur.actionHrid)
       const work = hashItem(cur.primaryItemHash)?.id
       const me = Looks.me
-      const key = [cur.id, id, work, tools[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
+      const key = [cur.id, id, work, tools[skill], toolEnh[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
       el.querySelector(".bfxl-name").textContent = actionName()
       el.querySelector(".bfxl-ico").title = actionName()
       el.querySelector(".bfxl-count").textContent = cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
@@ -3204,6 +3218,10 @@
         tool.classList.add("drawn")
         Object.assign(tool.style, { left: HAND[0] - gx * w + "px", top: HAND[1] - gy * h + "px", width: w + "px", height: h + "px", transformOrigin: `${gx * 100}% ${gy * 100}%` })
         tool.appendChild(img("tool/" + tools[skill]))
+        // enhancement glow as on the battle stage's weapons: +5 blue, +8 purple, +10 orange, +12 red, +15 rainbow
+        const lv = toolEnh[skill] || 0
+        const tier = [15, 12, 10, 8, 5].find(n => lv >= n)
+        if (tier) tool.classList.add("ench" + tier)
         held = { kind, geo }
       } else if (tools[skill]) tool.appendChild(svgUse("items", tools[skill]))
       hero.appendChild(tool)
@@ -3231,7 +3249,7 @@
       } else {
         target.classList.add("station")
         if (art("station", skill)) {
-          target.classList.add("drawn")
+          target.classList.add("drawn", skill)
           target.appendChild(img("station/" + skill, "cell"))
         } else target.appendChild(svgUse("skills", skill))
         const w = document.createElement("div")
@@ -3245,6 +3263,15 @@
         }
       }
       showEnh()
+      // the teapot is lifted until its body is just over the brewing table and its spout over the table's middle;
+      // the chisel (held level) is raised until its tip is on the workbench's top, at most a little so it stays in
+      // the hand (the bench is drawn a bit smaller for that)
+      const hand = [workX() + HAND[0], hero.offsetTop + HAND[1]]
+      if (held?.kind === "pot") POUR = [Math.max(-6, Math.min(20, target.offsetLeft + target.offsetWidth * 0.25 - hand[0])), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.4 - 14 - hand[1]))]
+      if (held?.kind === "chisel") {
+        const r = TOOL_REACH.chisel * 0.9
+        POUR = [Math.max(-10, Math.min(24, target.offsetLeft + target.offsetWidth * 0.3 - hand[0] - r)), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.36 - hand[1]))]
+      }
       if (walk.action !== cur.id) {
         walk.action = cur.id
         walk.x = -60
@@ -3331,6 +3358,7 @@
     const HAND = [76, 63]
     const TOOL_REACH = { pot: 34, alembic: 36, needle: 34, chisel: 38, brush: 40 }
     const TOOL_FRAME = 560 / 432
+    let POUR = [14, -26] // how far the teapot / chisel is brought to the table top (set per scene)
     // seconds per stroke, the moment it lands, and the target's reaction (a style of the icon motions)
     const TOOL_MOVE = {
       hatchet: [1.7, 0.68, "chop"],
@@ -3340,9 +3368,9 @@
       chisel: [0.7, 0.85, "chop"],
       needle: [0.9, 0.75, "stitch"],
       spatula: [1.4, 0.45, "stir"],
-      pot: [2.6, 0.5, "pour"],
+      pot: [2.6, 0.55, "pour"],
       alembic: [1.6, 0.5, "pour"],
-      enhancer: [1.8, 0.68, "chop"],
+      enhancer: [1.6, 0.62, "pour"],
     }
     // -> [direction the tool points (deg, 0 = toward the target, -90 = up) or null, dx, dy, extra turn (deg)]
     function toolPose(kind, f) {
@@ -3364,10 +3392,13 @@
           const b = Math.sin(Math.PI * f) ** 3
           return [-20 - 10 * b, 9 * b, -2 * b, 0]
         }
-        case "chisel": // pulled back slowly, then a quick tap
-          if (f < 0.75) return [25, -4 * ease(seg(0, 0.75)), 0, 0]
-          if (f < 0.85) return [25, -4 + 10 * seg(0.75, 0.85), 0, 0]
-          return [25, 6 * (1 - ease(seg(0.85, 1))), 0, 0]
+        case "chisel": {
+          // held on the workbench's top: pulled back slowly, then a quick tap
+          const [ax, ay] = POUR
+          if (f < 0.75) return [0, ax - 4 * ease(seg(0, 0.75)), ay, 0]
+          if (f < 0.85) return [0, ax - 4 + 10 * seg(0.75, 0.85), ay, 0]
+          return [0, ax + 6 * (1 - ease(seg(0.85, 1))), ay, 0]
+        }
         case "needle": // loops through the cloth
           return [-30 + 40 * wave, 6 * Math.cos(2 * Math.PI * f), -9 * wave, 0]
         case "spatula": // slides under, flips, comes back
@@ -3375,16 +3406,18 @@
           if (f < 0.5) return [10 - 70 * seg(0.35, 0.5), 6, -6 * seg(0.35, 0.5), 0]
           return [-60 + 70 * ease(seg(0.5, 1)), 6 * (1 - ease(seg(0.5, 1))), -6 * (1 - ease(seg(0.5, 1))), 0]
         case "pot": {
-          // tilted forward to pour, held, set back upright
-          const tilt = f < 0.35 ? ease(seg(0, 0.35)) : f < 0.7 ? 1 : 1 - ease(seg(0.7, 1))
-          return [null, 2 * tilt, -4 * tilt, 55 * tilt]
+          // lifted over the table, tilted to pour, set back upright, lowered
+          const lift = f < 0.25 ? ease(seg(0, 0.25)) : f < 0.9 ? 1 : 1 - ease(seg(0.9, 1))
+          const tilt = f < 0.25 ? 0 : f < 0.45 ? ease(seg(0.25, 0.45)) : f < 0.75 ? 1 : f < 0.9 ? 1 - ease(seg(0.75, 0.9)) : 0
+          return [null, POUR[0] * lift, POUR[1] * lift, 55 * tilt]
         }
         case "alembic": // swirled
           return [null, 0, -3 * Math.abs(wave), 18 * wave]
-        case "enhancer": // raised, then thrust at the altar
-          if (f < 0.55) return [-50 - 15 * ease(seg(0, 0.55)), -2 * ease(seg(0, 0.55)), 0, 0]
-          if (f < 0.68) return [-65 + 50 * seg(0.55, 0.68), 10 * seg(0.55, 0.68), 0, 0]
-          return [-15 - 35 * ease(seg(0.68, 1)), 10 * (1 - ease(seg(0.68, 1))), 0, 0]
+        case "enhancer": {
+          // a horn: aimed at the item on the altar, drawing breath, then a pulse with a small recoil
+          const p = f < 0.6 ? ease(seg(0, 0.6)) : 1 - ease(seg(0.6, 1))
+          return [-28 - 6 * p, -3 * p + (f > 0.6 && f < 0.7 ? -2 : 0), -2 * p, 0]
+        }
       }
       return [null, 0, 0, 0]
     }
@@ -3469,7 +3502,35 @@
       const k = cfg.lifeScale || 1
       return [(r.left - s.left + r.width / 2) / k, (r.top - s.top + r.height / 2) / k]
     }
+    // rings of power from the horn's bell to the item on the altar
+    function hornWave() {
+      const hero = el.querySelector(".bfxl-hero")
+      const work = el.querySelector(".bfxl-work")
+      if (!hero || !work) return
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const k = cfg.lifeScale || 1
+      const a = ((-32 * Math.PI) / 180)
+      const r = (TOOL_REACH.enhancer || 44) * 0.85
+      const bx = hero.offsetLeft + HAND[0] + Math.cos(a) * r
+      const by = hero.offsetTop + HAND[1] + Math.sin(a) * r
+      const w = work.getBoundingClientRect()
+      const tx = (w.left - s.left + w.width / 2) / k
+      const ty = (w.top - s.top + w.height / 2) / k
+      for (let i = 0; i < 3; i++) {
+        const ring = fxEl("bfxl-wave")
+        ring.animate(
+          [
+            { transform: `translate(${bx - 8}px,${by - 8}px) scale(.4)`, opacity: 0 },
+            { transform: `translate(${bx - 8}px,${by - 8}px) scale(.8)`, opacity: 1, offset: 0.15 },
+            { transform: `translate(${tx - 8}px,${ty - 8}px) scale(1.8)`, opacity: 0 },
+          ],
+          { duration: 620, delay: i * 120, easing: "ease-out", fill: "backwards" },
+        ).onfinish = gone(ring)
+      }
+      later(600, () => work.animate([{ filter: "drop-shadow(0 0 5px #fffa)" }, { filter: "drop-shadow(0 0 12px #7fd0ff) brightness(1.4)" }, { filter: "drop-shadow(0 0 5px #fffa)" }], { duration: 400 }))
+    }
     function hit(skill, style) {
+      if (held?.kind === "enhancer") hornWave()
       if (skill === "foraging" && !walk.moves.length && Math.random() < 0.6) {
         const base = workX()
         walk.moves.push({ to: base - 4 - Math.random() * 18, speed: 110 }, { to: base, work: true, speed: 110 })
@@ -3627,7 +3688,7 @@
         })
       } else if (kind === "sage") {
         // a magic circle under the station, power spirals in, a white flash, the stone rises glowing crimson
-        const full = g.id === "philosophers_stone"
+        const full = true
         const ms = full ? 4200 : 2600
         const ccx = cx
         const ccy = cy + 30
@@ -3736,7 +3797,7 @@
     let labState = null
     function lab() {
       if (labState) return labEnd()
-      labState = { saved: { cur, queue, tools: { ...tools }, measured }, skill: "milking", act: "cow", tier: "holy", dur: 3, auto: false, enh: 5, lv: 50, n: 0 }
+      labState = { saved: { cur, queue, tools: { ...tools }, toolEnh: { ...toolEnh }, measured }, skill: "milking", act: "cow", tier: "holy", dur: 3, auto: false, enh: 5, lv: 50, n: 0 }
       cfg.lifeIcon = false
       ensure()
       if (!el) build()
@@ -3766,6 +3827,7 @@
       })
       actSel = sel(LAB_ACTIONS[labState.skill], labState.act, v => ((labState.act = v), labApply()))
       sel(LAB_TIERS.map(t => [t, t]), labState.tier, v => ((labState.tier = v), labApply()))
+      sel([0, 5, 8, 10, 12, 15].map(n => [String(n), "工具 +" + n]), "0", v => ((labState.toolLv = +v), labApply()))
       sel([[1.5, "1.5s"], [3, "3s"], [6, "6s"], [12, "12s"]].map(([v, t]) => [String(v), t]), "3", v => ((labState.dur = +v), labApply()))
       const auto = document.createElement("label")
       auto.innerHTML = `<input type="checkbox"> 自动循环`
@@ -3779,7 +3841,6 @@
       btn("精通之油", () => labComplete({ rare: "butter_of_proficiency" }))
       btn("洞察之枝", () => labComplete({ rare: "branch_of_insight" }))
       btn("贤者之石", () => labComplete({ sage: "philosophers_stone" }))
-      btn("贤者碎片", () => labComplete({ sage: "crushed_philosophers_stone" }))
       btn("升级", () => labComplete({ up: true }))
       btn("强化成功", () => labComplete({ enh: 1 }))
       btn("强化失败", () => labComplete({ enh: -1 }))
@@ -3792,6 +3853,7 @@
     function labApply() {
       const { skill, act, tier, dur: d } = labState
       tools[skill] = `${tier}_${LAB_TOOL[skill]}`
+      toolEnh[skill] = labState.toolLv || 0
       const item = skill === "enhancing" ? "holy_sword" : skill === "alchemy" ? (act === "transmute" ? "blazing_trident_refined" : "star_fruit") : ""
       const fake = { id: -100 - ++labState.n, actionHrid: `/actions/${skill}/${act}`, currentCount: 0, hasMaxCount: false, maxCount: 0, ordinal: 0, isDone: false, primaryItemHash: item ? `0::/item_locations/inventory::/items/${item}::${skill === "enhancing" ? labState.enh : 0}` : "", enhancingProtectionMinLevel: 8 }
       cur = null
@@ -3845,6 +3907,7 @@
       el?.querySelector(".bfxl-lab")?.remove()
       Object.keys(tools).forEach(k => delete tools[k])
       Object.assign(tools, s.tools)
+      Object.assign(toolEnh, s.toolEnh)
       cur = null
       setQueue(s.queue)
       measured = s.measured
