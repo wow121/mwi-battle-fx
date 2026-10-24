@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.14.2
+// @version      0.14.3
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2891,7 +2891,7 @@
     const guildChars = {} // character id -> { name, avatarHrid, avatarOutfitHrid, ... } (the guild's members)
     let myId = null
     // the other guild members in this trial, with their looks (their tools are not sent: they hold the viewer's)
-    const trialMates = () => (trial?.from === "guild" ? (trial.data.participantIds || []).filter(id => id !== myId).slice(0, 5) : [])
+    const trialMates = () => (trial?.from === "guild" ? (trial.data.participantIds || []).filter(id => id !== myId).slice(0, 60) : [])
     let labyrinth = null
     const labPath = () => {
       try {
@@ -3305,6 +3305,8 @@
 .bfxl-gate{position:absolute;width:126px;height:84px;right:-8px;bottom:4px;pointer-events:none}
 .bfxl-target img.stage,.bfxl-project img.stage,.bfxl-gate img.stage{position:absolute;left:-3.125%;top:-4.6875%;width:106.25%;height:109.375%;pointer-events:none}
 .bfxl-mates{position:absolute;inset:0;pointer-events:none;z-index:1}
+.bfxl-crowd{position:absolute;inset:0;pointer-events:none;z-index:0}
+.bfxl-crowd b{display:none}
 .bfxl-mate{position:absolute;width:96px;height:96px;transform:scale(.82);transform-origin:50% 100%;filter:brightness(.92)}
 .bfxl-mate>svg{position:absolute;left:0;top:0;width:100%;height:100%}
 .bfxl-mate b{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font:700 9px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000}
@@ -3796,12 +3798,18 @@
     }
     // the guild members working the trial with the viewer: in a staggered row behind, a bit smaller, named. Their
     // tools come from their profile (opened once, as for the battle stage), else they hold the viewer's kind of tool
+    // a big guild: the first few work beside the hero (named), the rest are a crowd behind the project in rows
+    // that get smaller further back
+    const FRONT = 4
     function buildMates(skill) {
-      el.querySelector(".bfxl-mates")?.remove()
+      el.querySelectorAll(".bfxl-mates,.bfxl-crowd").forEach(e => e.remove())
       const ids = trialMates()
       if (!ids.length) return
       const box = document.createElement("div")
       box.className = "bfxl-mates"
+      const crowd = document.createElement("div")
+      crowd.className = "bfxl-crowd"
+      const front = tstage?.source ? 0 : FRONT
       ids.forEach((id, i) => {
         const c = guildChars[id] || {}
         const m = document.createElement("div")
@@ -3823,12 +3831,49 @@
         const name = document.createElement("b")
         name.textContent = c.name || "#" + id
         m.appendChild(name)
-        box.appendChild(m)
+        ;(i < front ? box : crowd).appendChild(m)
       })
-      // with a cow / field in front they stand behind it, else just behind the hero
-      const back = tstage?.source
-      if (back) box.style.zIndex = 0
-      el.querySelector(".bfxl-scene").insertBefore(box, back ? el.querySelector(".bfxl-target") : el.querySelector(".bfxl-hero"))
+      // the crowd stands behind the project / cow / field, the front few just behind the hero
+      const scene = el.querySelector(".bfxl-scene")
+      if (box.childElementCount) scene.insertBefore(box, el.querySelector(".bfxl-hero"))
+      if (crowd.childElementCount) scene.insertBefore(crowd, el.querySelector(".bfxl-project") || el.querySelector(".bfxl-target"))
+      placeMates()
+    }
+    // where the mates stand (again when the layout changes)
+    function placeMates() {
+      if (!el) return
+      const wx = workX()
+      const proj = tstage && !tstage.source ? tstage.project : null
+      const mid = tstage?.project ? tstage.project.offsetLeft + tstage.project.offsetWidth / 2 : 200
+      for (const m of el.querySelectorAll(".bfxl-mates .bfxl-mate")) {
+        const i = +m.dataset.i
+        const name = m.querySelector("b")
+        if (proj && i % 2 === 0) {
+          // the far side of the project, mirrored
+          const k = i / 2
+          m.style.left = Math.min(340 - 70, proj.offsetLeft + proj.offsetWidth * 0.82 - 20 + 26 * k) + "px"
+          m.style.bottom = 10 + 8 * k + "px"
+          m.style.transform = "scale(-.82,.82)"
+          name.style.transform = "translateX(-50%) scaleX(-1)"
+        } else {
+          const k = proj ? (i - 1) / 2 : i
+          m.style.left = Math.max(-24, wx - 42 * (k + 1)) + "px"
+          m.style.bottom = 16 + 7 * (k % 2) + "px"
+          m.style.transform = ""
+          name.style.transform = ""
+        }
+      }
+      // the crowd: rows of 9 across the width, each row further up and smaller, facing the project
+      ;[...el.querySelectorAll(".bfxl-crowd .bfxl-mate")].forEach((m, c) => {
+        const r = Math.floor(c / 9)
+        const j = c % 9
+        const x = 6 + j * 36 + (r % 2) * 18
+        const k = Math.max(0.3, 0.44 - 0.035 * r)
+        m.style.left = x - 48 + "px" // scaled about its bottom middle
+        m.style.bottom = 50 + 10 * r + "px"
+        m.style.transform = `scale(${x + 20 > mid ? -k : k},${k})`
+        m.style.zIndex = 10 - r
+      })
     }
     // the static parts: background, hero, the thing being worked on; rebuilt when any of them changes
     function setScene() {
@@ -3982,6 +4027,7 @@
         POUR = [Math.max(-10, Math.min(24, target.offsetLeft + target.offsetWidth * 0.3 - hand[0] - r)), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.36 - hand[1]))]
       }
       const x = workX()
+      placeMates()
       walk.moves = walk.moves.map(m => (m.work ? { ...m, to: x } : m))
       if (!walk.moves.length && Math.abs(walk.x - x) > 2 && walk.action === cur.id) walk.moves.push({ to: x, work: true })
     }
@@ -4514,32 +4560,6 @@
           walk.moves.shift()
           if (m.carry) dropCarry()
           m.then?.()
-        }
-      }
-      // the mates: in a staggered row behind the hero's work spot
-      const wx = workX()
-      const proj = tstage && !tstage.source ? tstage.project : null
-      for (const m of el.querySelectorAll(".bfxl-mate")) {
-        const i = +m.dataset.i
-        if (proj && i % 2 === 0) {
-          // the far side of the project, mirrored
-          const k = i / 2
-          m.style.left = Math.min(340 - 70, proj.offsetLeft + proj.offsetWidth * 0.82 - 20 + 26 * k) + "px"
-          m.style.bottom = 10 + 8 * k + "px"
-          m.style.transform = "scale(-.82,.82)"
-          m.querySelector("b").style.transform = "translateX(-50%) scaleX(-1)"
-        } else if (tstage?.source) {
-          // a cow / field in front: the others work in a row further back, smaller
-          m.style.left = 4 + 62 * i + "px"
-          m.style.bottom = 60 + "px"
-          m.style.transform = "scale(.62)"
-          m.querySelector("b").style.transform = ""
-        } else {
-          const k = proj ? (i - 1) / 2 : i
-          m.style.left = Math.max(-24, wx - 42 * (k + 1)) + "px"
-          m.style.bottom = 16 + 7 * (k % 2) + "px"
-          m.style.transform = ""
-          m.querySelector("b").style.transform = ""
         }
       }
       if (hero) {
@@ -5167,10 +5187,16 @@
       if (from === "lab") labState.realLab = labyrinth
       if (from === "lab") labyrinth = { isActive: true, currentFloor: 1 + ((Math.random() * 20) | 0), pathData: [{ x: 0, y: 0 }], roomData: [[{ roomType: "/labyrinth_room_types/skilling", skillHrid: "/skills/" + skill, recommendedLevel: 80 }]] }
       else {
-        // three made-up members
-        const looks = [["green_person_2", "anchorbound_equipment", "奶牛大王"], ["purple_person_1", "", "BigShield"], ["blue_person_3", "cow_suit", "RizeBelieve"]]
-        looks.forEach(([a, o, name], i) => (guildChars[-1 - i] = { name, avatarHrid: "/avatars/" + a, avatarOutfitHrid: o ? "/avatar_outfits/" + o : "" }))
-        msg.participantIds = [myId, -1, -2, -3]
+        // forty made-up members, their looks picked from the game's avatars and outfits
+        const avatars = Doll.list("a_").map(k => k.slice(2))
+        const outfits = Doll.list("o_").map(k => k.slice(2))
+        const pick = (list, fallback) => (list.length ? list[(Math.random() * list.length) | 0] : fallback)
+        const names = ["奶牛大王", "BigShield", "RizeBelieve", "Dawant", "挤奶工", "伐木累", "TeaTime", "Moo"]
+        msg.participantIds = [myId]
+        for (let i = 1; i <= 40; i++) {
+          guildChars[-i] = { name: names[i - 1] || "成员" + i, avatarHrid: "/avatars/" + pick(avatars, ["blue_person_1", "green_person_2", "purple_person_1"][i % 3]), avatarOutfitHrid: Math.random() < 0.7 && outfits.length ? "/avatar_outfits/" + pick(outfits) : "" }
+          msg.participantIds.push(-i)
+        }
       }
       delete trials[from]
       onTrial(from, { ...msg })
