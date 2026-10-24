@@ -73,8 +73,8 @@ TOOLS = {
     "chisel": "a woodworking chisel",
     "needle": "a big sewing needle",
     "spatula": "a cooking spatula",
-    "pot": "a brewing pot with a long handle",
-    "alembic": "an alchemy alembic flask held by its neck",
+    "pot": "a brewing teapot exactly like the attached icons (one side handle, a lid, a spout), with no other handle",
+    "alembic": "an alchemy alembic flask",
     "enhancer": "an enhancing tool (as in the attached icons)",
 }
 
@@ -166,10 +166,16 @@ prompt = f"Image: WORK STATIONS for a cute 2D side-view idle game, in {STYLE}; t
 job("lg_stations", prompt, [os.path.join(REF, f"s_{s}.png") for s, _ in STATIONS], "magenta")
 groups["lg_stations"] = {"grid": [4, 2], "dir": "station", "ids": [s for s, _ in STATIONS]}
 
+# how each tool is drawn, so the userscript can find the grip (see tool_geo in build-assets.py)
+HELD = "drawn as held in a hand, seen from the side: the handle toward the BOTTOM-LEFT of its cell and the working end toward the TOP-RIGHT, tilted 45 degrees, all eight at the same size and the same angle, the end of the handle at the same spot in every cell"
+HELD_KIND = {
+    "pot": "standing upright in side view with its spout pointing to the RIGHT and its single handle on the LEFT, all eight at the same size",
+    "alembic": "standing upright in side view, all eight at the same size",
+}
 for kind, desc in TOOLS.items():
     cells = [f"the {t} tier (attached icon {k + 1})" for k, t in enumerate(TIERS)]
     prompt = f"""Image: eight versions of {desc} for a cute 2D side-view idle game, in {STYLE}, one per material tier, each matching its attached item icon (same order) in colours, material and ornaments.
-Every tool is drawn as held in a hand, seen from the side: the handle toward the BOTTOM-LEFT of its cell and the working end toward the TOP-RIGHT, tilted 45 degrees, all eight at the same size and the same angle, the end of the handle at the same spot in every cell. No hands, no characters.
+Every tool is {HELD_KIND.get(kind, HELD)}. No hands, no characters.
 """ + grid(4, 2, cells, "magenta", "")
     job("lg_tool_" + kind, prompt, [os.path.join(REF, f"i_{t}_{kind}.png") for t in TIERS], "magenta")
     groups["lg_tool_" + kind] = {"grid": [4, 2], "dir": "tool", "ids": [f"{t}_{kind}" for t in TIERS]}

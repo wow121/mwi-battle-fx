@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
+.ProgressBar_bar{position:relative;width:200px;height:14px;background:#111;overflow:hidden}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+</style></head><body>
+<!-- every skill's tool in turn (motion only, no completions); run-mock serves this page as mock.html -->
+<div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm"></div></div>
+ <div class="ProgressBar_bar"><div class="ProgressBar_innerBar__q" style="width:0"></div><div class="ProgressBar_text__102Yn" id="pt">1.80s</div></div></div></div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799'}:d;window.GM_setClipboard=()=>{};window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+const A=[['milking','cow','挤奶 - 奶牛','cheese_brush'],['foraging','farmland','采摘 - 农田','azure_shears'],['woodcutting','tree','伐木 - 树','crimson_hatchet'],['cheesesmithing','cheese_sword','奶酪锻造 - 奶酪剑','verdant_hammer'],['crafting','lumber','制作 - 木板','cheese_chisel'],['tailoring','cotton_fabric','缝纫 - 棉布','holy_needle'],['cooking','donut','烹饪 - 甜甜圈','cheese_spatula'],['brewing','milking_tea','冲泡 - 挤奶茶','burble_pot'],['alchemy','coinify','炼金 - 点金','cheese_alembic'],['enhancing','enhance','强化 - 奶酪剑','rainbow_enhancer']];
+const act=(i,a,done)=>({id:i+1,actionHrid:`/actions/${a[0]}/${a[1]}`,currentCount:0,hasMaxCount:false,maxCount:0,ordinal:0,isDone:!!done,primaryItemHash:a[0]==='enhancing'||a[0]==='alchemy'?'1::/item_locations/inventory::/items/cheese_sword::3':'',enhancingProtectionMinLevel:0,updatedAt:new Date().toISOString()});
+async function start(){
+ document.getElementById('nm').textContent=A[0][2];
+ feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},characterActions:[act(0,A[0])],characterSkills:[],characterItems:A.map(a=>slot(a[0]+'_tool',a[3]))});
+ for(let i=1;i<A.length;i++){await sleep(1800);document.getElementById('nm').textContent=A[i][2];feed({type:'actions_updated',endCharacterActions:[act(i-1,A[i-1],true),act(i,A[i])]})}
+}
+function back(){}
+</script></body></html>

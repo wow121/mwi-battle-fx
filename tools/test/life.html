@@ -1,7 +1,7 @@
 <!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
 body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
 .Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
-.ProgressBar_bar{position:relative;width:200px;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+.ProgressBar_bar{position:relative;width:200px;overflow:hidden;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
 </style></head><body>
 <!-- the game's header: action name + seconds per action (run-mock serves this page as mock.html) -->
 <div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm">挤奶 - 奶牛</div></div>
@@ -25,7 +25,7 @@ const header=(name,s)=>{document.getElementById('nm').textContent=name;document.
 async function start(){
  T0=Date.now(); const D=1600; let at=0;
  const step=async(id,hrid,count,items,skills,extra={})=>{await sleep(D);at+=D;done(act(id,hrid,count,{...extra,at}),items,skills)};
- const sw=async(name,acts)=>{await sleep(300);at+=300;header(name,(D/1000).toFixed(2)+'s');feed({type:'actions_updated',endCharacterActions:acts})};
+ const sw=async(name,acts)=>{await sleep(300);at+=300;document.querySelector('.ProgressBar_innerBar__q').style.width='100%';header(name,(D/1000).toFixed(2)+'s');feed({type:'actions_updated',endCharacterActions:acts})};
  header('挤奶 - 奶牛',(D/1000).toFixed(2)+'s');
  feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},
   characterActions:[act(1,'/actions/milking/cow',0)],

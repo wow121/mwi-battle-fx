@@ -438,7 +438,34 @@ TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
 LIFE_MARGIN = 24
 _groups = os.path.join(RAW, "life-groups.json")
 GROUPS = json.load(open(_groups)) if os.path.exists(_groups) else {}
-life = {"bg": [], "t": [], "plant": [], "station": [], "tool": []}
+life = {"bg": [], "t": [], "plant": [], "station": [], "tool": [], "tool_geo": {}}
+
+
+def tool_geo(path, kind):
+    """Where a drawn tool is held: [grip x, grip y (0..1 of the frame), direction from the grip to the tool's mass in
+    degrees (screen coords, y down), reach from the grip (0..1 of the frame width)]. Most tools were drawn with the
+    handle's end at the bottom left: the grip is a bit up the handle from it. The teapot is held by its side handle
+    (its leftmost part), the alembic by its neck (its top)."""
+    a = np.asarray(Image.open(path).convert("RGBA"))[..., 3] > 128
+    h, w = a.shape
+    ys, xs = np.nonzero(a)
+    if not len(xs):
+        return None
+    cx, cy = xs.mean(), ys.mean()
+    if kind == "pot":
+        band = xs <= xs.min() + (xs.max() - xs.min()) * 0.08
+        gx, gy = xs[band].mean(), ys[band].mean()
+    elif kind == "alembic":
+        # the top of the flask's neck: the highest part above its middle (the tube curls off to a side)
+        col = np.abs(xs - cx) < w * 0.06
+        gx, gy = cx, ys[col].min() + (ys.max() - ys.min()) * 0.05
+    else:
+        i = np.argmax(ys - xs)
+        ex, ey = xs[i], ys[i]
+        gx, gy = ex + (cx - ex) * 0.16, ey + (cy - ey) * 0.16
+    ang = float(np.degrees(np.arctan2(cy - gy, cx - gx)))
+    reach = float(np.sqrt((xs - gx) ** 2 + (ys - gy) ** 2).max())
+    return [round(gx / w, 4), round(gy / h, 4), round(ang, 1), round(reach / w, 4)]
 doll_sheets = []
 for f in sorted(os.listdir(SHEETS)):
     if not f.endswith(".png"):
@@ -484,6 +511,11 @@ for f in sorted(os.listdir(SHEETS)):
         if not all(fresh(o, src) for o in outs):
             cut_cells(src, keys.get(name, "magenta"), tuple(g["grid"]), outs, LIFE_MARGIN, 256)
         life[g["dir"]] += g["ids"]
+        if g["dir"] == "tool":
+            for i, o in zip(g["ids"], outs):
+                geo = tool_geo(o, i.split("_")[-1])
+                if geo:
+                    life["tool_geo"][i] = geo
 # paper-doll layers: one atlas per layer, rects in doll/index.json
 if doll_sheets:
     ipath = os.path.join(ASSETS, "doll", "index.json")

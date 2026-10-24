@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.1
+// @version      0.12.2
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2765,6 +2765,9 @@
     let raf = 0
     let lastF = 0
     let sceneKey = ""
+    let held = null // the drawn tool in the hand: { kind, geo }
+    // the hero walks: in from the left when an action starts, out to the left with the product and back
+    const walk = { x: -60, moves: [], action: null, carried: 0 }
     let posed = null // the drawn cow / tree: { kind: "cow" | "tree", imgs: { pose: img }, until, base }
 
     const skillOf = hrid => (hrid ? String(hrid).split("/")[2] : null)
@@ -2785,14 +2788,16 @@
         }
       }
     }
-    function setQueue(list) {
+    // resume: the page was just loaded mid-action, so the cycle starts where the header's bar is; a newly started
+    // action starts at 0 (the bar may still show the previous action, full)
+    function setQueue(list, resume = false) {
       queue = list.filter(a => !a.isDone).sort((a, b) => (a.ordinal || 0) - (b.ordinal || 0))
       const next = queue[0] || null
       if (next?.id !== cur?.id) {
         if (next?.actionHrid !== cur?.actionHrid) measured = 0
         cur = next
         enhLevel = hashItem(cur?.primaryItemHash)?.level || 0
-        cycleAt = performance.now() - domProgress() * dur() * 1000
+        cycleAt = performance.now() - (resume ? domProgress() * dur() * 1000 : 0)
         lastDone = null
       } else cur = next
       ensure()
@@ -2829,7 +2834,7 @@
         setItems(obj.characterItems)
         for (const s of obj.characterSkills || []) skills[s.skillHrid] = { level: s.level, experience: s.experience }
         cur = null
-        setQueue(obj.characterActions || [])
+        setQueue(obj.characterActions || [], true)
       } else if (obj.type === "actions_updated") {
         const byId = Object.fromEntries(queue.map(a => [a.id, a]))
         for (const a of obj.endCharacterActions || []) byId[a.id] = a
@@ -2930,15 +2935,18 @@
 .bfxl-target img.pose{left:-18.75%;top:-18.75%;width:137.5%;height:137.5%}
 .bfxl-target.plant{width:96px;height:96px}
 .bfxl-target img.cell{left:-4.7%;top:-4.7%;width:109.4%;height:109.4%}
-.bfxl-target.station.drawn{width:96px;height:128px;bottom:6px}
+.bfxl-target.station.drawn{width:84px;height:112px;bottom:6px;right:36px}
 .bfxl-target.station.drawn img.cell{left:-6.25%;top:-4.7%;width:112.5%;height:109.4%}
-.bfxl-target.station.drawn .bfxl-work{top:-14%}
-.bfxl-tool.drawn{left:50%;top:26%;width:42px;height:54px;transform-origin:28% 78%}
+.bfxl-target.station.drawn .bfxl-work{top:-12%;left:22%;width:56%;height:42%}
+.bfxl-tool.drawn{z-index:1}
+.bfxl-hero{z-index:2}
+.bfxl-carry{position:absolute;left:30%;top:-26%;width:40%;height:40%;filter:drop-shadow(0 2px 2px #0006)}
+.bfxl-carry svg{left:0;top:0;width:100%;height:100%}
 .bfxl-tool.drawn img{width:100%;height:100%;position:absolute;left:0;top:0}
 .bfxl-work{position:absolute;left:25%;top:-10%;width:50%;height:50%;filter:drop-shadow(0 0 5px #fffa)}
 .bfxl-work svg{left:0;top:0;width:100%;height:100%}
 .bfxl-enh{position:absolute;left:0;right:0;top:-22%;text-align:center;font:700 16px sans-serif;text-shadow:0 1px 3px #000}
-.bfxl-fx{position:absolute;inset:0;pointer-events:none}
+.bfxl-fx{position:absolute;inset:0;pointer-events:none;z-index:3}
 .bfxl-fx>*{position:absolute;left:0;top:0;will-change:transform,opacity}
 .bfxl-pop{white-space:nowrap;font-weight:700;text-shadow:0 1px 2px #000,0 0 3px #000;display:flex;align-items:center;gap:2px}
 .bfxl-pop svg{position:static;width:22px;height:22px}
@@ -3085,9 +3093,18 @@
       hero.appendChild(body)
       const tool = document.createElement("div")
       tool.className = "bfxl-tool"
-      if (art("tool", tools[skill])) {
+      held = null
+      const geo = Assets.get("life")?.tool_geo?.[tools[skill]]
+      if (art("tool", tools[skill]) && geo) {
+        // the drawn tool, its grip (found by build-assets.py) on the front hand, turned about the grip
+        const kind = tools[skill].split("_").pop()
+        const [gx, gy, , reach] = geo
+        const w = (TOOL_REACH[kind] || 44) / reach
+        const h = w * TOOL_FRAME
         tool.classList.add("drawn")
+        Object.assign(tool.style, { left: HAND[0] - gx * w + "px", top: HAND[1] - gy * h + "px", width: w + "px", height: h + "px", transformOrigin: `${gx * 100}% ${gy * 100}%` })
         tool.appendChild(img("tool/" + tools[skill]))
+        held = { kind, geo }
       } else if (tools[skill]) tool.appendChild(svgUse("items", tools[skill]))
       hero.appendChild(tool)
       // target: the cow / tree / field, or the skill's station with the item on it
@@ -3128,6 +3145,26 @@
         }
       }
       showEnh()
+      if (walk.action !== cur.id) {
+        walk.action = cur.id
+        walk.x = -60
+        walk.moves = [{ to: workX(), work: true }]
+      } else walk.moves = walk.moves.map(m => (m.work ? { ...m, to: workX() } : m))
+    }
+    // where the hero stands to work: the tool's reach short of the target's front
+    function workX() {
+      const target = el?.querySelector(".bfxl-target")
+      if (!target || !cur) return 62
+      const kind = SKILL[skillOf(cur.actionHrid)][2]
+      if (kind === "alchemy" || kind === "enhancing") return 70 // casts from a step away
+      const reach = held ? TOOL_REACH[held.kind] || 44 : 30
+      const front = target.offsetLeft + target.offsetWidth * (kind === "gather" ? 0.2 : 0.1)
+      return Math.max(4, Math.min(150, front - HAND[0] - reach * 0.45))
+    }
+    // carries the product (icon over the head) to the left edge, drops it, walks back
+    function carryOut(item) {
+      const back = workX()
+      walk.moves.push({ to: 6, carry: item, speed: 190 }, { to: back, work: true, speed: 190 })
     }
     function img(path, cls) {
       const im = document.createElement("img")
@@ -3161,6 +3198,20 @@
       t.style.color = enhColor(enhLevel)
     }
 
+    function setCarry(item) {
+      const hero = el.querySelector(".bfxl-hero")
+      hero?.querySelector(".bfxl-carry")?.remove()
+      if (!item || !hero) return
+      const c = document.createElement("div")
+      c.className = "bfxl-carry"
+      c.appendChild(svgUse("items", item))
+      hero.appendChild(c)
+    }
+    function dropCarry() {
+      const c = el.querySelector(".bfxl-carry")
+      if (!c) return
+      c.animate([{ transform: "translateY(0) scale(1)", opacity: 1 }, { transform: "translateY(40px) scale(.6)", opacity: 0 }], { duration: 350, easing: "ease-in" }).onfinish = () => c.remove()
+    }
     // ----- motion: the tool swings N times per action, the target reacts on each hit -----
     function pose(style, f) {
       const ease = x => x * x * (3 - 2 * x)
@@ -3175,6 +3226,68 @@
       return [12 * Math.sin(2 * Math.PI * f), 3 * Math.sin(2 * Math.PI * f), 0] // squeeze
     }
     const HIT = { chop: 0.72, stir: 0.5, stitch: 0.5, pour: 0.5, squeeze: 0.5 }
+    // drawn tools: the front hand on the 96px hero box (as the battle stage's held weapons), how far each kind
+    // reaches from the grip (px), the frame's height / width (432x560 cells), and one motion per kind
+    const HAND = [76, 63]
+    const TOOL_REACH = { pot: 34, alembic: 36, needle: 34, chisel: 38, brush: 40 }
+    const TOOL_FRAME = 560 / 432
+    // seconds per stroke, the moment it lands, and the target's reaction (a style of the icon motions)
+    const TOOL_MOVE = {
+      hatchet: [1.7, 0.68, "chop"],
+      hammer: [1.5, 0.68, "chop"],
+      brush: [0.9, 0.5, "squeeze"],
+      shears: [0.9, 0.5, "squeeze"],
+      chisel: [0.7, 0.85, "chop"],
+      needle: [0.9, 0.75, "stitch"],
+      spatula: [1.4, 0.45, "stir"],
+      pot: [2.6, 0.5, "pour"],
+      alembic: [1.6, 0.5, "pour"],
+      enhancer: [1.8, 0.68, "chop"],
+    }
+    // -> [direction the tool points (deg, 0 = toward the target, -90 = up) or null, dx, dy, extra turn (deg)]
+    function toolPose(kind, f) {
+      const ease = x => x * x * (3 - 2 * x)
+      const seg = (a, b) => Math.max(0, Math.min(1, (f - a) / (b - a)))
+      const wave = Math.sin(2 * Math.PI * f)
+      switch (kind) {
+        case "hatchet":
+        case "hammer": {
+          // raised back over the shoulder, then swung down onto the tree / anvil
+          const hitAt = kind === "hammer" ? 30 : 15
+          if (f < 0.55) return [-70 - 70 * ease(seg(0, 0.55)), 0, -3 * ease(seg(0, 0.55)), 0]
+          if (f < 0.68) return [-140 + (140 + hitAt) * seg(0.55, 0.68), 4 * seg(0.55, 0.68), 0, 0]
+          return [hitAt - (hitAt + 70) * ease(seg(0.68, 1)), 4 * (1 - seg(0.68, 1)), 0, 0]
+        }
+        case "brush": // long strokes along the cow's side
+          return [-10 + 6 * wave, 12 * (0.5 - 0.5 * Math.cos(2 * Math.PI * f)) - 6, 0, 0]
+        case "shears": {
+          const b = Math.sin(Math.PI * f) ** 3
+          return [-20 - 10 * b, 9 * b, -2 * b, 0]
+        }
+        case "chisel": // pulled back slowly, then a quick tap
+          if (f < 0.75) return [25, -4 * ease(seg(0, 0.75)), 0, 0]
+          if (f < 0.85) return [25, -4 + 10 * seg(0.75, 0.85), 0, 0]
+          return [25, 6 * (1 - ease(seg(0.85, 1))), 0, 0]
+        case "needle": // loops through the cloth
+          return [-30 + 40 * wave, 6 * Math.cos(2 * Math.PI * f), -9 * wave, 0]
+        case "spatula": // slides under, flips, comes back
+          if (f < 0.35) return [10, 6 * ease(seg(0, 0.35)), 0, 0]
+          if (f < 0.5) return [10 - 70 * seg(0.35, 0.5), 6, -6 * seg(0.35, 0.5), 0]
+          return [-60 + 70 * ease(seg(0.5, 1)), 6 * (1 - ease(seg(0.5, 1))), -6 * (1 - ease(seg(0.5, 1))), 0]
+        case "pot": {
+          // tilted forward to pour, held, set back upright
+          const tilt = f < 0.35 ? ease(seg(0, 0.35)) : f < 0.7 ? 1 : 1 - ease(seg(0.7, 1))
+          return [null, 2 * tilt, -4 * tilt, 55 * tilt]
+        }
+        case "alembic": // swirled
+          return [null, 0, -3 * Math.abs(wave), 18 * wave]
+        case "enhancer": // raised, then thrust at the altar
+          if (f < 0.55) return [-50 - 15 * ease(seg(0, 0.55)), -2 * ease(seg(0, 0.55)), 0, 0]
+          if (f < 0.68) return [-65 + 50 * seg(0.55, 0.68), 10 * seg(0.55, 0.68), 0, 0]
+          return [-15 - 35 * ease(seg(0.68, 1)), 10 * (1 - ease(seg(0.68, 1))), 0, 0]
+      }
+      return [null, 0, 0, 0]
+    }
     function frame() {
       raf = 0
       if (!visible() || cfg.lifeMin || !isLife(cur)) return
@@ -3182,23 +3295,64 @@
       const skill = skillOf(cur.actionHrid)
       const style = SKILL[skill][3]
       const d = dur()
-      const t = (performance.now() - cycleAt) / (d * 1000)
-      const n = Math.max(1, Math.min(6, Math.round(d / (style === "stitch" ? 0.8 : 1.7))))
+      let t = (performance.now() - cycleAt) / (d * 1000)
+      // well past the end without a completion: the guessed start or length was off, start another cycle
+      if (t > 1.6) {
+        cycleAt = performance.now()
+        t = 0
+      }
+      const move = held && TOOL_MOVE[held.kind]
+      const n = Math.max(1, Math.min(8, Math.round(d / (move ? move[0] : style === "stitch" ? 0.8 : 1.7))))
       // past the end the action is waiting for the server: hold the rest pose
       const sub = Math.min(t, 1) * n
       const f = t >= 1 ? 0.999 : sub % 1
-      const [rot, x, y] = pose(style, f)
-      const tool = el.querySelector(".bfxl-tool")
-      if (tool) tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+      const now = performance.now()
       const hero = el.querySelector(".bfxl-hero")
-      if (hero) hero.style.transform = `translateY(${-2 * Math.abs(Math.sin(Math.PI * f))}px)`
-      idlePose(performance.now())
+      const m = walk.moves[0]
+      let facing = 1
+      let walking = false
+      if (m) {
+        if (m.t0 === undefined) {
+          m.t0 = now
+          m.from = walk.x
+          m.ms = Math.max(120, (Math.abs(m.to - m.from) / (m.speed || 150)) * 1000)
+          setCarry(m.carry)
+        }
+        const k = Math.min(1, (now - m.t0) / m.ms)
+        walk.x = m.from + (m.to - m.from) * k
+        walking = true
+        if (m.to < m.from) facing = -1
+        if (k >= 1) {
+          walk.moves.shift()
+          if (m.carry) dropCarry()
+        }
+      }
+      if (hero) {
+        hero.style.left = walk.x + "px"
+        const bob = walking ? -3 * Math.abs(Math.sin((now / 1000) * Math.PI * 4)) : -2 * Math.abs(Math.sin(Math.PI * f))
+        hero.style.transform = `translateY(${bob}px) scaleX(${facing})`
+      }
+      const tool = el.querySelector(".bfxl-tool")
+      if (walking) {
+        // tool at rest while walking; no strokes land
+        if (tool) tool.style.transform = move ? `rotate(${(toolPose(held.kind, 0)[0] ?? held.geo[2]) - held.geo[2]}deg)` : ""
+        lastF = f
+      } else if (tool && move) {
+        const [dir, x, y, turn] = toolPose(held.kind, f)
+        const rot = (dir === null ? 0 : dir - held.geo[2]) + turn
+        tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+      } else if (tool) {
+        const [rot, x, y] = pose(style, f)
+        tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+      }
+      idlePose(now)
       const work = el.querySelector(".bfxl-work")
       if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
       const bar = el.querySelector(".bfxl-bar i")
       bar.style.width = Math.min(100, t * 100) + "%"
       el.querySelector(".bfxl-bar span").textContent = d.toFixed(2) + "s"
-      if (t < 1 && f >= HIT[style] && lastF < HIT[style]) hit(skill, style)
+      const hitAt = move ? move[1] : HIT[style]
+      if (!walking && t < 1 && f >= hitAt && lastF < hitAt) hit(skill, move ? move[2] : style)
       lastF = t >= 1 ? 1 : f
     }
     // where the target's middle is, in scene pixels
@@ -3209,6 +3363,10 @@
       return [(r.left - s.left + r.width / 2) / k, (r.top - s.top + r.height / 2) / k]
     }
     function hit(skill, style) {
+      if (skill === "foraging" && !walk.moves.length && Math.random() < 0.6) {
+        const base = workX()
+        walk.moves.push({ to: base - 4 - Math.random() * 18, speed: 110 }, { to: base, work: true, speed: 110 })
+      }
       const target = el.querySelector(".bfxl-target")
       const kind = SKILL[skill][2]
       if ((style === "chop" || style === "squeeze") && !posed)
@@ -3335,6 +3493,11 @@
         })
         if (rare) later(delay + i * 160, () => key === sceneKey && (banner(L("稀有掉落！", "Rare drop!")), burst(skill, cx, cy - 30, 16, true), setPose(posed?.kind === "cow" ? "startled" : "leaves", 1200)))
       })
+      // gatherers and crafters take the product away (on short actions only every third time)
+      if ((kind === "gather" || kind === "make") && gains.length && (dur() >= 2.5 || ++walk.carried % 3 === 0)) {
+        const main = gains.find(g => !MINOR.test(g.id) && !RARE.test(g.id)) || gains[0]
+        later(delay + 300, () => key === sceneKey && carryOut(main.id))
+      }
       if (posed && !shown.some(g => RARE.test(g.id))) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
       if (exp > 0) pop(`+${exp >= 100 ? fmt(exp) : +exp.toFixed(1)} ${L("经验", "XP")}`, 46, 26, 0, -24, 1300, { color: "#9fd3ff", size: 11, delay: delay + 200 })
       // a switch to another action in between clears the scene: late banners are dropped
