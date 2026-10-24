@@ -1,0 +1,50 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
+.ProgressBar_bar{position:relative;width:200px;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+</style></head><body>
+<!-- the game's header: action name + seconds per action (run-mock serves this page as mock.html) -->
+<div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm">挤奶 - 奶牛</div></div>
+ <div class="ProgressBar_bar"><div class="ProgressBar_innerBar__q" style="width:0"></div><div class="ProgressBar_text__102Yn" id="pt">2.50s</div></div></div></div>
+<div style="padding:20px">生活技能小窗测试（技能页面）</div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799'}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const inv=(item,count,enh=0)=>({itemLocationHrid:'/item_locations/inventory',itemHrid:'/items/'+item,enhancementLevel:enh,count});
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+const sk=(s,level,experience)=>({skillHrid:'/skills/'+s,level,experience});
+const act=(id,hrid,count,extra={})=>({id,actionHrid:hrid,currentCount:count,hasMaxCount:false,maxCount:0,ordinal:0,isDone:false,primaryItemHash:'',enhancingProtectionMinLevel:0,updatedAt:new Date(T0+(extra.at||0)).toISOString(),...extra});
+let T0=Date.now();
+const done=(a,items,skills)=>feed({type:'action_completed',endCharacterAction:a,endCharacterItems:items,endCharacterSkills:skills});
+const header=(name,s)=>{document.getElementById('nm').textContent=name;document.getElementById('pt').textContent=s};
+async function start(){
+ T0=Date.now();
+ feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},
+  characterActions:[act(1,'/actions/milking/cow',0)],
+  characterSkills:[sk('milking',9,900),sk('woodcutting',20,5000),sk('cheesesmithing',15,3000),sk('enhancing',30,9000),sk('alchemy',10,800)],
+  characterItems:[inv('milk',10),inv('cheese',30),inv('cheese_hatchet',3,1),inv('coin',100000),inv('egg',50),inv('log',5),
+   slot('milking_tool','verdant_brush'),slot('woodcutting_tool','azure_hatchet'),slot('cheesesmithing_tool','verdant_hammer'),slot('enhancing_tool','cheese_enhancer'),slot('alchemy_tool','cheese_alembic')]});
+ await sleep(2500); done(act(1,'/actions/milking/cow',1,{at:2500}),[inv('milk',12)],[sk('milking',9,912)]);
+ await sleep(2500); done(act(1,'/actions/milking/cow',2,{at:5000}),[inv('milk',14),inv('milking_essence',1)],[sk('milking',10,1001)]);
+ await sleep(400);
+ header('奶酪锻造 - 奶酪剑','2.00s');
+ feed({type:'actions_updated',endCharacterActions:[act(1,'/actions/milking/cow',2,{isDone:true}),act(2,'/actions/cheesesmithing/cheese_sword',0,{hasMaxCount:true,maxCount:2})]});
+ await sleep(2000); done(act(2,'/actions/cheesesmithing/cheese_sword',1,{hasMaxCount:true,maxCount:2,at:7400}),[inv('cheese',20),inv('cheese_sword',1)],[sk('cheesesmithing',15,3030)]);
+ await sleep(500);
+ header('强化 - 奶酪斧','2.00s');
+ feed({type:'actions_updated',endCharacterActions:[act(2,'/actions/cheesesmithing/cheese_sword',1,{isDone:true}),act(3,'/actions/enhancing/enhance',0,{primaryItemHash:'1::/item_locations/inventory::/items/cheese_hatchet::1',enhancingProtectionMinLevel:2})]});
+ await sleep(2000); done(act(3,'/actions/enhancing/enhance',1,{primaryItemHash:'1::/item_locations/inventory::/items/cheese_hatchet::2',enhancingProtectionMinLevel:2,at:9900}),[inv('cheese_hatchet',2,1),inv('cheese_hatchet',1,2),inv('coin',99990),inv('enhancing_essence',1)],[sk('enhancing',30,9040)]);
+ await sleep(2000); done(act(3,'/actions/enhancing/enhance',2,{primaryItemHash:'1::/item_locations/inventory::/items/cheese_hatchet::1',enhancingProtectionMinLevel:2,at:11900}),[inv('cheese_hatchet',0,2),inv('cheese_hatchet',3,1),inv('coin',99980)],[sk('enhancing',30,9060)]);
+ await sleep(400);
+ header('伐木 - 桦树','2.00s');
+ feed({type:'actions_updated',endCharacterActions:[act(3,'/actions/enhancing/enhance',2,{isDone:true}),act(4,'/actions/woodcutting/birch_tree',0)]});
+ await sleep(2000); done(act(4,'/actions/woodcutting/birch_tree',1,{at:14300}),[inv('birch_log',2),inv('small_treasure_chest',1)],[sk('woodcutting',20,5010)]);
+ await sleep(2000); done(act(4,'/actions/woodcutting/birch_tree',2,{at:16300}),[inv('birch_log',4)],[sk('woodcutting',20,5020)]);
+}
+function back(){}
+</script></body></html>

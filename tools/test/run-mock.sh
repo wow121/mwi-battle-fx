@@ -17,7 +17,7 @@ cp "$REPO/tools/test/drive.mjs" "$TMP/"
 cp "${MOCK:-$REPO/tools/test/mock.html}" "$TMP/mock.html"
 # SCRIPT=release/mwi-battle-fx.user.js tests the release copy (no lab: the run stops after the live part)
 cp "${SCRIPT:-$REPO/mwi-battle-fx.user.js}" "$TMP/mwi-battle-fx.user.js"
-cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items}.svg "$TMP/sprites/"
+cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items,actions,skills}.svg "$TMP/sprites/"
 cp -r "$REPO/assets" "$TMP/"
 tar -cf "$TMP/in.tar" -C "$TMP" mock.html drive.mjs mwi-battle-fx.user.js sprites assets
 ssh "${SSHO[@]}" "$HOST" "rmdir /s /q C:\\Users\\ruixi\\fs-mine\\bfx-test 2>nul & mkdir C:\\Users\\ruixi\\fs-mine\\bfx-test"

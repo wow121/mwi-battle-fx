@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.11.4
+// @version      0.12.0
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460 }
+  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeScale: 1 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
@@ -2592,7 +2592,7 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -2697,6 +2697,563 @@
       if (!Stage.isTestActive()) Stage.attach(slot, "guild")
     }
     return { ensure, active: () => !!slot?.isConnected }
+  })()
+
+  // ---------- 生活技能: a floating window that plays the current gathering / production / enhancing action ----------
+  // Driven by action_completed (end item counts, skills, the action itself) against the inventory from
+  // init_character_data: gains / costs are the count changes. The cycle length comes from the header's progress
+  // bar text, else from the server times of two completions. Only the game's own sprites so far (avatar + outfit,
+  // items, actions, skills); hidden while fighting or idle.
+  const Life = (() => {
+    const SVGNS = "http://www.w3.org/2000/svg"
+    const SKILL = {
+      milking: ["挤奶", "Milking", "gather", "squeeze"],
+      foraging: ["采摘", "Foraging", "gather", "chop"],
+      woodcutting: ["伐木", "Woodcutting", "gather", "chop"],
+      cheesesmithing: ["奶酪锻造", "Cheesesmithing", "make", "chop"],
+      crafting: ["制作", "Crafting", "make", "chop"],
+      tailoring: ["缝纫", "Tailoring", "make", "stitch"],
+      cooking: ["烹饪", "Cooking", "make", "stir"],
+      brewing: ["冲泡", "Brewing", "make", "stir"],
+      alchemy: ["炼金", "Alchemy", "alchemy", "pour"],
+      enhancing: ["强化", "Enhancing", "enhancing", "chop"],
+    }
+    // particles per skill: colours + shape
+    const FX = {
+      milking: [["#ffffff", "#f3ecd6"], "drop"],
+      foraging: [["#7bd35a", "#b6e36b", "#e9d36b"], "leaf"],
+      woodcutting: [["#c48a4a", "#8a5a2b", "#e0b47a"], "chip"],
+      cheesesmithing: [["#ffb347", "#ffd76a", "#fff3b0"], "spark"],
+      crafting: [["#d9a066", "#a8743f"], "chip"],
+      tailoring: [["#f6a6d0", "#9ad0ff", "#fff"], "dot"],
+      cooking: [["#ffffffb0", "#ffe9c9a0"], "puff"],
+      brewing: [["#9be8ff", "#c6a0ff", "#fff"], "bubble"],
+      alchemy: [["#d07bff", "#ffe36b", "#7ff0ff"], "spark"],
+      enhancing: [["#7fd0ff", "#ffffff", "#ffe36b"], "spark"],
+    }
+    const BG = {
+      gather: "linear-gradient(#8fd0ff 0%,#cfeeff 58%,#7cc36a 58%,#5a9e4a 100%)",
+      woodcutting: "linear-gradient(#a9d8b0 0%,#dff2d8 58%,#5e9d4c 58%,#3f7a37 100%)",
+      make: "linear-gradient(#5b4636 0%,#7a5d45 60%,#4a3628 60%,#3a2a1f 100%)",
+      alchemy: "linear-gradient(#2a1f45 0%,#463370 62%,#2b2140 62%,#1d1630 100%)",
+      enhancing: "linear-gradient(#1f2a44 0%,#33456e 62%,#262c3e 62%,#191d2a 100%)",
+    }
+    // milking / woodcutting / foraging-area actions drawn in the game's actions sheet; single-item foraging uses the item
+    const ACTION_ART = new Set("azure_cow burble_cow cow crimson_cow holy_cow unicow verdant_cow arcane_tree birch_tree cedar_tree ginkgo_tree purpleheart_tree redwood_tree tree asteroid_belt burble_beach farmland misty_forest olympus_mons shimmering_lake silly_cow_valley".split(" "))
+    const RARE = /treasure_chest|artisans_crate|meteorite_cache/
+    const MINOR = /essence/
+    const ENH_COLOR = [[15, "#ffd75a"], [12, "#ff5a3c"], [10, "#ffa53a"], [8, "#c07bff"], [5, "#6fb6ff"], [0, "#e8f4ff"]]
+    const enhColor = n => ENH_COLOR.find(([k]) => n >= k)[1]
+
+    const inv = {} // "<location>::<item>::<enh>" -> count
+    const tools = {} // skill -> tool item id
+    const skills = {} // skill hrid -> { level, experience }
+    let queue = [] // the character's actions, not done, by ordinal
+    let cur = null // the running one (queue[0])
+    let cycleAt = 0 // performance.now() the current cycle started
+    let measured = 0 // seconds between the last two completions (server time)
+    let lastDone = null // { id, count, at: server ms }
+    const seen = new Set() // duplicate action_completed (the server sometimes sends one twice)
+    let enhLevel = 0 // level of the item being enhanced before this attempt
+    let el = null
+    let raf = 0
+    let lastF = 0
+    let sceneKey = ""
+
+    const skillOf = hrid => (hrid ? String(hrid).split("/")[2] : null)
+    const keyOf = it => `${it.itemLocationHrid}::${it.itemHrid}::${it.enhancementLevel || 0}`
+    const hashItem = h => {
+      const p = String(h || "").split("::")
+      return p.length >= 4 ? { id: shortId(p[2]), level: +p[3] || 0 } : null
+    }
+    const isLife = a => !!a && !!SKILL[skillOf(a.actionHrid)]
+    function setItems(list, withTools = true) {
+      for (const it of list || []) {
+        inv[keyOf(it)] = it.count
+        const loc = shortId(it.itemLocationHrid) || ""
+        if (withTools && loc.endsWith("_tool")) {
+          const s = loc.replace(/_tool$/, "")
+          if (it.count > 0) tools[s] = shortId(it.itemHrid)
+          else if (tools[s] === shortId(it.itemHrid)) delete tools[s]
+        }
+      }
+    }
+    function setQueue(list) {
+      queue = list.filter(a => !a.isDone).sort((a, b) => (a.ordinal || 0) - (b.ordinal || 0))
+      const next = queue[0] || null
+      if (next?.id !== cur?.id) {
+        if (next?.actionHrid !== cur?.actionHrid) measured = 0
+        cur = next
+        enhLevel = hashItem(cur?.primaryItemHash)?.level || 0
+        cycleAt = performance.now() - domProgress() * dur() * 1000
+        lastDone = null
+      } else cur = next
+      ensure()
+    }
+
+    // ----- the game's header: the action's name, its seconds per action and how far the bar is -----
+    const headerName = () => document.querySelector('[class*="Header_actionName"]')
+    const headerScope = () => headerName()?.parentElement?.parentElement || null
+    function domSeconds() {
+      const t = headerScope()?.querySelector('[class*="ProgressBar_text"]')?.textContent || ""
+      const m = /(\d+(?:\.\d+)?)\s*s/.exec(t)
+      const v = m ? +m[1] : 0
+      return v >= 0.5 && v <= 3600 ? v : 0
+    }
+    function domProgress() {
+      const bar = headerScope()?.querySelector('[class*="ProgressBar_innerBar"]')
+      const w = bar?.parentElement?.getBoundingClientRect().width
+      return bar && w ? Math.max(0, Math.min(1, bar.getBoundingClientRect().width / w)) : 0
+    }
+    const dur = () => measured || domSeconds() || 6
+    function actionName() {
+      const t = (headerName()?.querySelector('[class*="Header_displayName"]') || headerName())?.textContent || ""
+      const clean = t.replace(/\s*\[.*$/, "").trim()
+      if (clean) return clean
+      const id = shortId(cur?.actionHrid) || ""
+      return id.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+    }
+
+    // ----- messages -----
+    function onMessage(obj) {
+      if (obj.type === "init_character_data") {
+        for (const k of Object.keys(inv)) delete inv[k]
+        for (const k of Object.keys(tools)) delete tools[k]
+        setItems(obj.characterItems)
+        for (const s of obj.characterSkills || []) skills[s.skillHrid] = { level: s.level, experience: s.experience }
+        cur = null
+        setQueue(obj.characterActions || [])
+      } else if (obj.type === "actions_updated") {
+        const byId = Object.fromEntries(queue.map(a => [a.id, a]))
+        for (const a of obj.endCharacterActions || []) byId[a.id] = a
+        setQueue(Object.values(byId))
+      } else if (obj.type === "items_updated") {
+        setItems(obj.endCharacterItems)
+      } else if (obj.type === "action_completed") {
+        onCompleted(obj)
+      }
+    }
+    function onCompleted(obj) {
+      const a = obj.endCharacterAction
+      if (!a) return
+      const key = `${a.id}|${a.currentCount}|${a.updatedAt}`
+      if (seen.has(key)) return
+      seen.add(key)
+      if (seen.size > 200) seen.delete(seen.values().next().value)
+      // item count changes, before the inventory takes the new counts
+      const gains = []
+      const costs = []
+      for (const it of obj.endCharacterItems || []) {
+        if (shortId(it.itemLocationHrid) !== "inventory") continue
+        const d = it.count - (inv[keyOf(it)] || 0)
+        const g = { id: shortId(it.itemHrid), level: it.enhancementLevel || 0, n: Math.abs(d) }
+        if (d > 0) gains.push(g)
+        else if (d < 0) costs.push(g)
+      }
+      setItems(obj.endCharacterItems)
+      const ups = []
+      let exp = 0
+      for (const s of obj.endCharacterSkills || []) {
+        const old = skills[s.skillHrid]
+        if (s.skillHrid !== "/skills/total_level" && old) {
+          exp += Math.max(0, s.experience - old.experience)
+          if (s.level > old.level) ups.push([shortId(s.skillHrid), s.level])
+        }
+        skills[s.skillHrid] = { level: s.level, experience: s.experience }
+      }
+      const i = queue.findIndex(x => x.id === a.id)
+      if (i >= 0) queue[i] = a
+      if (cur?.id === a.id) cur = a
+      if (!isLife(a)) return
+      if (cur?.id !== a.id) setQueue(queue)
+      // the cycle: server time between two completions of this action
+      const at = Date.parse(a.updatedAt)
+      if (lastDone?.id === a.id && a.currentCount === lastDone.count + 1 && at > lastDone.at) {
+        const s = (at - lastDone.at) / 1000
+        if (s >= 0.5 && s <= 3600) measured = s
+      }
+      lastDone = { id: a.id, count: a.currentCount, at }
+      cycleAt = performance.now()
+      const before = enhLevel
+      enhLevel = hashItem(a.primaryItemHash)?.level ?? enhLevel
+      if (!visible()) return
+      play({ skill: skillOf(a.actionHrid), gains, costs, exp, ups, enh: [before, enhLevel], action: a })
+    }
+
+    // ----- the window -----
+    const sheet = name => Stage.sheet(name)
+    function svgUse(sheetName, id, cls) {
+      const s = document.createElementNS(SVGNS, "svg")
+      s.setAttribute("viewBox", "0 0 100 100")
+      if (cls) s.setAttribute("class", cls)
+      const url = id && sheet(sheetName)
+      if (url) {
+        const u = document.createElementNS(SVGNS, "use")
+        u.setAttribute("href", url + "#" + id)
+        s.appendChild(u)
+      }
+      return s
+    }
+    const visible = () => !!el && el.style.display !== "none" && !document.hidden
+    function injectCss() {
+      if (document.getElementById("bfxl-css")) return
+      const st = document.createElement("style")
+      st.id = "bfxl-css"
+      st.textContent = `
+.bfxl{position:fixed;z-index:1100;width:300px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
+  box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;transform-origin:0 0;user-select:none}
+.bfxl-head{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 9px;background:#262d47;cursor:move}
+.bfxl-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.bfxl-count{opacity:.75;white-space:nowrap}
+.bfxl-head button{background:none;border:0;color:#ccd;cursor:pointer;font-size:14px;line-height:1;padding:0 3px}
+.bfxl-head button:hover{color:#fff}
+.bfxl.min .bfxl-scene,.bfxl.min .bfxl-bar{display:none}
+.bfxl-scene{position:relative;height:150px;overflow:hidden}
+.bfxl-scene svg{position:absolute;overflow:visible}
+.bfxl-hero{position:absolute;left:62px;bottom:10px;width:96px;height:96px}
+.bfxl-hero>svg{left:0;top:0;width:100%;height:100%}
+.bfxl-tool{position:absolute;left:56%;top:26%;width:50%;height:50%;transform-origin:14% 86%}
+.bfxl-tool svg{left:0;top:0;width:100%;height:100%}
+.bfxl-target{position:absolute;right:30px;bottom:12px;width:100px;height:100px;transform-origin:50% 100%}
+.bfxl-target>svg{left:0;top:0;width:100%;height:100%}
+.bfxl-target.station>svg{left:14%;top:34%;width:72%;height:72%;opacity:.85}
+.bfxl-work{position:absolute;left:25%;top:-10%;width:50%;height:50%;filter:drop-shadow(0 0 5px #fffa)}
+.bfxl-work svg{left:0;top:0;width:100%;height:100%}
+.bfxl-enh{position:absolute;left:0;right:0;top:-22%;text-align:center;font:700 16px sans-serif;text-shadow:0 1px 3px #000}
+.bfxl-fx{position:absolute;inset:0;pointer-events:none}
+.bfxl-fx>*{position:absolute;left:0;top:0;will-change:transform,opacity}
+.bfxl-pop{white-space:nowrap;font-weight:700;text-shadow:0 1px 2px #000,0 0 3px #000;display:flex;align-items:center;gap:2px}
+.bfxl-pop svg{position:static;width:22px;height:22px}
+.bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
+  text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
+.bfxl-bar{position:relative;height:14px;background:#11141f}
+.bfxl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#4f8cff,#7fd0ff)}
+.bfxl-bar span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:14px;text-shadow:0 1px 1px #000}
+`
+      document.head.appendChild(st)
+    }
+    function build() {
+      injectCss()
+      el = document.createElement("div")
+      el.className = "bfxl"
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div>`
+      document.body.appendChild(el)
+      const $ = s => el.querySelector(s)
+      $(".bfxl-x").onclick = () => {
+        cfg.life = false
+        saveCfg()
+        ensure()
+        menu()
+      }
+      $(".bfxl-min").onclick = () => {
+        cfg.lifeMin = !cfg.lifeMin
+        saveCfg()
+        ensure()
+      }
+      $(".bfxl-size").onclick = () => {
+        const sizes = [0.8, 1, 1.25, 1.5]
+        cfg.lifeScale = sizes[(sizes.indexOf(cfg.lifeScale) + 1) % sizes.length]
+        saveCfg()
+        place()
+      }
+      // drag by the title bar
+      $(".bfxl-head").addEventListener("pointerdown", e => {
+        if (e.target.closest("button")) return
+        const r = el.getBoundingClientRect()
+        const dx = e.clientX - r.left
+        const dy = e.clientY - r.top
+        const move = ev => {
+          cfg.lifePos = [ev.clientX - dx, ev.clientY - dy]
+          place()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          saveCfg()
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        e.preventDefault()
+      })
+      addEventListener("resize", place)
+    }
+    // keeps the window on screen; default spot: bottom right
+    function place() {
+      if (!el) return
+      const s = cfg.lifeScale || 1
+      el.style.transform = `scale(${s})`
+      const w = 300 * s
+      const h = el.offsetHeight * s
+      const [x, y] = cfg.lifePos || [innerWidth - w - 16, innerHeight - h - 16]
+      el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
+      el.style.top = Math.max(0, Math.min(innerHeight - Math.min(h, 40), y)) + "px"
+    }
+    function ensure() {
+      const want = cfg.life && isLife(cur) && document.body
+      if (!want) {
+        if (el) el.style.display = "none"
+        cancelAnimationFrame(raf)
+        raf = 0
+        return
+      }
+      if (!el) build()
+      el.style.display = ""
+      el.classList.toggle("min", !!cfg.lifeMin)
+      setScene()
+      place()
+      if (!raf && !cfg.lifeMin) raf = requestAnimationFrame(frame)
+    }
+    // the static parts: background, hero, the thing being worked on; rebuilt when any of them changes
+    function setScene() {
+      const skill = skillOf(cur.actionHrid)
+      const [, , kind] = SKILL[skill]
+      const id = shortId(cur.actionHrid)
+      const work = hashItem(cur.primaryItemHash)?.id
+      const me = Looks.me
+      const key = [cur.id, id, work, tools[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills")].join("|")
+      el.querySelector(".bfxl-name").textContent = actionName()
+      el.querySelector(".bfxl-count").textContent = cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
+      if (key === sceneKey) return
+      sceneKey = key
+      const scene = el.querySelector(".bfxl-scene")
+      el.querySelector(".bfxl-fx").innerHTML = ""
+      scene.style.background = BG[skill] || BG[kind]
+      // hero: avatar + outfit, the skill's tool in the front hand
+      const hero = el.querySelector(".bfxl-hero")
+      hero.innerHTML = ""
+      const body = document.createElementNS(SVGNS, "svg")
+      body.setAttribute("viewBox", "0 0 100 100")
+      for (const [sh, sid] of [["avatars", me.avatar], ["avatar_outfits", me.outfit]]) {
+        if (!sid || !sheet(sh)) continue
+        const u = document.createElementNS(SVGNS, "use")
+        u.setAttribute("href", sheet(sh) + "#" + sid)
+        body.appendChild(u)
+      }
+      hero.appendChild(body)
+      const tool = document.createElement("div")
+      tool.className = "bfxl-tool"
+      if (tools[skill]) tool.appendChild(svgUse("items", tools[skill]))
+      hero.appendChild(tool)
+      // target: the cow / tree / field, or the skill's station with the item on it
+      const target = el.querySelector(".bfxl-target")
+      target.innerHTML = ""
+      target.classList.toggle("station", kind !== "gather")
+      if (kind === "gather") {
+        target.appendChild(ACTION_ART.has(id) && sheet("actions") ? svgUse("actions", id) : svgUse("items", id))
+      } else {
+        target.appendChild(svgUse("skills", skill))
+        const w = document.createElement("div")
+        w.className = "bfxl-work"
+        w.appendChild(svgUse("items", kind === "make" ? id : work))
+        target.appendChild(w)
+        if (kind === "enhancing") {
+          const t = document.createElement("div")
+          t.className = "bfxl-enh"
+          target.appendChild(t)
+        }
+      }
+      showEnh()
+    }
+    function showEnh() {
+      const t = el?.querySelector(".bfxl-enh")
+      if (!t) return
+      t.textContent = "+" + enhLevel
+      t.style.color = enhColor(enhLevel)
+    }
+
+    // ----- motion: the tool swings N times per action, the target reacts on each hit -----
+    function pose(style, f) {
+      const ease = x => x * x * (3 - 2 * x)
+      if (style === "chop") {
+        if (f < 0.6) return [-55 * ease(f / 0.6), 0, 0]
+        if (f < 0.72) return [-55 + 85 * ((f - 0.6) / 0.12), 0, 0]
+        return [30 * (1 - ease((f - 0.72) / 0.28)), 0, 0]
+      }
+      if (style === "stir") return [14 * Math.sin(2 * Math.PI * f), 7 * Math.cos(2 * Math.PI * f), 0]
+      if (style === "stitch") return [-8, 0, -12 * Math.abs(Math.sin(Math.PI * f))]
+      if (style === "pour") return [f < 0.5 ? 50 * ease(f / 0.5) : 50 * (1 - ease((f - 0.5) / 0.5)), 0, -4 * Math.sin(Math.PI * f)]
+      return [12 * Math.sin(2 * Math.PI * f), 3 * Math.sin(2 * Math.PI * f), 0] // squeeze
+    }
+    const HIT = { chop: 0.72, stir: 0.5, stitch: 0.5, pour: 0.5, squeeze: 0.5 }
+    function frame() {
+      raf = 0
+      if (!visible() || cfg.lifeMin || !isLife(cur)) return
+      raf = requestAnimationFrame(frame)
+      const skill = skillOf(cur.actionHrid)
+      const style = SKILL[skill][3]
+      const d = dur()
+      const t = (performance.now() - cycleAt) / (d * 1000)
+      const n = Math.max(1, Math.min(6, Math.round(d / (style === "stitch" ? 0.8 : 1.7))))
+      // past the end the action is waiting for the server: hold the rest pose
+      const sub = Math.min(t, 1) * n
+      const f = t >= 1 ? 0.999 : sub % 1
+      const [rot, x, y] = pose(style, f)
+      const tool = el.querySelector(".bfxl-tool")
+      if (tool) tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+      const hero = el.querySelector(".bfxl-hero")
+      if (hero) hero.style.transform = `translateY(${-2 * Math.abs(Math.sin(Math.PI * f))}px)`
+      const work = el.querySelector(".bfxl-work")
+      if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
+      const bar = el.querySelector(".bfxl-bar i")
+      bar.style.width = Math.min(100, t * 100) + "%"
+      el.querySelector(".bfxl-bar span").textContent = d.toFixed(2) + "s"
+      if (t < 1 && f >= HIT[style] && lastF < HIT[style]) hit(skill, style)
+      lastF = t >= 1 ? 1 : f
+    }
+    // where the target's middle is, in scene pixels
+    function targetAt() {
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const r = el.querySelector(".bfxl-target").getBoundingClientRect()
+      const k = cfg.lifeScale || 1
+      return [(r.left - s.left + r.width / 2) / k, (r.top - s.top + r.height / 2) / k]
+    }
+    function hit(skill, style) {
+      const target = el.querySelector(".bfxl-target")
+      const kind = SKILL[skill][2]
+      if (style === "chop" || style === "squeeze")
+        target.animate(
+          skill === "woodcutting" ? [{ transform: "rotate(0)" }, { transform: "rotate(-4deg)" }, { transform: "rotate(2deg)" }, { transform: "rotate(0)" }] : [{ transform: "translateX(0)" }, { transform: "translateX(3px)" }, { transform: "translateX(-2px)" }, { transform: "translateX(0)" }],
+          { duration: 260 },
+        )
+      const [cx, cy] = targetAt()
+      burst(skill, cx - (kind === "gather" ? 30 : 10), cy + (kind === "gather" ? 0 : -20), style === "stir" || style === "pour" ? 3 : 5)
+    }
+    function burst(skill, x, y, count, big) {
+      const fx = el.querySelector(".bfxl-fx")
+      if (!fx || fx.childElementCount > 70) return
+      const [colors, shape] = FX[skill] || FX.enhancing
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement("i")
+        const c = colors[(Math.random() * colors.length) | 0]
+        const s = (big ? 5 : 3) + Math.random() * 4
+        const round = shape === "chip" ? "1px" : shape === "leaf" ? "60% 0" : "50%"
+        p.style.cssText = `width:${s}px;height:${shape === "drop" ? s * 1.4 : s}px;background:${shape === "bubble" ? "transparent" : c};border:${shape === "bubble" ? "1.5px solid " + c : "0"};border-radius:${round};box-shadow:${shape === "spark" ? "0 0 6px " + c : "none"}`
+        fx.appendChild(p)
+        const up = shape === "puff" || shape === "bubble"
+        const a = up ? -Math.PI / 2 + (Math.random() - 0.5) * 0.9 : -Math.PI / 2 + (Math.random() - 0.5) * 2.6
+        const v = (big ? 70 : 34) + Math.random() * 30
+        const ex = x + Math.cos(a) * v
+        const ey = y + Math.sin(a) * v + (up ? 0 : 40)
+        p.animate(
+          [
+            { transform: `translate(${x}px,${y}px) scale(1)`, opacity: 1 },
+            { transform: `translate(${(x + ex) / 2}px,${y + Math.sin(a) * v * 0.8}px) scale(${up ? 1.6 : 1}) rotate(${Math.random() * 360}deg)`, opacity: 0.9, offset: 0.45 },
+            { transform: `translate(${ex}px,${ey}px) scale(${up ? 2.2 : 0.6})`, opacity: 0 },
+          ],
+          { duration: (up ? 1100 : 650) + Math.random() * 250, easing: "ease-out" },
+        ).onfinish = () => p.remove()
+      }
+    }
+    // a floating label (item icon + text) from (x, y) drifting by (dx, dy)
+    function pop(html, x, y, dx, dy, ms, opts = {}) {
+      const fx = el.querySelector(".bfxl-fx")
+      if (!fx) return
+      const p = document.createElement("div")
+      p.className = "bfxl-pop"
+      if (opts.icon) p.appendChild(svgUse("items", opts.icon))
+      const t = document.createElement("span")
+      t.textContent = html
+      t.style.color = opts.color || "#fff"
+      t.style.fontSize = (opts.size || 13) + "px"
+      p.appendChild(t)
+      if (opts.glow) p.style.filter = `drop-shadow(0 0 6px ${opts.glow})`
+      fx.appendChild(p)
+      p.animate(
+        [
+          { transform: `translate(${x}px,${y}px) scale(${opts.from ?? 0.6})`, opacity: 0 },
+          { transform: `translate(${x}px,${y - 8}px) scale(1)`, opacity: 1, offset: 0.15 },
+          { transform: `translate(${x + dx * 0.6}px,${y + dy * 0.6}px) scale(1)`, opacity: 1, offset: 0.7 },
+          { transform: `translate(${x + dx}px,${y + dy}px) scale(0.85)`, opacity: 0 },
+        ],
+        { duration: ms, delay: opts.delay || 0, easing: "ease-out", fill: "backwards" },
+      ).onfinish = () => p.remove()
+    }
+    function banner(text, color) {
+      const fx = el.querySelector(".bfxl-fx")
+      const b = document.createElement("div")
+      b.className = "bfxl-banner"
+      b.textContent = text
+      if (color) b.style.color = color
+      fx.appendChild(b)
+      b.animate(
+        [
+          { transform: "scale(.4)", opacity: 0 },
+          { transform: "scale(1.15)", opacity: 1, offset: 0.12 },
+          { transform: "scale(1)", opacity: 1, offset: 0.25 },
+          { transform: "scale(1)", opacity: 1, offset: 0.8 },
+          { transform: "translateY(-14px)", opacity: 0 },
+        ],
+        { duration: 2200, easing: "ease-out" },
+      ).onfinish = () => b.remove()
+    }
+    // one finished action: costs go into the station, gains come out, then experience / level-ups / results
+    function play({ skill, gains, costs, exp, ups, enh, action }) {
+      setScene()
+      const key = sceneKey
+      const kind = SKILL[skill][2]
+      const [cx, cy] = targetAt()
+      const target = el.querySelector(".bfxl-target")
+      let delay = 0
+      if (kind === "make") {
+        // inputs fly from the hero into the station
+        costs.forEach((c, i) => pop("-" + fmt(c.n), 100, 60 + i * 6, cx - 120, cy - 70, 650, { icon: c.id, color: "#ffb0a0", size: 11, delay: i * 90, from: 1 }))
+        delay = 420
+        target.animate([{ transform: "scale(1)" }, { transform: "scale(1.08,0.94)" }, { transform: "scale(1)" }], { duration: 300, delay })
+      }
+      if (kind === "enhancing") {
+        const [b, a] = enh
+        showEnh()
+        if (a > b) {
+          banner(L(`强化成功 +${a}`, `Success +${a}`), enhColor(a))
+          burst("enhancing", cx, cy - 30, 18, true)
+          target.animate([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 450 })
+        } else {
+          const prot = a === b - 1 && b >= (action.enhancingProtectionMinLevel || Infinity)
+          banner(a < b ? L(`失败 +${b} → +${a}`, `Failed +${b} → +${a}`) + (prot ? L("（保护）", " (protected)") : "") : L("强化失败", "Failed"), "#ff7a6a")
+          target.animate([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(-3px)" }, { transform: "translateX(0)" }], { duration: 380 })
+        }
+      }
+      if (kind === "alchemy") {
+        const ok = gains.length > 0
+        banner(ok ? L("炼金成功", "Success") : L("炼金失败", "Failed"), ok ? "#ffe27a" : "#ff7a6a")
+        if (ok) burst("alchemy", cx, cy - 20, 14, true)
+        delay = 300
+      }
+      // gains (the enhanced item itself is shown by the +N above it, not as a gain)
+      const shown = kind === "enhancing" ? gains.filter(g => g.id !== hashItem(action.primaryItemHash)?.id) : gains
+      shown.slice(0, 5).forEach((g, i) => {
+        const rare = RARE.test(g.id)
+        const minor = MINOR.test(g.id)
+        pop("+" + fmt(g.n), cx - 16 + i * 10, cy - 30, 60 - i * 6, -70, rare ? 2400 : 1500, {
+          icon: g.id,
+          delay: delay + i * 160,
+          color: rare ? "#ffd75a" : minor ? "#8ff0e0" : "#fff",
+          size: rare ? 15 : 13,
+          glow: rare ? "#ffb300" : minor ? "#3fe0c8" : null,
+        })
+        if (rare) later(delay + i * 160, () => key === sceneKey && (banner(L("稀有掉落！", "Rare drop!")), burst(skill, cx, cy - 30, 16, true)))
+      })
+      if (exp > 0) pop(`+${exp >= 100 ? fmt(exp) : +exp.toFixed(1)} ${L("经验", "XP")}`, 46, 26, 0, -24, 1300, { color: "#9fd3ff", size: 11, delay: delay + 200 })
+      // a switch to another action in between clears the scene: late banners are dropped
+      for (const [s, lv] of ups) later(delay + 500, () => key === sceneKey && banner(`${SKILL[s] ? L(SKILL[s][0], SKILL[s][1]) : s} Lv.${lv}`))
+    }
+    // #dev-start
+    // plays a few fake completions for the current action (or a cow) without the game
+    function demo(hrid = cur?.actionHrid || "/actions/milking/cow") {
+      if (!isLife(cur) || cur.actionHrid !== hrid) setQueue([{ id: -1, actionHrid: hrid, currentCount: 0, hasMaxCount: false }])
+      const skill = skillOf(hrid)
+      cycleAt = performance.now()
+      play({ skill, gains: [{ id: shortId(hrid), n: 2 }, { id: skill + "_essence", n: 1 }], costs: [{ id: "cheese", n: 3 }], exp: 12.5, ups: [[skill, 10]], enh: [3, 4], action: cur })
+    }
+    // #dev-end
+    // #release-start
+    // const demo = null
+    // #release-end
+    setInterval(() => {
+      ensure()
+      if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
+    }, 1000)
+    return { onMessage, ensure, demo, state: () => ({ cur, queue, tools, measured, dur: dur(), inv }) }
   })()
 
   // #dev-start
@@ -3129,6 +3686,7 @@
       // GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
       // #release-end
       toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
+      toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       // #dev-start
       GM_registerMenuCommand(`角色形象：${cfg.lookMode === "outfit" ? "按服装" : "按装备"}（点击切换）`, () => {
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"
@@ -3170,9 +3728,12 @@
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
-  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated)$|party/
+  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed)$|party/
   function onCharacterMessage(obj) {
-    Looks.onMessage(obj)
+    // completions only carry inventory counts (and the tools' slots), never the visible gear
+    if (obj.type !== "action_completed") Looks.onMessage(obj)
+    Life.onMessage(obj)
+    if (obj.type === "action_completed") return
     const act = combatActionIn(obj)
     if (act) {
       where.zone = shortId(act.actionHrid)
@@ -3206,5 +3767,5 @@
   }
   for (const msg of earlyWs.splice(0)) onWsMessage(msg)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder } // #dev
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life } // #dev
 })()
