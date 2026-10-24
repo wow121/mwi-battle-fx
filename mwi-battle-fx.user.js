@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.6
+// @version      0.13.7
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3274,6 +3274,7 @@
       el.style.display = ""
       el.classList.toggle("min", !!cfg.lifeMin)
       el.classList.toggle("icon", !!cfg.lifeIcon)
+      if (cfg.lifeMin || cfg.lifeIcon) layoutDirty = true
       setScene()
       showInfo()
       fillStore()
@@ -3406,6 +3407,29 @@
       }
       showEnh()
       buildStage(kind, target)
+      relayout()
+      if (walk.action !== cur.id) {
+        walk.action = cur.id
+        walk.x = -60
+        // crafters fetch the first materials from the storage and lay them on the table
+        walk.moves = staged && kind !== "gather" ? fetchMoves(null) : [{ to: workX(), work: true }]
+        if (staged && kind !== "gather") setMats(false)
+      } else walk.moves = walk.moves.map(m => (m.work ? { ...m, to: workX() } : m))
+    }
+    // positions measured from the laid-out scene: where the table stands, where the teapot / chisel aim. Measured
+    // while the picture is hidden (window collapsed or an icon) they are all zero, so they are measured again the
+    // first time it shows; a hero standing at a wrong spot walks to the right one
+    let layoutDirty = true
+    function relayout() {
+      const scene = el.querySelector(".bfxl-scene")
+      layoutDirty = !scene.offsetWidth
+      if (layoutDirty || !cur) return
+      const target = el.querySelector(".bfxl-target")
+      const hero = el.querySelector(".bfxl-hero")
+      const store = el.querySelector(".bfxl-store")
+      const table = el.querySelector(".bfxl-table")
+      // the table: behind the hero's back at the station, just right of the storage
+      if (staged && table.style.display !== "none") table.style.left = Math.max(store.offsetLeft + store.offsetWidth - 14, workX() - table.offsetWidth + 22) + "px"
       // the teapot is lifted until its body is just over the station's table and its spout over its middle; the
       // chisel (held level) is raised until its tip is on the workbench's top, at most a little so it stays in the
       // hand (those two stations are drawn smaller for that)
@@ -3415,13 +3439,9 @@
         const r = TOOL_REACH.chisel * 0.9
         POUR = [Math.max(-10, Math.min(24, target.offsetLeft + target.offsetWidth * 0.3 - hand[0] - r)), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.36 - hand[1]))]
       }
-      if (walk.action !== cur.id) {
-        walk.action = cur.id
-        walk.x = -60
-        // crafters fetch the first materials from the storage and lay them on the table
-        walk.moves = staged && kind !== "gather" ? fetchMoves(null) : [{ to: workX(), work: true }]
-        if (staged && kind !== "gather") setMats(false)
-      } else walk.moves = walk.moves.map(m => (m.work ? { ...m, to: workX() } : m))
+      const x = workX()
+      walk.moves = walk.moves.map(m => (m.work ? { ...m, to: x } : m))
+      if (!walk.moves.length && Math.abs(walk.x - x) > 2 && walk.action === cur.id) walk.moves.push({ to: x, work: true })
     }
     // ----- storage and materials table -----
     // where things sit, as fractions of a prop's 512px cell: storage slots [x, the shelf / top they stand on]
@@ -3453,8 +3473,6 @@
       fillStore()
       if (kind === "gather") return
       table.appendChild(img("prop/" + (kind === "make" ? "table_wood" : "table_stone"), "cell"))
-      // behind the hero's back at the station, just right of the storage
-      table.style.left = Math.max(store.offsetLeft + store.offsetWidth - 14, workX() - table.offsetWidth + 22) + "px"
       // the materials move from the station onto the table
       const row = target.querySelector(".bfxl-mats")
       if (row) {
@@ -3519,10 +3537,9 @@
     function fetchMoves(product) {
       const first = materials()[0]?.[0] || null
       const table = el.querySelector(".bfxl-table")
-      const tableX = table.offsetLeft + table.offsetWidth / 2 - HAND[0] + 6
       return [
         { to: storeX(), carry: product, speed: 190, then: () => (product && bumpStore(product), first && bumpStore(first)) },
-        { to: tableX, carry: first, speed: 190, then: () => setMats(true) },
+        { to: () => table.offsetLeft + table.offsetWidth / 2 - HAND[0] + 6, carry: first, speed: 190, then: () => setMats(true) },
         { to: workX(), work: true, speed: 160 },
       ]
     }
@@ -3923,6 +3940,7 @@
       // #dev-start
       if (labState?.auto && t >= 1) labComplete({})
       // #dev-end
+      if (layoutDirty && !cfg.lifeIcon) relayout()
       if (cfg.lifeIcon) {
         el.querySelector(".bfxl-ico").style.background = `conic-gradient(#7fd0ff ${Math.min(1, t) * 360}deg,#2b3350 0)`
         return
@@ -3941,6 +3959,7 @@
         if (m.t0 === undefined) {
           m.t0 = now
           m.from = walk.x
+          if (typeof m.to === "function") m.to = m.to()
           m.ms = Math.max(120, (Math.abs(m.to - m.from) / (m.speed || 150)) * 1000)
           setCarry(m.carry)
         }
