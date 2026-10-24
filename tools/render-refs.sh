@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renders reference PNGs from the game's sprite sheets on the Windows box (headless Chrome) into <raw>/ref.
 # usage: render-refs.sh <raw_dir> <sheet/id>...     e.g. combat_monsters/gummy_bear items/frost_staff
-#   combat_monsters/<id> -> ref/<id>.png;  avatars / avatar_outfits / items -> ref/lib/{a,o,i}_<id>.png
+#   combat_monsters/<id> -> ref/<id>.png;  avatars / avatar_outfits / items / actions / skills -> ref/lib/{a,o,i,act,s}_<id>.png
 # Sprites come from the newest mwi-gamedata archive. A reference that already exists is moved to ref/_old/ first.
 set -eu
 RAW=$1
@@ -15,7 +15,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 cp "$REPO/tools/render-refs.mjs" "$TMP/"
 mkdir "$TMP/sprites"
-cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items}.svg "$TMP/sprites/"
+cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items,actions,skills}.svg "$TMP/sprites/"
 tar -cf "$TMP/in.tar" -C "$TMP" render-refs.mjs sprites
 ssh "${SSHO[@]}" "$HOST" "rmdir /s /q $WIN 2>nul & mkdir $WIN"
 scp -q "${SSHO[@]}" "$TMP/in.tar" "$HOST:C:/Users/ruixi/fs-mine/bfx-refs/"
@@ -31,6 +31,8 @@ for f in "$TMP"/out/*.png; do
     avatars) dst=lib/a_$id.png ;;
     avatar_outfits) dst=lib/o_$id.png ;;
     items) dst=lib/i_$id.png ;;
+    actions) dst=lib/act_$id.png ;;
+    skills) dst=lib/s_$id.png ;;
   esac
   [ -f "$RAW/ref/$dst" ] && [ ! -f "$RAW/ref/_old/$dst" ] && mv "$RAW/ref/$dst" "$RAW/ref/_old/$dst"
   cp "$f" "$RAW/ref/$dst"

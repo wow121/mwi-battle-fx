@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.0
+// @version      0.12.1
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2740,6 +2740,12 @@
     }
     // milking / woodcutting / foraging-area actions drawn in the game's actions sheet; single-item foraging uses the item
     const ACTION_ART = new Set("azure_cow burble_cow cow crimson_cow holy_cow unicow verdant_cow arcane_tree birch_tree cedar_tree ginkgo_tree purpleheart_tree redwood_tree tree asteroid_belt burble_beach farmland misty_forest olympus_mons shimmering_lake silly_cow_valley".split(" "))
+    const FORAGE_AREA = {"apple":"shimmering_lake","arabica_coffee_bean":"shimmering_lake","asteroid_belt":"asteroid_belt","bamboo_branch":"burble_beach","blackberry":"misty_forest","blueberry":"shimmering_lake","burble_beach":"burble_beach","cocoon":"silly_cow_valley","cotton":"farmland","dragon_fruit":"olympus_mons","egg":"farmland","excelsa_coffee_bean":"silly_cow_valley","farmland":"farmland","fieriosa_coffee_bean":"olympus_mons","flax":"shimmering_lake","liberica_coffee_bean":"burble_beach","marsberry":"olympus_mons","misty_forest":"misty_forest","mooberry":"silly_cow_valley","olympus_mons":"olympus_mons","orange":"misty_forest","peach":"silly_cow_valley","plum":"burble_beach","radiant_fiber":"asteroid_belt","robusta_coffee_bean":"misty_forest","shimmering_lake":"shimmering_lake","silly_cow_valley":"silly_cow_valley","spaceberry":"asteroid_belt","spacia_coffee_bean":"asteroid_belt","star_fruit":"asteroid_belt","strawberry":"burble_beach","sugar":"farmland","wheat":"farmland"}
+    // drawn art (assets/life, see tools/make-life-jobs.py); anything missing falls back to the game's sprites
+    const art = (kind, id) => !!id && !!Assets.get("life")?.[kind]?.includes(id)
+    const artUrl = path => Assets.url("life/" + path + ".webp")
+    const COW_POSES = ["idle", "graze", "milked", "startled", "moo", "happy"]
+    const TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
     const RARE = /treasure_chest|artisans_crate|meteorite_cache/
     const MINOR = /essence/
     const ENH_COLOR = [[15, "#ffd75a"], [12, "#ff5a3c"], [10, "#ffa53a"], [8, "#c07bff"], [5, "#6fb6ff"], [0, "#e8f4ff"]]
@@ -2759,6 +2765,7 @@
     let raf = 0
     let lastF = 0
     let sceneKey = ""
+    let posed = null // the drawn cow / tree: { kind: "cow" | "tree", imgs: { pose: img }, until, base }
 
     const skillOf = hrid => (hrid ? String(hrid).split("/")[2] : null)
     const keyOf = it => `${it.itemLocationHrid}::${it.itemHrid}::${it.enhancementLevel || 0}`
@@ -2917,6 +2924,17 @@
 .bfxl-target{position:absolute;right:30px;bottom:12px;width:100px;height:100px;transform-origin:50% 100%}
 .bfxl-target>svg{left:0;top:0;width:100%;height:100%}
 .bfxl-target.station>svg{left:14%;top:34%;width:72%;height:72%;opacity:.85}
+.bfxl-target img{position:absolute;pointer-events:none}
+.bfxl-target.cow{width:118px;height:118px;right:22px;bottom:4px}
+.bfxl-target.tree{width:136px;height:136px;right:14px;bottom:2px}
+.bfxl-target img.pose{left:-18.75%;top:-18.75%;width:137.5%;height:137.5%}
+.bfxl-target.plant{width:96px;height:96px}
+.bfxl-target img.cell{left:-4.7%;top:-4.7%;width:109.4%;height:109.4%}
+.bfxl-target.station.drawn{width:96px;height:128px;bottom:6px}
+.bfxl-target.station.drawn img.cell{left:-6.25%;top:-4.7%;width:112.5%;height:109.4%}
+.bfxl-target.station.drawn .bfxl-work{top:-14%}
+.bfxl-tool.drawn{left:50%;top:26%;width:42px;height:54px;transform-origin:28% 78%}
+.bfxl-tool.drawn img{width:100%;height:100%;position:absolute;left:0;top:0}
 .bfxl-work{position:absolute;left:25%;top:-10%;width:50%;height:50%;filter:drop-shadow(0 0 5px #fffa)}
 .bfxl-work svg{left:0;top:0;width:100%;height:100%}
 .bfxl-enh{position:absolute;left:0;right:0;top:-22%;text-align:center;font:700 16px sans-serif;text-shadow:0 1px 3px #000}
@@ -2975,16 +2993,50 @@
         addEventListener("pointerup", up)
         e.preventDefault()
       })
+      $(".bfxl-head").addEventListener("dblclick", e => {
+        if (e.target.closest("button")) return
+        cfg.lifePos = null
+        saveCfg()
+        place()
+      })
       addEventListener("resize", place)
     }
-    // keeps the window on screen; default spot: bottom right
+    // the game's layout: the skill list on the left, chat under the main panel. Found by shape, not by class
+    // hashes: the outermost box (up to the page) of a navigation link that stays a narrow column, and the
+    // biggest visible element whose class mentions chat
+    function navRight() {
+      let e = document.querySelector('[class*="NavigationBar_"]')
+      let right = 0
+      while (e && e !== document.body) {
+        const r = e.getBoundingClientRect()
+        if (r.width > 0 && r.width < 420 && r.height > innerHeight * 0.5) right = r.right
+        e = e.parentElement
+      }
+      return right
+    }
+    function chatTop() {
+      let best = null
+      for (const e of document.querySelectorAll('[class*="Chat"],[class*="chat"]')) {
+        const r = e.getBoundingClientRect()
+        if (r.width < 200 || r.height < 80 || r.top < innerHeight * 0.3) continue
+        if (!best || r.width * r.height > best.width * best.height) best = r
+      }
+      return best ? best.top : 0
+    }
+    // default spot: just above the chat, against the skill list (bottom right when neither is found)
+    function defaultPos(w, h) {
+      const left = navRight()
+      const top = chatTop()
+      return [left ? left + 8 : innerWidth - w - 16, (top || innerHeight - 8) - h - 8]
+    }
+    // keeps the window on screen; dragged spots are kept, double-clicking the title bar goes back to the default
     function place() {
       if (!el) return
       const s = cfg.lifeScale || 1
       el.style.transform = `scale(${s})`
       const w = 300 * s
       const h = el.offsetHeight * s
-      const [x, y] = cfg.lifePos || [innerWidth - w - 16, innerHeight - h - 16]
+      const [x, y] = cfg.lifePos || defaultPos(w, h)
       el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
       el.style.top = Math.max(0, Math.min(innerHeight - Math.min(h, 40), y)) + "px"
     }
@@ -3010,14 +3062,15 @@
       const id = shortId(cur.actionHrid)
       const work = hashItem(cur.primaryItemHash)?.id
       const me = Looks.me
-      const key = [cur.id, id, work, tools[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills")].join("|")
+      const key = [cur.id, id, work, tools[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
       el.querySelector(".bfxl-name").textContent = actionName()
       el.querySelector(".bfxl-count").textContent = cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
       if (key === sceneKey) return
       sceneKey = key
       const scene = el.querySelector(".bfxl-scene")
       el.querySelector(".bfxl-fx").innerHTML = ""
-      scene.style.background = BG[skill] || BG[kind]
+      const bg = kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill
+      scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
       // hero: avatar + outfit, the skill's tool in the front hand
       const hero = el.querySelector(".bfxl-hero")
       hero.innerHTML = ""
@@ -3032,16 +3085,38 @@
       hero.appendChild(body)
       const tool = document.createElement("div")
       tool.className = "bfxl-tool"
-      if (tools[skill]) tool.appendChild(svgUse("items", tools[skill]))
+      if (art("tool", tools[skill])) {
+        tool.classList.add("drawn")
+        tool.appendChild(img("tool/" + tools[skill]))
+      } else if (tools[skill]) tool.appendChild(svgUse("items", tools[skill]))
       hero.appendChild(tool)
       // target: the cow / tree / field, or the skill's station with the item on it
       const target = el.querySelector(".bfxl-target")
       target.innerHTML = ""
-      target.classList.toggle("station", kind !== "gather")
+      target.className = "bfxl-target"
+      posed = null
       if (kind === "gather") {
-        target.appendChild(ACTION_ART.has(id) && sheet("actions") ? svgUse("actions", id) : svgUse("items", id))
+        if (art("t", id)) {
+          // the cow / tree pose frames, all loaded up front and switched by visibility
+          const cow = id.endsWith("cow")
+          target.classList.add(cow ? "cow" : "tree")
+          posed = { kind: cow ? "cow" : "tree", imgs: {}, until: 0, base: "idle", next: performance.now() + 3000 }
+          for (const p of cow ? COW_POSES : TREE_POSES) {
+            const im = img(`t/${id}/${p}`, "pose")
+            im.style.visibility = p === "idle" ? "visible" : "hidden"
+            posed.imgs[p] = im
+            target.appendChild(im)
+          }
+        } else if (art("plant", id)) {
+          target.classList.add("plant")
+          target.appendChild(img("plant/" + id, "cell"))
+        } else target.appendChild(ACTION_ART.has(id) && sheet("actions") ? svgUse("actions", id) : svgUse("items", id))
       } else {
-        target.appendChild(svgUse("skills", skill))
+        target.classList.add("station")
+        if (art("station", skill)) {
+          target.classList.add("drawn")
+          target.appendChild(img("station/" + skill, "cell"))
+        } else target.appendChild(svgUse("skills", skill))
         const w = document.createElement("div")
         w.className = "bfxl-work"
         w.appendChild(svgUse("items", kind === "make" ? id : work))
@@ -3053,6 +3128,31 @@
         }
       }
       showEnh()
+    }
+    function img(path, cls) {
+      const im = document.createElement("img")
+      im.src = artUrl(path)
+      im.draggable = false
+      if (cls) im.className = cls
+      return im
+    }
+    // shows a pose of the drawn cow / tree for ms, then its idle again
+    function setPose(p, ms) {
+      if (!posed?.imgs[p]) return
+      for (const [k, im] of Object.entries(posed.imgs)) im.style.visibility = k === p ? "visible" : "hidden"
+      posed.until = performance.now() + ms
+    }
+    // idle life between hits: the cow grazes now and then, the tree sways
+    function idlePose(t) {
+      if (!posed) return
+      if (t < posed.until) return
+      if (t > posed.next) {
+        posed.next = t + 3000 + Math.random() * 3000
+        if (posed.kind === "cow") return setPose(Math.random() < 0.7 ? "graze" : "moo", 1400)
+        setPose("swayl", 500)
+        return later(500, () => setPose("swayr", 500))
+      }
+      setPose("idle", 0)
     }
     function showEnh() {
       const t = el?.querySelector(".bfxl-enh")
@@ -3092,6 +3192,7 @@
       if (tool) tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
       const hero = el.querySelector(".bfxl-hero")
       if (hero) hero.style.transform = `translateY(${-2 * Math.abs(Math.sin(Math.PI * f))}px)`
+      idlePose(performance.now())
       const work = el.querySelector(".bfxl-work")
       if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
       const bar = el.querySelector(".bfxl-bar i")
@@ -3110,11 +3211,12 @@
     function hit(skill, style) {
       const target = el.querySelector(".bfxl-target")
       const kind = SKILL[skill][2]
-      if (style === "chop" || style === "squeeze")
+      if ((style === "chop" || style === "squeeze") && !posed)
         target.animate(
           skill === "woodcutting" ? [{ transform: "rotate(0)" }, { transform: "rotate(-4deg)" }, { transform: "rotate(2deg)" }, { transform: "rotate(0)" }] : [{ transform: "translateX(0)" }, { transform: "translateX(3px)" }, { transform: "translateX(-2px)" }, { transform: "translateX(0)" }],
           { duration: 260 },
         )
+      if (posed) setPose(posed.kind === "cow" ? "milked" : "hit", posed.kind === "cow" ? 500 : 260)
       const [cx, cy] = targetAt()
       burst(skill, cx - (kind === "gather" ? 30 : 10), cy + (kind === "gather" ? 0 : -20), style === "stir" || style === "pour" ? 3 : 5)
     }
@@ -3231,8 +3333,9 @@
           size: rare ? 15 : 13,
           glow: rare ? "#ffb300" : minor ? "#3fe0c8" : null,
         })
-        if (rare) later(delay + i * 160, () => key === sceneKey && (banner(L("稀有掉落！", "Rare drop!")), burst(skill, cx, cy - 30, 16, true)))
+        if (rare) later(delay + i * 160, () => key === sceneKey && (banner(L("稀有掉落！", "Rare drop!")), burst(skill, cx, cy - 30, 16, true), setPose(posed?.kind === "cow" ? "startled" : "leaves", 1200)))
       })
+      if (posed && !shown.some(g => RARE.test(g.id))) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
       if (exp > 0) pop(`+${exp >= 100 ? fmt(exp) : +exp.toFixed(1)} ${L("经验", "XP")}`, 46, 26, 0, -24, 1300, { color: "#9fd3ff", size: 11, delay: delay + 200 })
       // a switch to another action in between clears the scene: late banners are dropped
       for (const [s, lv] of ups) later(delay + 500, () => key === sceneKey && banner(`${SKILL[s] ? L(SKILL[s][0], SKILL[s][1]) : s} Lv.${lv}`))
@@ -3251,6 +3354,7 @@
     // #release-end
     setInterval(() => {
       ensure()
+      if (el && !cfg.lifePos) place()
       if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
     }, 1000)
     return { onMessage, ensure, demo, state: () => ({ cur, queue, tools, measured, dur: dur(), inv }) }
@@ -3607,11 +3711,11 @@
   const Recorder = (() => {
     let rec = null
     let timer = 0
-    const RE = /Battle|Combat|Labyrinth|Guild/
+    const RE = /Battle|Combat|Labyrinth|Guild|Header|Navigation|Chat|GamePage/
     // class name -> count over the elements whose classes mention battle / combat / labyrinth / guild
     function classes() {
       const out = {}
-      for (const el of document.querySelectorAll('[class*="Battle"],[class*="Combat"],[class*="Labyrinth"],[class*="Guild"]'))
+      for (const el of document.querySelectorAll('[class*="Battle"],[class*="Combat"],[class*="Labyrinth"],[class*="Guild"],[class*="Header"],[class*="Navigation"],[class*="Chat"],[class*="GamePage"]'))
         for (const c of el.classList) if (RE.test(c)) out[c] = (out[c] || 0) + 1
       return out
     }

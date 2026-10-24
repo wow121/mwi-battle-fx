@@ -6,6 +6,10 @@ usage: <raw_dir>/venv/bin/python build-assets.py <raw_dir> <repo_dir>   (needs P
   bg_<loc>[__tier].png   -> assets/bg/<loc>[__tier].webp
   fx_<effect>.png        -> assets/fx/<effect>.webp          (4x2 animation frames on black, drawn additively)
   d_<a|o|i>_<id>.png     -> assets/doll/<id>.webp + doll/index.json   (paper-doll layer drawn on the mannequin)
+  lb_<scene>.png         -> assets/life/bg/<scene>.webp               (skilling window backgrounds)
+  lt_<cow|tree>.png      -> assets/life/t/<id>/<pose>.webp            (3x2 pose sheet, keyed, LIFE_POSES)
+  lg_<group>.png         -> assets/life/<dir>/<id>.webp               (one thing per cell, cells listed in
+                                                                       <raw_dir>/life-groups.json by make-life-jobs.py)
 tools/flip.txt lists monster poses the generator drew facing the wrong way; they are mirrored.
 Each pose frame is its 512px cell plus a MARGIN on every side, so weapons and swings that cross the
 cell edge survive; pieces of neighbouring poses are dropped by assigning connected blobs to cells.
@@ -84,12 +88,23 @@ def dilate(m, r):
     return out
 
 
-def cut_sheet(src, outdir, key, flip=frozenset()):
+def cut_sheet(src, outdir, key, flip=frozenset(), poses=POSES):
     os.makedirs(outdir, exist_ok=True)
     marker = os.path.join(outdir, ".flipped")
     done = open(marker).read() if os.path.exists(marker) else ""
-    if fresh(os.path.join(outdir, POSES[-1] + ".webp"), src) and done == ",".join(sorted(flip)):
+    if fresh(os.path.join(outdir, poses[-1] + ".webp"), src) and done == ",".join(sorted(flip)):
         return
+    outs = [os.path.join(outdir, p + ".webp") for p in poses]
+    cut_cells(src, key, None, outs, MARGIN, OUT, {i for i, p in enumerate(poses) if p in flip})
+    if flip:
+        open(marker, "w").write(",".join(sorted(flip)))
+    elif os.path.exists(marker):
+        os.remove(marker)
+
+
+def cut_cells(src, key, grid, outs, margin, out_w, flip=frozenset()):
+    """Keys out a sheet and writes each grid cell (plus margin) to outs[cell] (None = skip). grid = (cols, rows),
+    or None for square CELL-sized cells."""
     rgb = np.asarray(Image.open(src).convert("RGB")).astype(np.int16)
     H, W = rgb.shape[:2]
     kc = np.array(KEY_RGB[key], np.int16)
@@ -108,7 +123,8 @@ def cut_sheet(src, outdir, key, flip=frozenset()):
     S = 4
     small = (alpha[: H // S * S, : W // S * S].reshape(H // S, S, W // S, S) > 0.5).any(axis=(1, 3))
     lab, sizes = label(small)
-    cols, rows = W // CELL, H // CELL
+    cols, rows = grid or (W // CELL, H // CELL)
+    cw, ch = W // cols, H // rows
     ys, xs = np.indices(lab.shape)
     cnt = np.bincount(lab.ravel(), minlength=len(sizes))
     sx = np.bincount(lab.ravel(), xs.ravel(), minlength=len(sizes))
@@ -118,28 +134,28 @@ def cut_sheet(src, outdir, key, flip=frozenset()):
         if cnt[n] < 20:
             continue
         cx, cy = sx[n] / cnt[n] * S, sy[n] / cnt[n] * S
-        owner[n] = min(int(cy // CELL), rows - 1) * cols + min(int(cx // CELL), cols - 1)
+        owner[n] = min(int(cy // ch), rows - 1) * cols + min(int(cx // cw), cols - 1)
     rgba = np.dstack([np.clip(rgb, 0, 255), (alpha * 255)]).astype(np.uint8)
-    for cell, pose in enumerate(POSES):
+    for cell, out in enumerate(outs):
+        if not out:
+            continue
         keep = np.isin(lab, [n for n, c in owner.items() if c == cell])
         keep = dilate(keep, 1).repeat(S, axis=0).repeat(S, axis=1)
         full = np.zeros((H, W), bool)
         full[: keep.shape[0], : keep.shape[1]] = keep
-        x, y = (cell % cols) * CELL, (cell // cols) * CELL
-        frame = np.zeros((CELL + 2 * MARGIN, CELL + 2 * MARGIN, 4), np.uint8)
-        x0, y0 = max(0, x - MARGIN), max(0, y - MARGIN)
-        x1, y1 = min(W, x + CELL + MARGIN), min(H, y + CELL + MARGIN)
+        x, y = (cell % cols) * cw, (cell // cols) * ch
+        m = margin
+        frame = np.zeros((ch + 2 * m, cw + 2 * m, 4), np.uint8)
+        x0, y0 = max(0, x - m), max(0, y - m)
+        x1, y1 = min(W, x + cw + m), min(H, y + ch + m)
         part = rgba[y0:y1, x0:x1].copy()
         part[..., 3] = np.where(full[y0:y1, x0:x1], part[..., 3], 0)
-        frame[y0 - (y - MARGIN) : y1 - (y - MARGIN), x0 - (x - MARGIN) : x1 - (x - MARGIN)] = part
-        im = Image.fromarray(frame, "RGBA").resize((OUT, OUT), Image.LANCZOS)
-        if pose in flip:
+        frame[y0 - (y - m) : y1 - (y - m), x0 - (x - m) : x1 - (x - m)] = part
+        im = Image.fromarray(frame, "RGBA").resize((out_w, round(out_w * (ch + 2 * m) / (cw + 2 * m))), Image.LANCZOS)
+        if cell in flip:
             im = im.transpose(Image.FLIP_LEFT_RIGHT)
-        im.save(os.path.join(outdir, pose + ".webp"), quality=85, method=4)
-    if flip:
-        open(marker, "w").write(",".join(sorted(flip)))
-    elif os.path.exists(marker):
-        os.remove(marker)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        im.save(out, quality=85, method=4)
 
 
 
@@ -416,6 +432,13 @@ def template_mask(p):
 
 
 manifest = {"poses": POSES, "frame": {"cell": CELL, "margin": MARGIN}, "m": [], "p": [], "bg": [], "fx": []}
+# skilling window: cows and trees as pose sheets, packed sheets (plants, stations, tools) as one thing per cell
+COW_POSES = ["idle", "graze", "milked", "startled", "moo", "happy"]
+TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
+LIFE_MARGIN = 24
+_groups = os.path.join(RAW, "life-groups.json")
+GROUPS = json.load(open(_groups)) if os.path.exists(_groups) else {}
+life = {"bg": [], "t": [], "plant": [], "station": [], "tool": []}
 doll_sheets = []
 for f in sorted(os.listdir(SHEETS)):
     if not f.endswith(".png"):
@@ -444,6 +467,23 @@ for f in sorted(os.listdir(SHEETS)):
         manifest["fx"].append(name[3:])
     elif name.startswith("d_"):
         doll_sheets.append((name, src))
+    elif name.startswith("lb_"):
+        out = os.path.join(ASSETS, "life", "bg", name[3:] + ".webp")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        if not fresh(out, src):
+            im = Image.open(src).convert("RGB")
+            im.resize((960, round(im.height * 960 / im.width)), Image.LANCZOS).save(out, quality=78, method=6)
+        life["bg"].append(name[3:])
+    elif name.startswith("lt_"):
+        tid = name[3:]
+        cut_sheet(src, os.path.join(ASSETS, "life", "t", tid), keys.get(name, "green"), poses=COW_POSES if tid.endswith("cow") else TREE_POSES)
+        life["t"].append(tid)
+    elif name.startswith("lg_") and name in GROUPS:
+        g = GROUPS[name]
+        outs = [os.path.join(ASSETS, "life", g["dir"], i + ".webp") for i in g["ids"]]
+        if not all(fresh(o, src) for o in outs):
+            cut_cells(src, keys.get(name, "magenta"), tuple(g["grid"]), outs, LIFE_MARGIN, 256)
+        life[g["dir"]] += g["ids"]
 # paper-doll layers: one atlas per layer, rects in doll/index.json
 if doll_sheets:
     ipath = os.path.join(ASSETS, "doll", "index.json")
@@ -467,6 +507,7 @@ if doll_sheets:
     os.replace(ipath + ".tmp", ipath)
     open(os.path.join(REPO, "doll-report.tsv"), "w").write("\n".join(report) + "\n")
     manifest["doll"] = len(rects)
+manifest["life"] = life
 # shipped mirroring, so the userscript's gallery can show and edit absolute flips
 manifest["flips"] = {k: sorted(v) for k, v in sorted(FLIP.items())}
 json.dump(manifest, open(os.path.join(ASSETS, "manifest.json"), "w"), separators=(",", ":"))

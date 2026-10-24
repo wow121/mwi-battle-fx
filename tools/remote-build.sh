@@ -21,6 +21,7 @@ else
   find sheets -name '*.png' >"$TMP/list"
 fi
 ls jobs-*.tsv >>"$TMP/list"
+[ -f life-groups.json ] && echo life-groups.json >>"$TMP/list"
 # paper-doll rig (masks, labels, slots) for the d_* sheets
 [ -d doll ] && find doll -type f ! -name "mannequin_*" >>"$TMP/list"
 touch "$TMP/stamp"
