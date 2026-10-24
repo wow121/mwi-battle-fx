@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.8
+// @version      0.12.9
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3294,7 +3294,14 @@
         } else target.appendChild(svgUse("skills", skill))
         const w = document.createElement("div")
         w.className = "bfxl-work"
-        w.appendChild(svgUse("items", kind === "make" ? id : work))
+        // over the station: what comes out (alchemy: coins, what it decomposes into, or every possible transmute
+        // result in turn); for enhancing the item itself
+        const outs = kind === "make" ? [id] : kind === "alchemy" ? alchemyOutputs() : [work]
+        outs.forEach((o, i) => {
+          const sv = svgUse("items", o)
+          if (i) sv.style.visibility = "hidden"
+          w.appendChild(sv)
+        })
         target.appendChild(w)
         // what goes in, laid out on the table top
         const mats = materials()
@@ -3449,7 +3456,7 @@
         const pairs = list => (list || []).map(x => [shortId(x.itemHrid), x.count])
         for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9, inputs: pairs(a.inputItems), upgrade: shortId(a.upgradeItemHrid) || null }
         const items = {}
-        for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate, bulk: it.alchemyDetail?.bulkMultiplier || 1, costs: pairs(it.enhancementCosts) }
+        for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate, bulk: it.alchemyDetail?.bulkMultiplier || 1, costs: pairs(it.enhancementCosts), decompose: pairs(it.alchemyDetail?.decomposeItems), drops: pairs(it.alchemyDetail?.transmuteDropTable) }
         gd = { actions, items, enhance: h.enhancementLevelSuccessRateTable || [] }
       } catch (e) {
         if (cfg.debug) console.warn("[生活动画] initClientData", e) // #dev
@@ -3537,6 +3544,15 @@
     const TABLE_X = { cheesesmithing: [0, 0.55] }
     // [item, count] going in per action: the recipe (and the item it upgrades); for enhancing the item's costs and the
     // protection; for alchemy the item in its batch size and the catalyst
+    function alchemyOutputs() {
+      const work = hashItem(cur?.primaryItemHash)
+      const it = gameData()?.items[work?.id]
+      const how = shortId(cur?.actionHrid)
+      if (how === "coinify") return ["coin"]
+      if (how === "decompose") return it?.decompose?.length ? it.decompose.map(([d]) => d) : [work?.id]
+      if (how === "transmute") return it?.drops?.length ? it.drops.map(([d]) => d) : [work?.id]
+      return [work?.id]
+    }
     function materials() {
       const g = gameData()
       if (!g || !cur) return []
@@ -3771,8 +3787,13 @@
       idlePose(now)
       const work = el.querySelector(".bfxl-work")
       if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
+      // a transmute's possible results take turns, like a slot machine
+      if (work && work.childElementCount > 1) {
+        const k = Math.floor(performance.now() / 180) % work.childElementCount
+        ;[...work.children].forEach((c, i) => (c.style.visibility = i === k ? "visible" : "hidden"))
+      }
       // the product to come firms up over the action
-      if (work && SKILL[skill][2] === "make") work.style.opacity = 0.3 + 0.6 * Math.min(1, t)
+      if (work && (SKILL[skill][2] === "make" || SKILL[skill][2] === "alchemy")) work.style.opacity = 0.3 + 0.6 * Math.min(1, t)
       // enhancing: the item charges up in the colour of the level it is going for
       if (work && skill === "enhancing") {
         const c = enhTint(enhLevel + 1)
@@ -4316,8 +4337,14 @@
       if (kind === "alchemy") {
         const ok = o.sage || (o.alch ?? Math.random() < 0.5)
         if (o.sage) gains.push({ id: o.sage, n: 1 })
-        else if (ok) gains.push(act === "coinify" ? { id: "coin", n: 1200 } : act === "decompose" ? { id: "star_fragment", n: 4 } : { id: "sunstone", n: 1 })
-        costs.push({ id: "star_fruit", n: 1 })
+        else if (ok) {
+          const outs = alchemyOutputs()
+          const it = gameData()?.items[hashItem(cur.primaryItemHash)?.id]
+          if (act === "coinify") gains.push({ id: "coin", n: 1200 })
+          else if (act === "decompose") (it?.decompose?.length ? it.decompose : [[outs[0], 4]]).forEach(([id, n]) => gains.push({ id, n }))
+          else gains.push({ id: outs[(Math.random() * outs.length) | 0], n: 1 })
+        }
+        costs.push({ id: hashItem(cur.primaryItemHash)?.id || "star_fruit", n: 1 })
       }
       cur = { ...cur, currentCount: cur.currentCount + 1 }
       queue = [cur]
