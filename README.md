@@ -35,6 +35,8 @@ Greasy Fork 上的版本用"从网址同步"跟随 `release/mwi-battle-fx.user.j
 ## 素材生成（tools/）
 
 参考图是游戏自身的精灵图（栅格化后作为 Codex 图像生成的参考），原始姿势表不入库。
+`render-refs.sh <raw> <sheet/id>…` 在 109 的 Chrome 里渲染参考图。游戏把 `fill="none"` 写在每个 `<symbol>` 上，
+只拷子元素会让依赖继承的图形变成纯黑（issue #1），所以必须保留 symbol 自身的属性。
 
 1. `make-jobs.py <raw> base|tier` — 怪物姿势表、地点背景、难度变体的生成任务
 2. `make-looks.py <raw> <looks.json>` — 玩家形象（脚本导出的待生成清单）

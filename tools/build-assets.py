@@ -366,10 +366,22 @@ def bridge_grip(rgb, fg, man, fist):
     w, v = np.linalg.eigh(np.cov(np.stack([px - px.mean(), py - py.mean()])))
     ux, uy = v[:, 1]
     along, perp = gx * ux + gy * uy, gx * -uy + gy * ux
-    lo, hi = np.percentile(perp[near], [5, 95])
-    if hi - lo > 60:  # a broad blade or shield, not a shaft: leave it
-        return rgb, fg
     a0, a1 = along[near].min(), along[near].max()
+    # the shaft's width from slices across it: a staff head or ornament right by the hand is wide but short,
+    # so only the narrow slices count, and most of them must be narrow
+    sl = np.round(along / 8).astype(int)
+    pn, sn = perp[near], sl[near]
+    narrow, slices = [], 0
+    for s in np.unique(sn):
+        p = pn[sn == s]
+        if len(p) >= 5:
+            slices += 1
+            if np.percentile(p, 95) - np.percentile(p, 5) <= 60:
+                narrow.append(s)
+    if len(narrow) * 2 < slices:  # a broad blade or shield, not a shaft: leave it
+        return rgb, fg
+    near = near & np.isin(sl, narrow)
+    lo, hi = np.percentile(perp[near], [5, 95])
     # repaint the band under the arm, also the shaft's own edge there (it carries the arm's fringe)
     region = arm & (perp >= lo) & (perp <= hi) & (along >= a0) & (along <= a1)
     if not region.any():
