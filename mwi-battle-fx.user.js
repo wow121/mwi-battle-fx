@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.6
+// @version      0.12.7
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2774,6 +2774,10 @@
     const rareName = id => (RARE_NAMES[id] ? L(...RARE_NAMES[id]) : id.replace(/_/g, " "))
     const ENH_COLOR = [[15, "#ffd75a"], [12, "#ff5a3c"], [10, "#ffa53a"], [8, "#c07bff"], [5, "#6fb6ff"], [0, "#e8f4ff"]]
     const enhColor = n => ENH_COLOR.find(([k]) => n >= k)[1]
+    // how big the enhancing show is: 0 below +5, then +5 / +8 / +10 / +12 / +15
+    const enhStage = n => (n >= 15 ? 5 : n >= 12 ? 4 : n >= 10 ? 3 : n >= 8 ? 2 : n >= 5 ? 1 : 0)
+    // a colour for the level; from +15 a hue that keeps turning
+    const enhTint = n => (n >= 15 ? `hsl(${(performance.now() / 8) % 360},100%,65%)` : enhColor(n))
 
     const inv = {} // "<location>::<item>::<enh>" -> count
     const tools = {} // skill -> tool item id
@@ -2989,6 +2993,7 @@
 .bfxl-target.station.drawn .bfxl-work{top:-12%;left:22%;width:56%;height:42%}
 .bfxl-target.station.drawn.crafting{width:76px;height:101px}
 .bfxl-target.station.drawn.brewing{width:72px;height:96px}
+.bfxl-target.station.drawn.enhancing{width:76px;height:101px}
 .bfxl-tool.drawn{z-index:1}
 .bfxl-tool.ench5 img{filter:drop-shadow(0 0 2px #6fb6ff) drop-shadow(0 0 4px #6fb6ff)}
 .bfxl-tool.ench8 img{filter:drop-shadow(0 0 2px #c07bff) drop-shadow(0 0 5px #c07bff)}
@@ -3012,6 +3017,22 @@
 .bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
   text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
 .bfxl-big{position:absolute;left:0;top:0}
+.bfxl-rune{position:absolute;left:8%;top:-8px;width:84%;aspect-ratio:1;border-radius:50%;border:2px solid var(--enh,#7fd0ff);box-shadow:0 0 8px var(--enh,#7fd0ff),inset 0 0 8px var(--enh,#7fd0ff);background:repeating-conic-gradient(#ffffff55 0 3deg,transparent 3deg 24deg);animation:bfxl-rune 7s linear infinite;pointer-events:none}
+.st3 .bfxl-rune,.st4 .bfxl-rune{animation-duration:4s;border-width:3px}
+.st5 .bfxl-rune{animation:bfxl-rune 3s linear infinite,bfxl-hue 2s linear infinite;border-width:3px}
+.st5 .bfxl-orbit{filter:hue-rotate(0);animation-name:bfxl-orbit;animation-iteration-count:infinite}
+.st5 .bfxl-orbit i{animation:bfxl-hue 1.5s linear infinite}
+@keyframes bfxl-hue{to{filter:hue-rotate(360deg)}}
+@keyframes bfxl-rune{from{transform:scaleY(.3) rotate(0)}to{transform:scaleY(.3) rotate(360deg)}}
+.bfxl-orbit{position:absolute;left:50%;top:9%;width:0;height:0;animation:bfxl-orbit 2.4s linear infinite;pointer-events:none}
+.bfxl-orbit i{position:absolute;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:#fff;box-shadow:0 0 6px var(--enh,#7fd0ff),0 0 3px #fff}
+@keyframes bfxl-orbit{from{transform:scaleY(.4) rotate(0)}to{transform:scaleY(.4) rotate(360deg)}}
+.bfxl-beam{height:6px;transform-origin:0 50%;border-radius:3px;background:linear-gradient(90deg,#bfe8ff00,#bfe8ff 20%,#fff 60%,#7fd0ff);box-shadow:0 0 8px #7fd0ff}
+.bfxl-fu{width:44px;height:44px;background:radial-gradient(circle,#ff4a3a,#c8141c);border:2px solid #ffd75a;border-radius:4px;box-shadow:0 0 14px #ff3b30,0 0 4px #ffd75a;display:flex;align-items:center;justify-content:center}
+.bfxl-fu span{transform:rotate(-45deg);font:900 28px serif;color:#ffd75a;text-shadow:0 1px 2px #6a0000}
+.bfxl-banner.bless{color:#ffd75a;text-shadow:0 0 10px #ff3b30,0 0 4px #ff8a1a,0 2px 3px #000}
+.bfxl-num{font:900 24px sans-serif;width:60px;text-align:center}
+.bfxl-shield{width:52px;height:52px;border-radius:50%;border:2px solid #9fe0ff;background:radial-gradient(circle,#7fd0ff22 40%,#7fd0ff66 75%,transparent);box-shadow:0 0 12px #7fd0ff}
 .bfxl-wave{width:16px;height:16px;border-radius:50%;border:2px solid #9fe0ff;box-shadow:0 0 6px #7fd0ff,inset 0 0 4px #7fd0ff}
 .bfxl-big svg{position:static!important;width:100%;height:100%}
 .bfxl-meteor{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle,#fff6c0 0%,#ffb030 45%,#ff5a1a 75%);box-shadow:0 0 10px #ff7a1a,0 0 22px #ff4a00}
@@ -3271,6 +3292,14 @@
         w.appendChild(svgUse("items", kind === "make" ? id : work))
         target.appendChild(w)
         if (kind === "enhancing") {
+          // a slowly turning rune circle on the altar, sparks circling the item
+          const rune = document.createElement("div")
+          rune.className = "bfxl-rune"
+          target.insertBefore(rune, w)
+          const orbit = document.createElement("div")
+          orbit.className = "bfxl-orbit"
+          orbit.innerHTML = "<i></i><i></i><i></i>"
+          target.appendChild(orbit)
           const t = document.createElement("div")
           t.className = "bfxl-enh"
           target.appendChild(t)
@@ -3433,12 +3462,12 @@
       // enhancing has no efficiency; alchemy is levelled against the item, the rest against the action
       const req = kind === "alchemy" ? item?.level || 0 : a?.level || 0
       const eff = kind === "enhancing" ? 0 : Math.max(0, level - req) * 0.01 + (b.efficiency || 0)
-      const line1 = [`⏱ ${time.toFixed(2)}s`, `${L("速度", "Speed")} ${pctS(speed)}`]
+      const line1 = [`⏱ ${time.toFixed(2)}s`, `${L("行动速度", "Speed")} ${pctS(speed)}`]
       if (kind !== "enhancing") line1.push(`${L("效率", "Efficiency")} ${pctS(eff)}`)
       line1.push(`≈${Math.round((3600 / time) * (1 + eff))}${L("次/时", "/h")}`)
       const line2 = [`${L("经验", "XP")} ${pctS(b.wisdom || 0)}`]
       if (kind === "gather") {
-        line2.push(`${L("采集", "Gathering")} ${pctS(b.gathering || 0)}`)
+        line2.push(`${L("采集数量", "Gathering")} ${pctS(b.gathering || 0)}`)
         if (b.processing) line2.push(`${L("加工", "Processing")} ${pctS(b.processing)}`)
       }
       if (kind === "make") {
@@ -3450,7 +3479,7 @@
         const base = g.enhance[lv] ?? 0
         const ratio = (level >= item.level ? (level - item.level) * 0.0005 : -0.5 * (1 - level / item.level)) + (b.enhancing_success || 0)
         line2.unshift(`${L("成功率", "Success")} ${(Math.min(1, base * (1 + ratio)) * 100).toFixed(1)}% (+${lv}→+${lv + 1})`)
-        if (b.blessed) line2.push(`${L("祝福", "Blessed")} ${pctS(b.blessed)}`)
+        if (b.blessed) line2.push(`${L("福气", "Blessed")} ${pctS(b.blessed)}`)
         if (cur.enhancingMaxLevel) line2.push(`${L("目标", "Target")} +${cur.enhancingMaxLevel}`)
       }
       if (kind === "alchemy" && g) {
@@ -3461,7 +3490,7 @@
         const lvRatio = item && level < item.level ? -0.9 * (1 - level / item.level) : 0
         if (base) line2.unshift(`${L("成功率", "Success")} ${(Math.min(1, base * (1 + lvRatio + (b.alchemy_success || 0) + catalyst)) * 100).toFixed(1)}%`)
       }
-      line2.push(`${L("精华", "Essence")} ${pctS(b.essence_find || 0)}`, `${L("稀有", "Rare")} ${pctS(b.rare_find || 0)}`)
+      line2.push(`${L("精华发现", "Essence")} ${pctS(b.essence_find || 0)}`, `${L("稀有发现", "Rare")} ${pctS(b.rare_find || 0)}`)
       return [line1, line2]
     }
     function showInfo() {
@@ -3474,11 +3503,29 @@
         .join("")
       if (box.innerHTML !== html) box.innerHTML = html
     }
+    // the item's level over it; the altar's runes and sparks in the colour of the level it is going for, more
+    // sparks for higher levels, turning hues from +15
     function showEnh() {
       const t = el?.querySelector(".bfxl-enh")
       if (!t) return
       t.textContent = "+" + enhLevel
       t.style.color = enhColor(enhLevel)
+      const target = el.querySelector(".bfxl-target")
+      const next = enhLevel + 1
+      const st = enhStage(next)
+      target.style.setProperty("--enh", next >= 15 ? "#ff4d4d" : enhColor(next))
+      for (let i = 0; i <= 5; i++) target.classList.toggle("st" + i, i === st)
+      const orbit = el.querySelector(".bfxl-orbit")
+      const n = 3 + st
+      if (orbit && orbit.childElementCount !== n) {
+        orbit.innerHTML = ""
+        for (let i = 0; i < n; i++) {
+          const d = document.createElement("i")
+          const a = (i / n) * Math.PI * 2
+          d.style.transform = `translate(${28 * Math.cos(a)}px,${28 * Math.sin(a)}px)`
+          orbit.appendChild(d)
+        }
+      }
     }
 
     function setCarry(item) {
@@ -3644,6 +3691,14 @@
       idlePose(now)
       const work = el.querySelector(".bfxl-work")
       if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
+      // enhancing: the item charges up in the colour of the level it is going for
+      if (work && skill === "enhancing") {
+        const c = enhTint(enhLevel + 1)
+        const k = Math.min(1, t)
+        work.style.filter = `drop-shadow(0 0 ${3 + 9 * k}px ${c}) drop-shadow(0 0 ${2 + 4 * k}px #fff) brightness(${1 + 0.35 * k})`
+        const orbit = el.querySelector(".bfxl-orbit")
+        if (orbit) orbit.style.animationDuration = 2.4 - 1.6 * k + "s"
+      }
       const bar = el.querySelector(".bfxl-bar i")
       bar.style.width = Math.min(100, t * 100) + "%"
       el.querySelector(".bfxl-bar span").textContent = d.toFixed(2) + "s"
@@ -3673,7 +3728,7 @@
       const tx = (w.left - s.left + w.width / 2) / k
       const ty = (w.top - s.top + w.height / 2) / k
       for (let i = 0; i < 3; i++) {
-        const ring = fxEl("bfxl-wave")
+        const ring = fxEl("bfxl-wave", `border-color:${enhTint(enhLevel + 1)};box-shadow:0 0 6px ${enhTint(enhLevel + 1)}`)
         ring.animate(
           [
             { transform: `translate(${bx - 8}px,${by - 8}px) scale(.4)`, opacity: 0 },
@@ -3683,7 +3738,133 @@
           { duration: 620, delay: i * 120, easing: "ease-out", fill: "backwards" },
         ).onfinish = gone(ring)
       }
-      later(600, () => work.animate([{ filter: "drop-shadow(0 0 5px #fffa)" }, { filter: "drop-shadow(0 0 12px #7fd0ff) brightness(1.4)" }, { filter: "drop-shadow(0 0 5px #fffa)" }], { duration: 400 }))
+      // and a beam of light from the bell to the item
+      const len = Math.hypot(tx - bx, ty - by)
+      const bc = enhTint(enhLevel + 1)
+      const beam = fxEl("bfxl-beam", `width:${len}px;transform:translate(${bx}px,${by - 3}px) rotate(${Math.atan2(ty - by, tx - bx)}rad);background:linear-gradient(90deg,transparent,${bc} 20%,#fff 60%,${bc});box-shadow:0 0 ${6 + 2 * enhStage(enhLevel + 1)}px ${bc}`)
+      beam.animate([{ opacity: 0, clipPath: "inset(0 100% 0 0)" }, { opacity: 1, clipPath: "inset(0 0 0 0)", offset: 0.35 }, { opacity: 0, clipPath: "inset(0 0 0 60%)" }], { duration: 520, easing: "ease-out" }).onfinish = gone(beam)
+      later(450, () => burst("enhancing", tx, ty, 4))
+    }
+    // the enhanced item's middle in scene pixels
+    function itemAt() {
+      const work = el.querySelector(".bfxl-work")
+      if (!work) return targetAt()
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const w = work.getBoundingClientRect()
+      const k = cfg.lifeScale || 1
+      // kept low enough that what pops up over it stays in the window
+      return [(w.left - s.left + w.width / 2) / k, Math.max(44, (w.top - s.top + w.height / 2) / k)]
+    }
+    // the show grows with the level reached: flash, ring and sparks always; rays from +5; the window dims with a
+    // light pillar and shakes from +10; turning colours and fireworks from +15
+    function enhSuccess(b, a) {
+      const [x, y] = itemAt()
+      const st = enhStage(a)
+      const c = enhColor(a)
+      const work = el.querySelector(".bfxl-work")
+      const f = fxEl("bfxl-flash")
+      f.animate([{ transform: `translate(${x - 60}px,${y - 60}px) scale(.2)`, opacity: 1 }, { transform: `translate(${x - 60}px,${y - 60}px) scale(${1 + 0.15 * st})`, opacity: 0 }], { duration: 450, easing: "ease-out" }).onfinish = gone(f)
+      if (st >= 1) {
+        const rays = fxEl("bfxl-rays", `left:${x - 60}px;top:${y - 60}px;background:repeating-conic-gradient(${c}aa 0 10deg,transparent 10deg 30deg)`)
+        if (st >= 5) rays.style.animation = "bfxl-hue 1s linear infinite"
+        rays.animate([{ transform: "rotate(0) scale(.2)", opacity: 0 }, { transform: `rotate(40deg) scale(${0.8 + 0.1 * st})`, opacity: 1, offset: 0.2 }, { transform: "rotate(150deg) scale(1.1)", opacity: 0 }], { duration: 1200 + 150 * st }).onfinish = gone(rays)
+      }
+      const r = fxEl("bfxl-ring", `border-color:${c};box-shadow:0 0 10px ${c}`)
+      r.animate([{ transform: `translate(${x - 40}px,${y - 12}px) scale(.2)`, opacity: 1 }, { transform: `translate(${x - 40}px,${y - 12}px) scale(2.4,1.6)`, opacity: 0 }], { duration: 700, easing: "ease-out" }).onfinish = gone(r)
+      work?.animate([{ transform: "scale(1)" }, { transform: "scale(1.35) rotate(-8deg)" }, { transform: "scale(1)" }], { duration: 500, easing: "ease-out" })
+      const num = fxEl("bfxl-num", `color:${c};text-shadow:0 0 10px ${c},0 0 4px #fff,0 2px 3px #000`)
+      num.textContent = "+" + a
+      if (st >= 5) num.style.animation = "bfxl-hue 1s linear infinite"
+      num.animate([{ transform: `translate(${x - 70}px,${y - 20}px) scale(.3)`, opacity: 0 }, { transform: `translate(${x - 70}px,${y - 34}px) scale(${1.2 + 0.1 * st})`, opacity: 1, offset: 0.25 }, { transform: `translate(${x - 70}px,${y - 36}px) scale(1)`, opacity: 1, offset: 0.75 }, { transform: `translate(${x - 70}px,${y - 44}px) scale(1)`, opacity: 0 }], { duration: 1600, easing: "ease-out" }).onfinish = gone(num)
+      burst("enhancing", x, y, 10 + 4 * st, st >= 1)
+      if (st >= 2) later(250, () => burst("enhancing", x, y - 10, 6 + 2 * st, true))
+      if (st >= 5) {
+        // fireworks in every colour
+        FX.fireworks ||= [["#ff4d4d", "#ffb84d", "#fff04d", "#4dff88", "#4dc3ff", "#b84dff"], "spark"]
+        for (let i = 0; i < 5; i++) later(300 + i * 280, () => burst("fireworks", x + (Math.random() - 0.5) * 150, y - 10 + (Math.random() - 0.5) * 50, 12, true))
+      }
+      if (a >= 10) {
+        // high levels: the whole window joins in
+        const dim = fxEl("bfxl-dim")
+        dim.animate([{ opacity: 0 }, { opacity: 0.5, offset: 0.15 }, { opacity: 0.5, offset: 0.7 }, { opacity: 0 }], { duration: 2200 }).onfinish = gone(dim)
+        const pillar = fxEl("bfxl-pillar", `left:${x - 22}px;background:linear-gradient(90deg,transparent,${c}cc 30%,#fff 50%,${c}cc 70%,transparent)`)
+        pillar.animate([{ transform: "scaleY(0)", opacity: 0 }, { transform: "scaleY(1)", opacity: 1, offset: 0.15 }, { transform: "scaleY(1)", opacity: 0 }], { duration: 1800 }).onfinish = gone(pillar)
+        shake(3, 350)
+      }
+      if (a - b >= 2) return blessShow(b, a, x, y)
+      const b2 = banner(L(`强化成功 +${a}`, `Success +${a}`), c)
+      if (a >= 15) b2?.classList.add("rainbow")
+    }
+    // 福气 (blessed: two levels at once): a 福 paper diamond spins down onto the item and bursts into coins,
+    // the level ticks up twice, firecrackers go off around it
+    function blessShow(b, a, x, y) {
+      const fu = fxEl("bfxl-fu")
+      fu.innerHTML = "<span>福</span>"
+      fu.animate(
+        [
+          { transform: `translate(${x - 22}px,${y - 70}px) rotate(45deg) scale(.3) rotateY(0)`, opacity: 0 },
+          { transform: `translate(${x - 22}px,${y - 24}px) rotate(45deg) scale(1.2) rotateY(360deg)`, opacity: 1, offset: 0.35 },
+          { transform: `translate(${x - 22}px,${y - 22}px) rotate(45deg) scale(1) rotateY(360deg)`, opacity: 1, offset: 0.7 },
+          { transform: `translate(${x - 22}px,${y - 22}px) rotate(45deg) scale(1.7) rotateY(360deg)`, opacity: 0 },
+        ],
+        { duration: 1500, easing: "ease-out" },
+      ).onfinish = gone(fu)
+      // the coins
+      later(1050, () => {
+        const fx = el.querySelector(".bfxl-fx")
+        for (let i = 0; i < 18; i++) {
+          const coin = document.createElement("i")
+          coin.style.cssText = "width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff6b0,#ffd23a 45%,#c98a00);box-shadow:0 0 4px #ffcf40"
+          fx.appendChild(coin)
+          const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.8
+          const v = 40 + Math.random() * 45
+          const ex = x + Math.cos(ang) * v
+          coin.animate(
+            [
+              { transform: `translate(${x}px,${y - 30}px) scaleX(1)`, opacity: 1 },
+              { transform: `translate(${(x + ex) / 2}px,${y - 30 + Math.sin(ang) * v}px) scaleX(.2)`, opacity: 1, offset: 0.4 },
+              { transform: `translate(${ex}px,${y + 40}px) scaleX(1)`, opacity: 0 },
+            ],
+            { duration: 900 + Math.random() * 400, easing: "ease-in" },
+          ).onfinish = gone(coin)
+        }
+      })
+      // the level ticks up twice
+      ;[b + 1, a].forEach((n, i) =>
+        later(300 + i * 450, () => {
+          const num = fxEl("bfxl-num", `color:${enhColor(n)};text-shadow:0 0 8px #ff3b30,0 0 4px #ffd75a,0 2px 3px #000`)
+          num.textContent = "+" + n + (i ? "!!" : "!")
+          num.animate([{ transform: `translate(${x - 80 + i * 14}px,${y - 14}px) scale(.3)`, opacity: 0 }, { transform: `translate(${x - 80 + i * 14}px,${y - 30 - i * 6}px) scale(1.3)`, opacity: 1, offset: 0.3 }, { transform: `translate(${x - 80 + i * 14}px,${y - 38 - i * 6}px) scale(1)`, opacity: 0 }], { duration: 1100, easing: "ease-out" }).onfinish = gone(num)
+        }),
+      )
+      // firecrackers
+      FX.firecracker ||= [["#ff3b30", "#ffd75a", "#ff8a1a", "#fff"], "spark"]
+      for (let i = 0; i < 4; i++) later(200 + i * 260, () => burst("firecracker", x + (Math.random() - 0.5) * 120, y - 20 + (Math.random() - 0.5) * 40, 9, true))
+      const bn = banner(L(`福气！+${b} → +${a}`, `Blessed! +${b} → +${a}`), "#ffd75a")
+      bn?.classList.add("bless")
+    }
+    // the fall is as heavy as the level lost
+    function enhFail(b, a, prot) {
+      const [x, y] = itemAt()
+      const st = enhStage(b)
+      const work = el.querySelector(".bfxl-work")
+      if (prot) {
+        // the protection catches it: a shield flickers up around the item
+        const sh = fxEl("bfxl-shield")
+        sh.animate([{ transform: `translate(${x - 26}px,${y - 26}px) scale(.5)`, opacity: 0 }, { transform: `translate(${x - 26}px,${y - 26}px) scale(1.1)`, opacity: 1, offset: 0.2 }, { transform: `translate(${x - 26}px,${y - 26}px) scale(1)`, opacity: 0.8, offset: 0.7 }, { transform: `translate(${x - 26}px,${y - 26}px) scale(1.3)`, opacity: 0 }], { duration: 1000 }).onfinish = gone(sh)
+      }
+      const f = fxEl("bfxl-flash", "background:radial-gradient(circle,#ff6a5a 0%,#ff2a2a66 40%,transparent 70%)")
+      f.animate([{ transform: `translate(${x - 60}px,${y - 60}px) scale(.3)`, opacity: 1 }, { transform: `translate(${x - 60}px,${y - 60}px) scale(1.2)`, opacity: 0 }], { duration: 450 }).onfinish = gone(f)
+      work?.animate([0, 1, 2, 3, 4, 5, 6].map(i => ({ transform: i === 6 ? "none" : `translateX(${(i % 2 ? -1 : 1) * 7 * (1 - i / 6)}px) rotate(${(i % 2 ? 1 : -1) * 10 * (1 - i / 6)}deg)` })), { duration: 480 })
+      FX.smoke ||= [["#555a", "#777a", "#333a"], "puff"]
+      burst("smoke", x, y, 6 + 3 * st, true)
+      if (a < b) {
+        const num = fxEl("bfxl-num", "color:#ff6a5a;text-shadow:0 0 6px #f00,0 2px 3px #000")
+        num.textContent = "+" + b
+        num.animate([{ transform: `translate(${x - 30}px,${y - 46}px) scale(1.2)`, opacity: 1 }, { transform: `translate(${x - 30}px,${y + 10}px) scale(.7) rotate(18deg)`, opacity: 0 }], { duration: 900, easing: "ease-in" }).onfinish = gone(num)
+      }
+      shake(1 + st, 250 + 50 * st)
+      banner(a < b ? L(`失败 +${b} → +${a}`, `Failed +${b} → +${a}`) + (prot ? L("（保护）", " (protected)") : "") : L("强化失败", "Failed"), "#ff7a6a")
     }
     function hit(skill, style) {
       if (held?.kind === "enhancer") hornWave()
@@ -3899,15 +4080,8 @@
       if (kind === "enhancing") {
         const [b, a] = enh
         showEnh()
-        if (a > b) {
-          banner(L(`强化成功 +${a}`, `Success +${a}`), enhColor(a))
-          burst("enhancing", cx, cy - 30, 18, true)
-          target.animate([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 450 })
-        } else {
-          const prot = a === b - 1 && b >= (action.enhancingProtectionMinLevel || Infinity)
-          banner(a < b ? L(`失败 +${b} → +${a}`, `Failed +${b} → +${a}`) + (prot ? L("（保护）", " (protected)") : "") : L("强化失败", "Failed"), "#ff7a6a")
-          target.animate([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(-3px)" }, { transform: "translateX(0)" }], { duration: 380 })
-        }
+        if (a > b) enhSuccess(b, a)
+        else enhFail(b, a, a === b - 1 && b >= (action.enhancingProtectionMinLevel || Infinity))
       }
       if (kind === "alchemy") {
         const ok = gains.length > 0
@@ -3999,12 +4173,23 @@
       btn("贤者之石", () => labComplete({ sage: "philosophers_stone" }))
       btn("升级", () => labComplete({ up: true }))
       btn("强化成功", () => labComplete({ enh: 1 }))
+      btn("福气", () => labComplete({ enh: 2 }))
+      btn("物品+0", () => labSetEnh(0))
+      btn("+9", () => labSetEnh(9))
+      btn("+14", () => labSetEnh(14))
       btn("强化失败", () => labComplete({ enh: -1 }))
       btn("炼金成功", () => labComplete({ alch: true }))
       btn("炼金失败", () => labComplete({ alch: false }))
       btn("结束测试", () => labEnd())
       el.appendChild(box)
       labApply()
+    }
+    function labSetEnh(n) {
+      labState.enh = n
+      enhLevel = n
+      cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/holy_sword::${n}` }
+      queue = [cur]
+      showEnh()
     }
     function labApply() {
       const { skill, act, tier, dur: d } = labState
@@ -4038,7 +4223,7 @@
       let enh = [labState.enh, labState.enh]
       if (kind === "enhancing") {
         const ok = o.enh ? o.enh > 0 : Math.random() < 0.5
-        const after = ok ? labState.enh + 1 : labState.enh >= 8 ? labState.enh - 1 : 0
+        const after = ok ? labState.enh + (o.enh === 2 ? 2 : 1) : labState.enh >= 8 ? labState.enh - 1 : 0
         enh = [labState.enh, after]
         labState.enh = after
         cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/holy_sword::${after}` }
