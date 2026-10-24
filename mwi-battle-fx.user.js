@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.14.0
+// @version      0.14.1
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -5081,7 +5081,22 @@
       queue = [cur]
       showEnh()
     }
+    // the trials the panel started (marked .lab) are dropped, the real ones and the real labyrinth kept
+    function labStopTrials() {
+      clearInterval(labTrialTimer)
+      for (const [k, t] of Object.entries(trials)) if (t.lab) delete trials[k]
+      if (trial?.lab) {
+        trial = null
+        cur = null
+        sceneKey = ""
+      }
+      if ("realLab" in labState) {
+        labyrinth = labState.realLab
+        delete labState.realLab
+      }
+    }
     function labApply() {
+      labStopTrials()
       const { skill, act, tier, dur: d } = labState
       tools[skill] = `${tier}_${LAB_TOOL[skill]}`
       toolEnh[skill] = labState.toolLv || 0
@@ -5141,11 +5156,12 @@
     // a whole trial of the panel's skill: an attempt per cycle (75% success, 10% double), cleared after ~10
     let labTrialTimer = 0
     function labTrial(from) {
-      clearInterval(labTrialTimer)
+      labStopTrials()
       const skill = labState.skill
       const enh = skill === "enhancing"
       const ppa = 160
       const msg = { trialHrid: "/guild_skilling/" + skill, tier: 1, successRate: 0.75, efficiency: 0.4, doubleProgressChance: 0.1, progressPerAction: ppa, targetLevel: enh ? 5 : null, actionTimeMs: labState.dur * 1000, timeoutAt: new Date(Date.now() + 600e3).toISOString(), targetWorkValue: enh ? 0 : ppa * 10, currentWorkValue: 0, currentEnhLevel: 0, actionCounter: 0 }
+      if (from === "lab") labState.realLab = labyrinth
       if (from === "lab") labyrinth = { isActive: true, currentFloor: 1 + ((Math.random() * 20) | 0), pathData: [{ x: 0, y: 0 }], roomData: [[{ roomType: "/labyrinth_room_types/skilling", skillHrid: "/skills/" + skill, recommendedLevel: 80 }]] }
       else {
         // three made-up members
@@ -5155,6 +5171,7 @@
       }
       delete trials[from]
       onTrial(from, { ...msg })
+      if (trials[from]) trials[from].lab = true
       labTrialTimer = setInterval(() => {
         if (!trials[from] || trials[from].ended) return clearInterval(labTrialTimer)
         msg.actionCounter++
@@ -5166,12 +5183,7 @@
       }, labState.dur * 1000)
     }
     function labEnd() {
-      clearInterval(labTrialTimer)
-      for (const k of Object.keys(trials)) delete trials[k]
-      if (trial) {
-        trial = null
-        cur = null
-      }
+      labStopTrials()
       const s = labState.saved
       labState = null
       el?.querySelector(".bfxl-lab")?.remove()
