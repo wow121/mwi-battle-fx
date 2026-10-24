@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.0
+// @version      0.13.1
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2822,9 +2822,26 @@
     }
     // resume: the page was just loaded mid-action, so the cycle starts where the header's bar is; a newly started
     // action starts at 0 (the bar may still show the previous action, full)
+    let lastPlayAt = 0
+    let deferTimer = 0
+    let deferFrom = 0 // when the running action was first found ended / replaced
     function setQueue(list, resume = false) {
       queue = list.filter(a => !a.isDone).sort((a, b) => (a.ordinal || 0) - (b.ordinal || 0))
       const next = queue[0] || null
+      clearTimeout(deferTimer)
+      // the running skilling action ends or changes: the last completion's show plays out first, and an action that
+      // just ended stays a moment longer (its last completion can come after the message that ends it)
+      if (!resume && isLife(cur) && next?.id !== cur.id && visible()) {
+        const t = performance.now()
+        deferFrom ||= t
+        // re-checked when the time is up: a late completion in between has its own show to finish
+        const wait = Math.max(isLife(next) ? 0 : deferFrom + 1500 - t, lastPlayAt + 3200 - t)
+        if (wait > 0) {
+          deferTimer = setTimeout(() => setQueue(queue), wait)
+          return
+        }
+      }
+      deferFrom = 0
       if (next?.id !== cur?.id) {
         if (next?.actionHrid !== cur?.actionHrid) measured = 0
         cur = next
@@ -4296,6 +4313,7 @@
     }
     // one finished action: costs go into the station, gains come out, then experience / level-ups / results
     function play({ skill, gains, costs, exp, ups, enh, action }) {
+      lastPlayAt = performance.now()
       setScene()
       const key = sceneKey
       const kind = SKILL[skill][2]
