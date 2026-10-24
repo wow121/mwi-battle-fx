@@ -40,6 +40,35 @@
   const cfg = { ...DEFAULTS, ...GM_getValue("battle_fx_cfg_v1", {}) }
   const saveCfg = () => GM_setValue("battle_fx_cfg_v1", cfg)
 
+  // ---------- websocket hook (installed first) ----------
+  // read-only: wraps MessageEvent.data, never changes the message; each event handled once. It goes in before the
+  // rest of the setup so nothing that fails later can keep it out; messages that arrive before the handler at the
+  // bottom exists are queued. Other scripts replace window.WebSocket with their own wrapper (e.g. "MWI Combat
+  // Simulator 主站一键导入"), so the socket is recognised by its url, not by instanceof WebSocket.
+  let onWsMessage = null
+  const earlyWs = []
+  {
+    const seen = new WeakSet()
+    const desc = Object.getOwnPropertyDescriptor(W.MessageEvent.prototype, "data")
+    const origGet = desc.get
+    desc.get = function () {
+      const msg = origGet.call(this)
+      try {
+        if (typeof msg === "string" && msg.length < 2e7 && !seen.has(this)) {
+          const ws = this.currentTarget || this.target
+          const url = ws && typeof ws.url === "string" ? ws.url : ""
+          if (url.includes("milkywayidle")) {
+            seen.add(this)
+            if (onWsMessage) onWsMessage(msg)
+            else if (earlyWs.length < 500) earlyWs.push(msg)
+          }
+        }
+      } catch {}
+      return msg
+    }
+    Object.defineProperty(W.MessageEvent.prototype, "data", desc)
+  }
+
   // ---------- static data (game v1.20260927.0) ----------
   // short hrid -> [zh name, effect type, target type, combat style, damage type]
   const ABILITIES = {
@@ -3126,44 +3155,31 @@
       Stage.setBackground()
     }
   }
-  // read-only: wraps MessageEvent.data, never changes the message; each event handled once
-  const seen = new WeakSet()
-  const desc = Object.getOwnPropertyDescriptor(W.MessageEvent.prototype, "data")
-  const origGet = desc.get
-  desc.get = function () {
-    const msg = origGet.call(this)
-    try {
-      if (typeof msg === "string" && !seen.has(this)) {
-        seen.add(this)
-        const ws = this.currentTarget
-        if (ws instanceof W.WebSocket && ws.url.includes("milkywayidle") && msg.length < 2e7) {
-          const type = (/"type":"([a-z_]+)"/.exec(msg.slice(0, 200)) || (msg.length < 20000 && /"type":"([a-z_]+)"/.exec(msg)) || [])[1]
-          Recorder.on(type || "?", msg) // #dev
-          if (type && WANTED.test(type)) {
-            setTimeout(() => {
-              try {
-                const obj = JSON.parse(msg)
-                if (obj.type === "new_battle") onNewBattle(obj)
-                else if (obj.type === "battle_updated") onBattleUpdated(obj)
-                else if (obj.type === "new_guild_battle") onNewGuildBattle(obj)
-                else if (obj.type === "guild_battle_updated") onBattleUpdated(obj, gunits, "guild")
-                else if (obj.type === "labyrinth_updated") {
-                  // labyrinth fights are ordinary battles; only the backdrop changes
-                  where.labyrinth = !!obj.labyrinth?.isActive
-                  Stage.setBackground()
-                }
-                else onCharacterMessage(obj)
-              } catch (e) {
-                if (cfg.debug) console.warn("[战斗动画]", e) // #dev
-              }
-            }, 0)
+  // the hook itself is installed at the top of the script
+  onWsMessage = msg => {
+    const type = (/"type":"([a-z_]+)"/.exec(msg.slice(0, 200)) || (msg.length < 20000 && /"type":"([a-z_]+)"/.exec(msg)) || [])[1]
+    Recorder.on(type || "?", msg) // #dev
+    if (type && WANTED.test(type)) {
+      setTimeout(() => {
+        try {
+          const obj = JSON.parse(msg)
+          if (obj.type === "new_battle") onNewBattle(obj)
+          else if (obj.type === "battle_updated") onBattleUpdated(obj)
+          else if (obj.type === "new_guild_battle") onNewGuildBattle(obj)
+          else if (obj.type === "guild_battle_updated") onBattleUpdated(obj, gunits, "guild")
+          else if (obj.type === "labyrinth_updated") {
+            // labyrinth fights are ordinary battles; only the backdrop changes
+            where.labyrinth = !!obj.labyrinth?.isActive
+            Stage.setBackground()
           }
+          else onCharacterMessage(obj)
+        } catch (e) {
+          if (cfg.debug) console.warn("[战斗动画]", e) // #dev
         }
-      }
-    } catch {}
-    return msg
+      }, 0)
+    }
   }
-  Object.defineProperty(W.MessageEvent.prototype, "data", desc)
+  for (const msg of earlyWs.splice(0)) onWsMessage(msg)
 
   W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder } // #dev
 })()
