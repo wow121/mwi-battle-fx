@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.14.1
+// @version      0.14.2
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3687,7 +3687,8 @@
         scene.insertBefore(gate, el.querySelector(".bfxl-store"))
         tstage.gate = stageImgs(gate, "gate/gate")
       }
-      if (skill === "enhancing") {
+      // a labyrinth enhancing room counts levels (the seal stone's +N); the guild's trial is progress
+      if (skill === "enhancing" && !guild) {
         const t = document.createElement("div")
         t.className = "bfxl-enh"
         target.appendChild(t)
@@ -4600,7 +4601,8 @@
     // rings of power from the horn's bell to the item on the altar
     function hornWave() {
       const hero = el.querySelector(".bfxl-hero")
-      const work = el.querySelector(".bfxl-work")
+      // the item on the altar, or in a trial the relic / seal stone
+      const work = el.querySelector(".bfxl-work") || tstage?.project
       if (!hero || !work) return
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
       const k = curScale
@@ -5158,7 +5160,8 @@
     function labTrial(from) {
       labStopTrials()
       const skill = labState.skill
-      const enh = skill === "enhancing"
+      // only a labyrinth enhancing room goes by levels; the guild's enhancing trial is progress like the rest
+      const enh = skill === "enhancing" && from === "lab"
       const ppa = 160
       const msg = { trialHrid: "/guild_skilling/" + skill, tier: 1, successRate: 0.75, efficiency: 0.4, doubleProgressChance: 0.1, progressPerAction: ppa, targetLevel: enh ? 5 : null, actionTimeMs: labState.dur * 1000, timeoutAt: new Date(Date.now() + 600e3).toISOString(), targetWorkValue: enh ? 0 : ppa * 10, currentWorkValue: 0, currentEnhLevel: 0, actionCounter: 0 }
       if (from === "lab") labState.realLab = labyrinth
