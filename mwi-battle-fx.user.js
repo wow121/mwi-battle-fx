@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.8
+// @version      0.13.9
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2915,45 +2915,60 @@
       }
       return best
     }
+    // a guild trial and a labyrinth room can run at the same time: each keeps its own state from its own messages,
+    // and the scene shows the one whose panel is on screen (pickTrial)
+    const trials = {} // "guild" | "lab" -> { from, key, skill, title, data, at, ended, cur }
     function onTrial(from, obj) {
       let skill
       let key
       let title
+      const old = trials[from]
       if (from === "guild") {
         skill = shortId(obj.trialHrid)
         key = `guild:${obj.trialHrid}:${obj.tier}`
         title = `${L("公会试炼", "Guild trial")} · ${L(...(SKILL[skill] || [skill, skill]).slice(0, 2))} T${obj.tier}`
       } else {
         const room = labRoom()
-        skill = shortId(room?.skillHrid) || trial?.skill
-        key = `lab:${room?.key || trial?.key}`
+        skill = shortId(room?.skillHrid) || old?.skill
+        key = room ? `lab:${room.key}` : old?.key
         title = `${L("迷宫", "Labyrinth")} · ${L(...(SKILL[skill] || [skill, skill]).slice(0, 2))}${room?.recommendedLevel ? " Lv." + room.recommendedLevel : ""}`
       }
-      if (!SKILL[skill]) return
-      // a trial right after another one finished: its show plays out first
-      if (trial?.ended && trial.key !== key && performance.now() - trial.ended < 3000) return later(3000 - (performance.now() - trial.ended), () => onTrial(from, obj))
-      if (!trial || trial.key !== key) {
-        const level = (skills["/skills/" + skill]?.level || 1) + (from === "lab" ? 0 : 0)
-        trial = { from, key, skill, title, data: obj, at: performance.now(), ended: 0 }
-        const id = trialActionId(skill, level)
-        cur = { id: "trial:" + key, trial: true, actionHrid: `/actions/${skill}/${id}`, currentCount: obj.actionCounter || 0, hasMaxCount: false, primaryItemHash: SKILL[skill][2] === "gather" ? "" : `0::/item_locations/inventory::/items/${skill}_essence::${obj.currentEnhLevel || 0}` }
-        enhLevel = obj.currentEnhLevel || 0
-        measured = (obj.actionTimeMs || 0) / 1000
-        cycleAt = performance.now()
-        lastDone = null
+      if (!SKILL[skill] || !key) return
+      let t = old
+      if (t && t.key !== key) {
+        // the next tier / room: the one before is through, its show plays out first
+        if (!t.ended) trialEnd(t, true)
+        const wait = 3000 - (performance.now() - t.ended)
+        if (wait > 0) return later(wait, () => onTrial(from, obj))
+        t = null
+      }
+      if (!t) {
+        const id = trialActionId(skill, skills["/skills/" + skill]?.level || 1)
+        t = trials[from] = { from, key, skill, title, data: obj, at: performance.now(), ended: 0 }
+        t.cur = { id: "trial:" + key, trial: true, actionHrid: `/actions/${skill}/${id}`, currentCount: obj.actionCounter || 0, hasMaxCount: false, primaryItemHash: SKILL[skill][2] === "gather" ? "" : `0::/item_locations/inventory::/items/${skill}_essence::${obj.currentEnhLevel || 0}` }
         ensure()
-        trialFinish(obj)
+        trialFinish(t, obj)
         return
       }
-      const prev = trial.data
-      trial.data = obj
-      trial.at = performance.now()
-      measured = (obj.actionTimeMs || 0) / 1000 || measured
+      const prev = t.data
+      t.data = obj
+      t.at = performance.now()
       if ((obj.actionCounter || 0) <= (prev.actionCounter || 0)) return
-      cur = { ...cur, currentCount: obj.actionCounter }
-      cycleAt = performance.now()
-      if (visible() && !cfg.lifeIcon) playTrial(prev, obj)
-      trialFinish(obj)
+      t.cur = { ...t.cur, currentCount: obj.actionCounter }
+      if (t === trial) {
+        cur = t.cur
+        measured = (obj.actionTimeMs || 0) / 1000 || measured
+        cycleAt = performance.now()
+        if (visible() && !cfg.lifeIcon) playTrial(prev, obj)
+        else enhLevel = obj.currentEnhLevel || 0
+      }
+      trialFinish(t, obj)
+    }
+    // the trial to show: the one whose panel is on screen (the test panel's in the window)
+    function pickTrial() {
+      for (const from of ["lab", "guild"]) if (trials[from] && trialHost(trials[from])) return trials[from]
+      if (DEV && labState) return trials.lab || trials.guild || null
+      return null
     }
     // one attempt: progress gained (doubled), failed, or for enhancing the level gone up / down
     function playTrial(prev, obj) {
@@ -2965,7 +2980,7 @@
         const b = prev.currentEnhLevel || 0
         const a = obj.currentEnhLevel || 0
         enhLevel = a
-        cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/${skill}_essence::${a}` }
+        cur = trial.cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/${skill}_essence::${a}` }
         showEnh()
         if (a > b) enhSuccess(b, a)
         else enhFail(b, a, false)
@@ -2984,17 +2999,17 @@
       }
     }
     // the trial is through: work done, or the target level reached
-    function trialFinish(obj) {
-      if (!trial || trial.ended) return
+    function trialFinish(t, obj) {
+      if (!t || t.ended) return
       const done = obj.targetLevel !== null && obj.targetLevel !== undefined ? (obj.currentEnhLevel || 0) >= obj.targetLevel : obj.targetWorkValue > 0 && obj.currentWorkValue >= obj.targetWorkValue
-      if (done) trialEnd(true)
+      if (done) trialEnd(t, true)
     }
-    function trialEnd(ok, why) {
-      if (!trial || trial.ended) return
-      trial.ended = performance.now()
-      if (visible() && !cfg.lifeIcon) {
+    function trialEnd(t, ok, why) {
+      if (!t || t.ended) return
+      t.ended = performance.now()
+      if (t === trial && visible() && !cfg.lifeIcon) {
         const [cx, cy] = targetAt()
-        const b = banner(ok ? (trial.from === "guild" ? L("试炼完成！", "Trial cleared!") : L("房间通关！", "Room cleared!")) : why || L("试炼结束", "Trial over"), ok ? "#ffd75a" : "#ff7a6a")
+        const b = banner(ok ? (t.from === "guild" ? L("试炼完成！", "Trial cleared!") : L("房间通关！", "Room cleared!")) : why || L("试炼结束", "Trial over"), ok ? "#ffd75a" : "#ff7a6a")
         if (ok) {
           b?.classList.add("bless")
           burst("enhancing", cx, cy - 20, 24, true)
@@ -3002,42 +3017,41 @@
           for (let i = 0; i < 3; i++) later(250 + i * 300, () => burst("fireworks", cx + (Math.random() - 0.5) * 140, cy - 20, 12, true))
         }
       }
-      const key = trial.key
       later(3200, () => {
-        if (trial?.key !== key || !trial.ended) return
-        trial = null
-        cur = null
-        sceneKey = ""
-        setQueue(queue)
+        if (trials[t.from] === t) delete trials[t.from]
         ensure()
       })
     }
     // the labyrinth moved on: the character left the room (cleared above, or failed / gave up)
     function trialCheckRoom() {
-      if (trial?.from !== "lab" || trial.ended) return
+      const t = trials.lab
+      if (!t || t.ended) return
       const room = labRoom()
-      if (!labyrinth?.isActive || !room || `lab:${room.key}` !== trial.key || room.roomType !== "/labyrinth_room_types/skilling") trialEnd(false, L("离开房间", "Left the room"))
+      if (!labyrinth?.isActive || !room || `lab:${room.key}` !== t.key || room.roomType !== "/labyrinth_room_types/skilling") trialEnd(t, false, L("离开房间", "Left the room"))
     }
     // the guild's trial state: this skill's party done (or the trials closed)
     function trialCheckGuild(obj) {
-      if (trial?.from !== "guild" || trial.ended) return
+      const t = trials.guild
+      if (!t || t.ended) return
       let data
       try {
         data = JSON.parse(obj.guild?.currentTrialsData || "{}")
       } catch {
         return
       }
-      const party = data?.skilling?.parties?.["/guild_skilling/" + trial.skill]
-      if (party?.done || (data?.skilling && data.skilling.status !== "in_progress")) trialEnd(!!party?.done && (party.highestTier || 0) >= (trial.data.tier || 1), L("试炼结束", "Trial over"))
+      const party = data?.skilling?.parties?.["/guild_skilling/" + t.skill]
+      if (party?.done || (data?.skilling && data.skilling.status !== "in_progress")) trialEnd(t, !!party?.done && (party.highestTier || 0) >= (t.data.tier || 1), L("试炼结束", "Trial over"))
     }
     // a trial that went quiet (timed out, page asleep): wound up
     function trialTick() {
-      if (!trial || trial.ended) return
-      const d = trial.data
-      const quiet = performance.now() - trial.at > Math.max(15000, 4 * (d.actionTimeMs || 0))
-      const timedOut = d.timeoutAt && Date.now() > Date.parse(d.timeoutAt)
-      if (timedOut) trialEnd(false, L("时间到", "Time's up"))
-      else if (quiet) trialEnd(false)
+      for (const t of Object.values(trials)) {
+        if (t.ended) continue
+        const d = t.data
+        const quiet = performance.now() - t.at > Math.max(15000, 4 * (d.actionTimeMs || 0))
+        const timedOut = d.timeoutAt && Date.now() > Date.parse(d.timeoutAt)
+        if (timedOut) trialEnd(t, false, L("时间到", "Time's up"))
+        else if (quiet) trialEnd(t, false)
+      }
     }
     function trialLines() {
       const d = trial.data
@@ -3506,22 +3520,13 @@
     // from the test panel excepted)
     let docked = null
     let trialBtn = null
-    function trialHost() {
-      if (trial?.from === "guild") {
-        const tab = document.querySelector('[class*="GuildPanel_inProgressTab"]')
-        return tab?.offsetParent && !tab.querySelector('[class*="BattlePanel_battleArea"]') ? tab : null
-      }
-      // the labyrinth's 房间 (Room) tab, as for its fights: the shown panel of the tabs whose selected tab is it
-      for (const b of document.querySelectorAll('.MuiTab-root.Mui-selected')) {
-        if (!/^\s*(房间|Room)/.test(b.textContent)) continue
-        const tabs = b.closest('[class*="TabsComponent_tabsComponent"]')
-        const panel = tabs && [...tabs.querySelectorAll('[class*="TabPanel_tabPanel"]')].find(p => p.offsetParent && !/hidden/i.test(p.className))
-        if (panel && !panel.querySelector('[class*="BattlePanel_battleArea"]')) return panel
-      }
-      return null
+    function trialHost(t) {
+      // the guild page's 进行中 tab; the labyrinth page's 房间 tab (its fights are the battle stage's)
+      const panel = document.querySelector(t?.from === "guild" ? '[class*="GuildPanel_inProgressTab"]' : '[class*="LabyrinthPanel_roomTab"]')
+      return t && panel?.offsetParent && !panel.querySelector('[class*="BattlePanel_battleArea"]') ? panel : null
     }
     function dock(host) {
-      if (host !== docked) {
+      if (host !== docked || (host && el.parentElement !== host)) {
         if (docked) docked.style.minHeight = ""
         trialBtn?.remove()
         trialBtn = null
@@ -3552,7 +3557,23 @@
       trialBtn.textContent = cfg.trialOverlay ? L("切换到原版", "Original view") : L("切换到动画", "Animated view")
     }
     function ensure() {
-      const host = trial ? trialHost() : null
+      // the trial on screen takes the scene; with none, the queue's action is back
+      const pick = pickTrial()
+      if (pick !== trial) {
+        trial = pick
+        sceneKey = ""
+        if (pick) {
+          cur = pick.cur
+          enhLevel = pick.data.currentEnhLevel || 0
+          measured = (pick.data.actionTimeMs || 0) / 1000
+          cycleAt = performance.now()
+          lastDone = null
+        } else {
+          cur = null
+          return setQueue(queue)
+        }
+      }
+      const host = trial ? trialHost(trial) : null
       // the test panel's trials show in the floating window
       const shown = trial ? !!host || (DEV && !!labState) : true
       const want = cfg.life && isLife(cur) && document.body && shown
@@ -4925,10 +4946,10 @@
       const ppa = 160
       const msg = { trialHrid: "/guild_skilling/" + skill, tier: 1, successRate: 0.75, efficiency: 0.4, doubleProgressChance: 0.1, progressPerAction: ppa, targetLevel: enh ? 5 : null, actionTimeMs: labState.dur * 1000, timeoutAt: new Date(Date.now() + 600e3).toISOString(), targetWorkValue: enh ? 0 : ppa * 10, currentWorkValue: 0, currentEnhLevel: 0, actionCounter: 0 }
       if (from === "lab") labyrinth = { isActive: true, pathData: [{ x: 0, y: 0 }], roomData: [[{ roomType: "/labyrinth_room_types/skilling", skillHrid: "/skills/" + skill, recommendedLevel: 80 }]] }
-      trial = null
+      delete trials[from]
       onTrial(from, { ...msg })
       labTrialTimer = setInterval(() => {
-        if (!trial || trial.ended) return clearInterval(labTrialTimer)
+        if (!trials[from] || trials[from].ended) return clearInterval(labTrialTimer)
         msg.actionCounter++
         const r = Math.random()
         if (enh) msg.currentEnhLevel = r < 0.6 ? msg.currentEnhLevel + 1 : Math.max(0, msg.currentEnhLevel - 1)
@@ -4939,6 +4960,7 @@
     }
     function labEnd() {
       clearInterval(labTrialTimer)
+      for (const k of Object.keys(trials)) delete trials[k]
       if (trial) {
         trial = null
         cur = null
