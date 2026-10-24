@@ -2,7 +2,7 @@
 // @name         MWI 战斗动画
 // @name:en      MWI Battle FX
 // @namespace    mwi-battle-fx-release
-// @version      0.11.0
+// @version      0.11.1
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -736,7 +736,8 @@
 .bfx-rings{position:absolute;left:50%;bottom:0;width:0;height:0}
 .bfx-ring{position:absolute;border-radius:50%;border:2px solid;transform:translate(-50%,-50%);animation:bfx-ring 2.4s ease-in-out infinite}
 @keyframes bfx-ring{0%,100%{opacity:.45}50%{opacity:.95}}
-.bfx-chips{display:flex;justify-content:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;min-height:0}
+/* chips float above the name (growing upward) so a buff never pushes the name and bars down */
+.bfx-chips{position:absolute;left:0;right:0;bottom:100%;display:flex;justify-content:center;flex-wrap:wrap-reverse;gap:2px;margin-bottom:2px}
 .bfx-chip{width:14px;height:14px;border-radius:50%;font:700 9px/14px sans-serif;text-align:center;color:#1a1a1a;box-shadow:0 0 3px rgba(0,0,0,.8)}
 .bfx-chip.debuff{color:#fff;background:#5a1a24!important;border:1px solid #ff5a6a;line-height:12px}
 .bfx-bubble{position:absolute;left:-12%;right:-12%;top:-8%;bottom:-4%;border-radius:50%;border:2px solid rgba(255,226,122,.85);background:radial-gradient(ellipse at 50% 35%,rgba(255,240,180,.08),rgba(255,214,90,.22) 70%,rgba(255,214,90,.05));box-shadow:0 0 14px rgba(255,214,90,.7),inset 0 0 12px rgba(255,214,90,.5);animation:bfx-ring 1.6s ease-in-out infinite;pointer-events:none}
@@ -1408,7 +1409,8 @@
       canvas.height = Math.round(SH * dpr * cres)
       // each side stands in a row on the same ground line, first unit nearest the middle;
       // every other unit steps a little back so a crowded row still reads
-      const ground = SH * 0.84
+      // ...high enough that the name and bars under the feet stay inside the stage
+      const ground = Math.min(SH * 0.84, SH - 34)
       for (const side of ["p", "m"]) {
         if (side === "p" && mode === "guild") {
           guildLayout(ground)
