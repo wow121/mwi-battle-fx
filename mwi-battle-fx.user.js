@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.7
+// @version      0.13.8
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2, trialOverlay: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
@@ -570,6 +570,15 @@
       }
       return items
     }
+    // skill -> { id, enh } of the skilling tools (for the skilling window's guild trials)
+    function toolsFrom(list) {
+      const out = {}
+      for (const it of Array.isArray(list) ? list : Object.values(list || {})) {
+        const slot = shortId(it?.itemLocationHrid) || ""
+        if (slot.endsWith("_tool") && it.itemHrid) out[slot.replace(/_tool$/, "")] = { id: shortId(it.itemHrid), enh: it.enhancementLevel || 0 }
+      }
+      return out
+    }
     // slot -> enhancement level (+N) of the visible gear
     function enhFrom(list) {
       const enh = {}
@@ -590,7 +599,7 @@
         const p = obj.profile || {}
         const name = p.sharableCharacter?.name
         if (name) {
-          profiles[name] = { ...avatarOf(p.sharableCharacter), items: itemsFrom(p.wearableItemMap), enh: enhFrom(p.wearableItemMap) }
+          profiles[name] = { ...avatarOf(p.sharableCharacter), items: itemsFrom(p.wearableItemMap), enh: enhFrom(p.wearableItemMap), tools: toolsFrom(p.wearableItemMap) }
           GM_setValue("battle_fx_profiles_v1", profiles)
         }
       } else if (Array.isArray(obj.endCharacterItems)) {
@@ -687,10 +696,10 @@
       GM_setClipboard(JSON.stringify(list, null, 1))
       return list.length
     }
-    return { onMessage, assign, assignGuild, exportMissing, me }
+    return { onMessage, assign, assignGuild, exportMissing, me, toolOf: (name, skill) => profiles[name]?.tools?.[skill] || null }
     // #dev-end
     // #release-start
-    // return { onMessage, assign, assignGuild, me }
+    // return { onMessage, assign, assignGuild, me, toolOf: (name, skill) => profiles[name]?.tools?.[skill] || null }
     // #release-end
   })()
 
@@ -2841,6 +2850,7 @@
     let deferFrom = 0 // when the running action was first found ended / replaced
     function setQueue(list, resume = false) {
       queue = list.filter(a => !a.isDone).sort((a, b) => (a.ordinal || 0) - (b.ordinal || 0))
+      if (trial) return // the trial has the window; the queue takes over when it ends
       const next = queue[0] || null
       clearTimeout(deferTimer)
       // the running skilling action ends or changes: the last completion's show plays out first, and an action that
@@ -2866,6 +2876,198 @@
       ensure()
     }
 
+    // ----- trials: guild skilling trials and labyrinth skilling rooms -----
+    // Not actions: new_guild_skilling / guild_skilling_updated and labyrinth_room_progress carry one attempt each
+    // (actionCounter), its success rate, double-progress chance, progress per attempt, the work done / needed, the
+    // attempt's time and for enhancing the current / target level. Which skill a labyrinth room is comes from the
+    // labyrinth's room grid (path[0] is where the character is). The scene is the skill's own, on the labyrinth /
+    // guild trial backdrop of the battle stage, without the storage (a trial takes nothing from the inventory).
+    let trial = null // { from, key, skill, title, data, at, ended }
+    const guildChars = {} // character id -> { name, avatarHrid, avatarOutfitHrid, ... } (the guild's members)
+    let myId = null
+    // the other guild members in this trial, with their looks (their tools are not sent: they hold the viewer's)
+    const trialMates = () => (trial?.from === "guild" ? (trial.data.participantIds || []).filter(id => id !== myId).slice(0, 5) : [])
+    let labyrinth = null
+    const labPath = () => {
+      try {
+        const p = labyrinth?.pathData
+        return (Array.isArray(p) ? p : JSON.parse(p || "[]"))[0] || null
+      } catch {
+        return null
+      }
+    }
+    function labRoom() {
+      const p = labPath()
+      const room = p && labyrinth?.roomData?.[p.y]?.[p.x]
+      return room ? { ...room, key: `${p.x},${p.y}` } : null
+    }
+    // the cow / tree / field / product shown for a trial of this skill: the best one the character's level allows
+    function trialActionId(skill, level) {
+      const g = gameData()
+      if (SKILL[skill][2] !== "gather") return skill + "_essence"
+      let best = { milking: "cow", woodcutting: "tree", foraging: "farmland" }[skill]
+      let bestLv = -1
+      for (const [k, a] of Object.entries(g?.actions || {})) {
+        const id = shortId(k)
+        if (skillOf(k) !== skill || !ACTION_ART.has(id) || a.level > level || a.level < bestLv) continue
+        best = id
+        bestLv = a.level
+      }
+      return best
+    }
+    function onTrial(from, obj) {
+      let skill
+      let key
+      let title
+      if (from === "guild") {
+        skill = shortId(obj.trialHrid)
+        key = `guild:${obj.trialHrid}:${obj.tier}`
+        title = `${L("公会试炼", "Guild trial")} · ${L(...(SKILL[skill] || [skill, skill]).slice(0, 2))} T${obj.tier}`
+      } else {
+        const room = labRoom()
+        skill = shortId(room?.skillHrid) || trial?.skill
+        key = `lab:${room?.key || trial?.key}`
+        title = `${L("迷宫", "Labyrinth")} · ${L(...(SKILL[skill] || [skill, skill]).slice(0, 2))}${room?.recommendedLevel ? " Lv." + room.recommendedLevel : ""}`
+      }
+      if (!SKILL[skill]) return
+      // a trial right after another one finished: its show plays out first
+      if (trial?.ended && trial.key !== key && performance.now() - trial.ended < 3000) return later(3000 - (performance.now() - trial.ended), () => onTrial(from, obj))
+      if (!trial || trial.key !== key) {
+        const level = (skills["/skills/" + skill]?.level || 1) + (from === "lab" ? 0 : 0)
+        trial = { from, key, skill, title, data: obj, at: performance.now(), ended: 0 }
+        const id = trialActionId(skill, level)
+        cur = { id: "trial:" + key, trial: true, actionHrid: `/actions/${skill}/${id}`, currentCount: obj.actionCounter || 0, hasMaxCount: false, primaryItemHash: SKILL[skill][2] === "gather" ? "" : `0::/item_locations/inventory::/items/${skill}_essence::${obj.currentEnhLevel || 0}` }
+        enhLevel = obj.currentEnhLevel || 0
+        measured = (obj.actionTimeMs || 0) / 1000
+        cycleAt = performance.now()
+        lastDone = null
+        ensure()
+        trialFinish(obj)
+        return
+      }
+      const prev = trial.data
+      trial.data = obj
+      trial.at = performance.now()
+      measured = (obj.actionTimeMs || 0) / 1000 || measured
+      if ((obj.actionCounter || 0) <= (prev.actionCounter || 0)) return
+      cur = { ...cur, currentCount: obj.actionCounter }
+      cycleAt = performance.now()
+      if (visible() && !cfg.lifeIcon) playTrial(prev, obj)
+      trialFinish(obj)
+    }
+    // one attempt: progress gained (doubled), failed, or for enhancing the level gone up / down
+    function playTrial(prev, obj) {
+      lastPlayAt = performance.now()
+      setScene()
+      const [cx, cy] = targetAt()
+      const skill = trial.skill
+      if (obj.targetLevel !== null && obj.targetLevel !== undefined) {
+        const b = prev.currentEnhLevel || 0
+        const a = obj.currentEnhLevel || 0
+        enhLevel = a
+        cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/${skill}_essence::${a}` }
+        showEnh()
+        if (a > b) enhSuccess(b, a)
+        else enhFail(b, a, false)
+        return
+      }
+      const gain = (obj.currentWorkValue || 0) - (prev.currentWorkValue || 0)
+      if (gain > 0) {
+        const double = obj.progressPerAction && gain >= obj.progressPerAction * 1.9
+        pop(`+${fmt(gain)} ${L("进度", "progress")}`, cx - 20, cy - 30, 30, -60, 1500, { color: "#ffd75a", size: double ? 15 : 13, glow: double ? "#ffb300" : null })
+        burst(skill, cx, cy - 20, double ? 16 : 8, double)
+        if (double) banner(L("双倍进度！", "Double progress!"))
+        if (posed) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
+      } else {
+        pop(L("失败", "Failed"), cx - 14, cy - 30, 0, -30, 1100, { color: "#ff7a6a", size: 13 })
+        el.querySelector(".bfxl-target").animate([{ transform: "translateX(0)" }, { transform: "translateX(-4px)" }, { transform: "translateX(4px)" }, { transform: "translateX(0)" }], { duration: 300 })
+      }
+    }
+    // the trial is through: work done, or the target level reached
+    function trialFinish(obj) {
+      if (!trial || trial.ended) return
+      const done = obj.targetLevel !== null && obj.targetLevel !== undefined ? (obj.currentEnhLevel || 0) >= obj.targetLevel : obj.targetWorkValue > 0 && obj.currentWorkValue >= obj.targetWorkValue
+      if (done) trialEnd(true)
+    }
+    function trialEnd(ok, why) {
+      if (!trial || trial.ended) return
+      trial.ended = performance.now()
+      if (visible() && !cfg.lifeIcon) {
+        const [cx, cy] = targetAt()
+        const b = banner(ok ? (trial.from === "guild" ? L("试炼完成！", "Trial cleared!") : L("房间通关！", "Room cleared!")) : why || L("试炼结束", "Trial over"), ok ? "#ffd75a" : "#ff7a6a")
+        if (ok) {
+          b?.classList.add("bless")
+          burst("enhancing", cx, cy - 20, 24, true)
+          FX.fireworks ||= [["#ff4d4d", "#ffb84d", "#fff04d", "#4dff88", "#4dc3ff", "#b84dff"], "spark"]
+          for (let i = 0; i < 3; i++) later(250 + i * 300, () => burst("fireworks", cx + (Math.random() - 0.5) * 140, cy - 20, 12, true))
+        }
+      }
+      const key = trial.key
+      later(3200, () => {
+        if (trial?.key !== key || !trial.ended) return
+        trial = null
+        cur = null
+        sceneKey = ""
+        setQueue(queue)
+        ensure()
+      })
+    }
+    // the labyrinth moved on: the character left the room (cleared above, or failed / gave up)
+    function trialCheckRoom() {
+      if (trial?.from !== "lab" || trial.ended) return
+      const room = labRoom()
+      if (!labyrinth?.isActive || !room || `lab:${room.key}` !== trial.key || room.roomType !== "/labyrinth_room_types/skilling") trialEnd(false, L("离开房间", "Left the room"))
+    }
+    // the guild's trial state: this skill's party done (or the trials closed)
+    function trialCheckGuild(obj) {
+      if (trial?.from !== "guild" || trial.ended) return
+      let data
+      try {
+        data = JSON.parse(obj.guild?.currentTrialsData || "{}")
+      } catch {
+        return
+      }
+      const party = data?.skilling?.parties?.["/guild_skilling/" + trial.skill]
+      if (party?.done || (data?.skilling && data.skilling.status !== "in_progress")) trialEnd(!!party?.done && (party.highestTier || 0) >= (trial.data.tier || 1), L("试炼结束", "Trial over"))
+    }
+    // a trial that went quiet (timed out, page asleep): wound up
+    function trialTick() {
+      if (!trial || trial.ended) return
+      const d = trial.data
+      const quiet = performance.now() - trial.at > Math.max(15000, 4 * (d.actionTimeMs || 0))
+      const timedOut = d.timeoutAt && Date.now() > Date.parse(d.timeoutAt)
+      if (timedOut) trialEnd(false, L("时间到", "Time's up"))
+      else if (quiet) trialEnd(false)
+    }
+    function trialLines() {
+      const d = trial.data
+      const pct = v => (Math.round((v || 0) * 1000) / 10).toString() + "%"
+      const line1 = [`⏱ ${((d.actionTimeMs || 0) / 1000).toFixed(2)}s`, `${L("成功率", "Success")} ${pct(d.successRate)}`]
+      if (d.efficiency) line1.push(`${L("效率", "Efficiency")} +${pct(d.efficiency)}`)
+      const line2 = []
+      if (d.targetLevel !== null && d.targetLevel !== undefined) line2.push(`${L("目标", "Target")} +${d.targetLevel}`, `${L("当前", "Now")} +${d.currentEnhLevel || 0}`)
+      else line2.push(`${L("每次进度", "Per attempt")} ${fmt(d.progressPerAction || 0)}`)
+      line2.push(`${L("双倍进度", "Double progress")} ${pct(d.doubleProgressChance)}`, `${L("次数", "Attempts")} ${d.actionCounter || 0}`)
+      return [line1, line2]
+    }
+    // the trial's own bar: work done / needed (or levels), time left
+    function showTrialBar() {
+      const bar = el?.querySelector(".bfxl-tbar")
+      if (!bar) return
+      bar.style.display = trial ? "" : "none"
+      if (!trial) return
+      const d = trial.data
+      const enh = d.targetLevel !== null && d.targetLevel !== undefined
+      const k = enh ? (d.currentEnhLevel || 0) / (d.targetLevel || 1) : d.targetWorkValue ? (d.currentWorkValue || 0) / d.targetWorkValue : d.currentProgress || 0
+      bar.querySelector("i").style.width = Math.min(100, k * 100) + "%"
+      let left = ""
+      if (d.timeoutAt) {
+        const s = Math.max(0, Math.round((Date.parse(d.timeoutAt) - Date.now()) / 1000))
+        left = ` · ${L("剩余", "left")} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
+      }
+      bar.querySelector("span").textContent = (enh ? `+${d.currentEnhLevel || 0} / +${d.targetLevel}` : `${fmt(d.currentWorkValue || 0)} / ${fmt(d.targetWorkValue || 0)} (${(k * 100).toFixed(1)}%)`) + left
+    }
+
     // ----- the game's header: the action's name, its seconds per action and how far the bar is -----
     const headerName = () => document.querySelector('[class*="Header_actionName"]')
     const headerScope = () => headerName()?.parentElement?.parentElement || null
@@ -2882,6 +3084,7 @@
     }
     const dur = () => measured || domSeconds() || 6
     function actionName() {
+      if (trial) return trial.title
       // #dev-start
       if (labState) return `${SKILL[labState.skill][0]} - ${(LAB_ACTIONS[labState.skill].find(a => a[0] === labState.act) || [, labState.act])[1]}（测试）`
       // #dev-end
@@ -2894,7 +3097,9 @@
 
     // ----- messages -----
     function onMessage(obj) {
+      if (obj.guildSharableCharacterMap) Object.assign(guildChars, obj.guildSharableCharacterMap)
       if (obj.type === "init_character_data") {
+        myId = obj.character?.id ?? myId
         for (const k of Object.keys(inv)) delete inv[k]
         for (const k of Object.keys(tools)) delete tools[k]
         setItems(obj.characterItems)
@@ -2918,6 +3123,15 @@
         setItems(obj.endCharacterItems)
       } else if (/buff|house/.test(obj.type)) {
         setBuffMaps(obj)
+      } else if (obj.type === "new_guild_skilling" || obj.type === "guild_skilling_updated") {
+        onTrial("guild", obj)
+      } else if (obj.type === "labyrinth_room_progress") {
+        onTrial("lab", obj)
+      } else if (obj.type === "labyrinth_updated") {
+        labyrinth = obj.labyrinth || labyrinth
+        trialCheckRoom()
+      } else if (obj.type === "guild_updated") {
+        trialCheckGuild(obj)
       } else if (obj.type === "action_completed") {
         // #dev-start
         if (labState) return setItems(obj.endCharacterItems)
@@ -2956,7 +3170,7 @@
       const i = queue.findIndex(x => x.id === a.id)
       if (i >= 0) queue[i] = a
       if (cur?.id === a.id) cur = a
-      if (!isLife(a)) return
+      if (!isLife(a) || trial) return
       if (cur?.id !== a.id) setQueue(queue)
       // the cycle: server time between two completions of this action
       const at = Date.parse(a.updatedAt)
@@ -2999,6 +3213,9 @@
       st.textContent = `
 .bfxl{position:fixed;z-index:1100;width:340px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
   box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;user-select:none}
+.bfxl.docked{position:absolute;left:0;top:0;right:0;bottom:0;width:auto!important;border-radius:0;box-shadow:none;z-index:15}
+.bfxl.docked .bfxl-size,.bfxl.docked .bfxl-min,.bfxl.docked .bfxl-x,.bfxl.docked .bfxl-grip{display:none}
+.bfxl.docked .bfxl-head{cursor:default;padding-right:110px}
 .bfxl-grip{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:5;background:linear-gradient(135deg,transparent 50%,#8a93b8 50%,#8a93b8 60%,transparent 60%,transparent 72%,#8a93b8 72%,#8a93b8 82%,transparent 82%)}
 .bfxl.icon .bfxl-grip{display:none}
 .bfxl-head{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 9px;background:#262d47;cursor:move}
@@ -3058,6 +3275,10 @@
 .bfxl-slot{position:absolute;width:18px;height:18px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 1px #0009)}
 .bfxl-slot svg{position:absolute;left:0;top:0;width:100%;height:100%}
 .bfxl-slot b{position:absolute;left:50%;top:100%;transform:translateX(-50%);font:700 8.5px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000,0 0 1px #000}
+.bfxl-mates{position:absolute;inset:0;pointer-events:none;z-index:1}
+.bfxl-mate{position:absolute;width:96px;height:96px;transform:scale(.82);transform-origin:50% 100%;filter:brightness(.92)}
+.bfxl-mate>svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-mate b{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font:700 9px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000}
 .bfxl-mats{position:absolute;left:4%;right:4%;display:flex;justify-content:center;gap:1px;transform:translateY(-100%);pointer-events:none;z-index:1}
 .bfxl-mat{position:relative;width:19px;height:19px;filter:drop-shadow(0 1px 1px #0008)}
 .bfxl-mat svg{position:absolute;left:0;top:0;width:100%;height:100%}
@@ -3103,6 +3324,10 @@
 .bfxl-lab button:hover{background:#4a5c96}
 .bfxl-lab b{width:100%;font-size:11px;opacity:.7}
 .bfxl-bar{position:relative;height:14px;background:#11141f}
+.bfxl-tbar{position:relative;height:13px;background:#1c1710}
+.bfxl-tbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#c98a00,#ffd75a)}
+.bfxl-tbar span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:13px;text-shadow:0 1px 1px #000,0 0 2px #000}
+.bfxl.min .bfxl-tbar,.bfxl.icon .bfxl-tbar{display:none!important}
 .bfxl-info{padding:3px 8px 4px;background:#171b2b;font-size:10.5px;line-height:1.5;color:#c8d0e8}
 .bfxl-info div{display:flex;flex-wrap:wrap;column-gap:9px}
 .bfxl-info span{white-space:nowrap}
@@ -3116,7 +3341,7 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-tbar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
       // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
@@ -3193,7 +3418,7 @@
       })
       // drag by the title bar
       $(".bfxl-head").addEventListener("pointerdown", e => {
-        if (e.target.closest("button")) return
+        if (e.target.closest("button") || docked) return
         const r = el.getBoundingClientRect()
         const dx = e.clientX - r.left
         const dy = e.clientY - r.top
@@ -3250,9 +3475,23 @@
     const winScale = () => (Math.min(0.5, Math.max(0.12, cfg.lifeW || 0.2)) * innerWidth) / 340
     // keeps the window on screen; dragged spots are kept, double-clicking the title bar goes back to the default
     // only the picture is scaled: the title bar, bars, bonus lines and buttons keep their size
+    let curScale = 1 // the picture's scale as last placed (for measuring in it)
     function place() {
       if (!el) return
-      const s = winScale()
+      if (docked) {
+        // laid over the game's panel: as wide as it (at most 2.2x), the panel grown to hold it
+        const view = el.querySelector(".bfxl-view")
+        const bars = el.offsetHeight - view.offsetHeight
+        const s = (curScale = Math.max(0.5, Math.min(docked.clientWidth / 340, 2.2)))
+        view.style.height = 150 * s + "px"
+        docked.style.minHeight = Math.ceil(150 * s + bars) + "px"
+        const scene = el.querySelector(".bfxl-scene")
+        scene.style.transform = `scale(${s})`
+        scene.style.marginLeft = Math.max(0, (docked.clientWidth - 340 * s) / 2) + "px"
+        return
+      }
+      el.querySelector(".bfxl-scene").style.marginLeft = ""
+      const s = (curScale = winScale())
       el.style.width = cfg.lifeIcon ? "" : 340 * s + "px"
       el.querySelector(".bfxl-view").style.height = 150 * s + "px"
       el.querySelector(".bfxl-scene").style.transform = `scale(${s})`
@@ -3262,8 +3501,62 @@
       el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
       el.style.top = Math.max(0, Math.min(innerHeight - Math.min(h, 40), y)) + "px"
     }
+    // a trial is shown like the battle stage: laid over the game's own panel for it (the guild page's 进行中 tab
+    // or the labyrinth's 房间 tab), with a corner button back to the original; not as the floating window (trials
+    // from the test panel excepted)
+    let docked = null
+    let trialBtn = null
+    function trialHost() {
+      if (trial?.from === "guild") {
+        const tab = document.querySelector('[class*="GuildPanel_inProgressTab"]')
+        return tab?.offsetParent && !tab.querySelector('[class*="BattlePanel_battleArea"]') ? tab : null
+      }
+      // the labyrinth's 房间 (Room) tab, as for its fights: the shown panel of the tabs whose selected tab is it
+      for (const b of document.querySelectorAll('.MuiTab-root.Mui-selected')) {
+        if (!/^\s*(房间|Room)/.test(b.textContent)) continue
+        const tabs = b.closest('[class*="TabsComponent_tabsComponent"]')
+        const panel = tabs && [...tabs.querySelectorAll('[class*="TabPanel_tabPanel"]')].find(p => p.offsetParent && !/hidden/i.test(p.className))
+        if (panel && !panel.querySelector('[class*="BattlePanel_battleArea"]')) return panel
+      }
+      return null
+    }
+    function dock(host) {
+      if (host !== docked) {
+        if (docked) docked.style.minHeight = ""
+        trialBtn?.remove()
+        trialBtn = null
+        docked = host
+        el.classList.toggle("docked", !!host)
+        // the floating window's own spot and width must not move it inside the panel
+        Object.assign(el.style, { left: "", top: "", width: "" })
+        if (host) {
+          if (getComputedStyle(host).position === "static") host.style.position = "relative"
+          host.style.minHeight = "330px"
+          host.appendChild(el)
+        } else document.body.appendChild(el)
+        layoutDirty = true
+      }
+      if (!host) return
+      Stage.injectCss() // the corner button's style
+      if (!trialBtn?.isConnected) {
+        trialBtn = document.createElement("button")
+        trialBtn.className = "bfx-toggle"
+        trialBtn.addEventListener("click", e => {
+          e.stopPropagation()
+          cfg.trialOverlay = !cfg.trialOverlay
+          saveCfg()
+          ensure()
+        })
+        host.appendChild(trialBtn)
+      }
+      trialBtn.textContent = cfg.trialOverlay ? L("切换到原版", "Original view") : L("切换到动画", "Animated view")
+    }
     function ensure() {
-      const want = cfg.life && isLife(cur) && document.body
+      const host = trial ? trialHost() : null
+      // the test panel's trials show in the floating window
+      const shown = trial ? !!host || (DEV && !!labState) : true
+      const want = cfg.life && isLife(cur) && document.body && shown
+      if (el && !want && docked) dock(null)
       if (!want) {
         if (el) el.style.display = "none"
         cancelAnimationFrame(raf)
@@ -3271,15 +3564,72 @@
         return
       }
       if (!el) build()
-      el.style.display = ""
-      el.classList.toggle("min", !!cfg.lifeMin)
-      el.classList.toggle("icon", !!cfg.lifeIcon)
+      dock(host)
+      el.style.display = host && !cfg.trialOverlay ? "none" : ""
+      el.classList.toggle("min", !!cfg.lifeMin && !docked)
+      el.classList.toggle("icon", !!cfg.lifeIcon && !docked)
       if (cfg.lifeMin || cfg.lifeIcon) layoutDirty = true
       setScene()
       showInfo()
       fillStore()
+      showTrialBar()
       place()
       if (!raf && !cfg.lifeMin) raf = requestAnimationFrame(frame)
+    }
+    // a tool in the hand: the drawn one, its grip (found by build-assets.py) on the front hand, turned about the
+    // grip and glowing by its level like the battle stage's weapons (+5 blue, +8 purple, +10 orange, +12 red, +15
+    // rainbow); the game's icon when it has no drawing
+    function makeTool(id, lv) {
+      const node = document.createElement("div")
+      node.className = "bfxl-tool"
+      const geo = id && Assets.get("life")?.tool_geo?.[id]
+      if (!art("tool", id) || !geo) {
+        if (id) node.appendChild(svgUse("items", id))
+        return { node, held: null }
+      }
+      const kind = id.split("_").pop()
+      const [gx, gy, , reach] = geo
+      const w = (TOOL_REACH[kind] || 44) / reach
+      const h = w * TOOL_FRAME
+      node.classList.add("drawn")
+      Object.assign(node.style, { left: HAND[0] - gx * w + "px", top: HAND[1] - gy * h + "px", width: w + "px", height: h + "px", transformOrigin: `${gx * 100}% ${gy * 100}%` })
+      node.appendChild(img("tool/" + id))
+      const tier = [15, 12, 10, 8, 5].find(n => lv >= n)
+      if (tier) node.classList.add("ench" + tier)
+      return { node, held: { kind, geo } }
+    }
+    // the guild members working the trial with the viewer: in a staggered row behind, a bit smaller, named. Their
+    // tools come from their profile (opened once, as for the battle stage), else they hold the viewer's kind of tool
+    function buildMates(skill) {
+      el.querySelector(".bfxl-mates")?.remove()
+      const ids = trialMates()
+      if (!ids.length) return
+      const box = document.createElement("div")
+      box.className = "bfxl-mates"
+      ids.forEach((id, i) => {
+        const c = guildChars[id] || {}
+        const m = document.createElement("div")
+        m.className = "bfxl-mate"
+        m.dataset.i = i
+        const body = document.createElementNS(SVGNS, "svg")
+        body.setAttribute("viewBox", "0 0 100 100")
+        for (const [sh, sid] of [["avatars", shortId(c.avatarHrid) || "person_default"], ["avatar_outfits", shortId(c.avatarOutfitHrid)]]) {
+          if (!sid || !sheet(sh)) continue
+          const u = document.createElementNS(SVGNS, "use")
+          u.setAttribute("href", sheet(sh) + "#" + sid)
+          body.appendChild(u)
+        }
+        m.appendChild(body)
+        const own = Looks.toolOf(c.name, skill)
+        const made = makeTool(own?.id || tools[skill], own ? own.enh : 0)
+        if (made.held) m.dataset.ang = made.held.geo[2]
+        m.appendChild(made.node)
+        const name = document.createElement("b")
+        name.textContent = c.name || "#" + id
+        m.appendChild(name)
+        box.appendChild(m)
+      })
+      el.querySelector(".bfxl-scene").insertBefore(box, el.querySelector(".bfxl-hero"))
     }
     // the static parts: background, hero, the thing being worked on; rebuilt when any of them changes
     function setScene() {
@@ -3288,10 +3638,10 @@
       const id = shortId(cur.actionHrid)
       const work = hashItem(cur.primaryItemHash)?.id
       const me = Looks.me
-      const key = [cur.id, id, work, tools[skill], toolEnh[skill], !!gameData(), me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
+      const key = [cur.id, id, work, tools[skill], toolEnh[skill], !!gameData(), trialMates().map(i => i + (guildChars[i]?.avatarHrid || "") + (Looks.toolOf(guildChars[i]?.name, skill)?.id || "")).join(), me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
       el.querySelector(".bfxl-name").textContent = actionName()
       el.querySelector(".bfxl-ico").title = actionName()
-      el.querySelector(".bfxl-count").textContent = cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
+      el.querySelector(".bfxl-count").textContent = cur.trial ? "" : cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
       if (key === sceneKey) return
       sceneKey = key
       const ico = el.querySelector(".bfxl-ico")
@@ -3300,7 +3650,10 @@
       const scene = el.querySelector(".bfxl-scene")
       el.querySelector(".bfxl-fx").innerHTML = ""
       const bg = kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill
-      scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
+      // trials: the battle stage's labyrinth / guild trial backdrops
+      const trialBg = trial && (trial.from === "lab" ? "labyrinth" : "guild_trial")
+      if (trialBg && Assets.has("bg", trialBg)) scene.style.background = `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
+      else scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
       // hero: avatar + outfit, the skill's tool in the front hand
       const hero = el.querySelector(".bfxl-hero")
       hero.innerHTML = ""
@@ -3313,26 +3666,11 @@
         body.appendChild(u)
       }
       hero.appendChild(body)
-      const tool = document.createElement("div")
-      tool.className = "bfxl-tool"
-      held = null
-      const geo = Assets.get("life")?.tool_geo?.[tools[skill]]
-      if (art("tool", tools[skill]) && geo) {
-        // the drawn tool, its grip (found by build-assets.py) on the front hand, turned about the grip
-        const kind = tools[skill].split("_").pop()
-        const [gx, gy, , reach] = geo
-        const w = (TOOL_REACH[kind] || 44) / reach
-        const h = w * TOOL_FRAME
-        tool.classList.add("drawn")
-        Object.assign(tool.style, { left: HAND[0] - gx * w + "px", top: HAND[1] - gy * h + "px", width: w + "px", height: h + "px", transformOrigin: `${gx * 100}% ${gy * 100}%` })
-        tool.appendChild(img("tool/" + tools[skill]))
-        // enhancement glow as on the battle stage's weapons: +5 blue, +8 purple, +10 orange, +12 red, +15 rainbow
-        const lv = toolEnh[skill] || 0
-        const tier = [15, 12, 10, 8, 5].find(n => lv >= n)
-        if (tier) tool.classList.add("ench" + tier)
-        held = { kind, geo }
-      } else if (tools[skill]) tool.appendChild(svgUse("items", tools[skill]))
+      const made = makeTool(tools[skill], toolEnh[skill] || 0)
+      const tool = made.node
+      held = made.held
       hero.appendChild(tool)
+      buildMates(skill)
       // target: the cow / tree / field, or the skill's station with the item on it
       const target = el.querySelector(".bfxl-target")
       target.innerHTML = ""
@@ -3457,7 +3795,7 @@
       store.innerHTML = ""
       table.innerHTML = ""
       const storeId = kind === "gather" ? "storage_crates" : kind === "make" ? "storage_wood" : "storage_arcane"
-      staged = art("prop", storeId)
+      staged = art("prop", storeId) && !cur.trial
       store.style.display = staged ? "" : "none"
       table.style.display = staged && kind !== "gather" ? "" : "none"
       if (!staged) return
@@ -3670,6 +4008,7 @@
     // the game's action panel in two lines: time and speed, efficiency, actions per hour; experience, drops and
     // finds, or the success rate for enhancing and alchemy
     function infoLines() {
+      if (trial) return trialLines()
       if (!cur) return []
       const skill = skillOf(cur.actionHrid)
       const kind = SKILL[skill][2]
@@ -3973,12 +4312,19 @@
           m.then?.()
         }
       }
+      // the mates: in a staggered row behind the hero's work spot
+      const wx = workX()
+      for (const m of el.querySelectorAll(".bfxl-mate")) {
+        const i = +m.dataset.i
+        m.style.left = Math.max(-24, wx - 42 * (i + 1)) + "px"
+        m.style.bottom = 16 + 7 * (i % 2) + "px"
+      }
       if (hero) {
         hero.style.left = walk.x + "px"
         const bob = walking ? -3 * Math.abs(Math.sin((now / 1000) * Math.PI * 4)) : -2 * Math.abs(Math.sin(Math.PI * f))
         hero.style.transform = `translateY(${bob}px) scaleX(${facing})`
       }
-      const tool = el.querySelector(".bfxl-tool")
+      const tool = el.querySelector(".bfxl-hero > .bfxl-tool")
       if (walking) {
         // tool at rest while walking; no strokes land
         if (tool) tool.style.transform = move ? `rotate(${(toolPose(held.kind, 0)[0] ?? held.geo[2]) - held.geo[2]}deg)` : ""
@@ -3987,6 +4333,12 @@
         const [dir, x, y, turn] = toolPose(held.kind, f)
         const rot = (dir === null ? 0 : dir - held.geo[2]) + turn
         tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+        for (const m of el.querySelectorAll(".bfxl-mate")) {
+          const i = +m.dataset.i
+          const [d2, x2, y2, t2] = toolPose(held.kind, (sub + 0.29 * (i + 1)) % 1)
+          const mt = m.querySelector(".bfxl-tool")
+          if (mt) mt.style.transform = `translate(${x2}px,${y2}px) rotate(${(d2 === null ? 0 : d2 - (+m.dataset.ang || held.geo[2])) + t2}deg)`
+        }
       } else if (tool) {
         const [rot, x, y] = pose(style, f)
         tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
@@ -4020,7 +4372,7 @@
     function targetAt() {
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
       const r = el.querySelector(".bfxl-target").getBoundingClientRect()
-      const k = winScale()
+      const k = curScale
       return [(r.left - s.left + r.width / 2) / k, (r.top - s.top + r.height / 2) / k]
     }
     // rings of power from the horn's bell to the item on the altar
@@ -4029,7 +4381,7 @@
       const work = el.querySelector(".bfxl-work")
       if (!hero || !work) return
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
-      const k = winScale()
+      const k = curScale
       const a = ((-32 * Math.PI) / 180)
       const r = (TOOL_REACH.enhancer || 44) * 0.85
       const bx = hero.offsetLeft + HAND[0] + Math.cos(a) * r
@@ -4061,7 +4413,7 @@
       if (!work) return targetAt()
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
       const w = work.getBoundingClientRect()
-      const k = winScale()
+      const k = curScale
       // kept low enough that what pops up over it stays in the window
       return [(w.left - s.left + w.width / 2) / k, Math.max(44, (w.top - s.top + w.height / 2) / k)]
     }
@@ -4494,6 +4846,8 @@
       btn("强化失败", () => labComplete({ enh: -1 }))
       btn("炼金成功", () => labComplete({ alch: true }))
       btn("炼金失败", () => labComplete({ alch: false }))
+      btn("公会试炼", () => labTrial("guild"))
+      btn("迷宫房间", () => labTrial("lab"))
       btn("结束测试", () => labEnd())
       el.appendChild(box)
       labApply()
@@ -4562,7 +4916,33 @@
       if (cfg.lifeIcon) return
       play({ skill, gains, costs, exp: 10 + Math.random() * 30, ups, enh, action: cur })
     }
+    // a whole trial of the panel's skill: an attempt per cycle (75% success, 10% double), cleared after ~10
+    let labTrialTimer = 0
+    function labTrial(from) {
+      clearInterval(labTrialTimer)
+      const skill = labState.skill
+      const enh = skill === "enhancing"
+      const ppa = 160
+      const msg = { trialHrid: "/guild_skilling/" + skill, tier: 1, successRate: 0.75, efficiency: 0.4, doubleProgressChance: 0.1, progressPerAction: ppa, targetLevel: enh ? 5 : null, actionTimeMs: labState.dur * 1000, timeoutAt: new Date(Date.now() + 600e3).toISOString(), targetWorkValue: enh ? 0 : ppa * 10, currentWorkValue: 0, currentEnhLevel: 0, actionCounter: 0 }
+      if (from === "lab") labyrinth = { isActive: true, pathData: [{ x: 0, y: 0 }], roomData: [[{ roomType: "/labyrinth_room_types/skilling", skillHrid: "/skills/" + skill, recommendedLevel: 80 }]] }
+      trial = null
+      onTrial(from, { ...msg })
+      labTrialTimer = setInterval(() => {
+        if (!trial || trial.ended) return clearInterval(labTrialTimer)
+        msg.actionCounter++
+        const r = Math.random()
+        if (enh) msg.currentEnhLevel = r < 0.6 ? msg.currentEnhLevel + 1 : Math.max(0, msg.currentEnhLevel - 1)
+        else if (r < 0.75) msg.currentWorkValue += ppa * (r < 0.1 ? 2 : 1)
+        msg.currentProgress = msg.targetWorkValue ? msg.currentWorkValue / msg.targetWorkValue : 0
+        onTrial(from, { ...msg })
+      }, labState.dur * 1000)
+    }
     function labEnd() {
+      clearInterval(labTrialTimer)
+      if (trial) {
+        trial = null
+        cur = null
+      }
       const s = labState.saved
       labState = null
       el?.querySelector(".bfxl-lab")?.remove()
@@ -4586,6 +4966,7 @@
     // const lab = null
     // #release-end
     setInterval(() => {
+      trialTick()
       ensure()
       if (el && !cfg.lifePos) place()
       if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
@@ -4963,7 +5344,8 @@
         lines.push("  ".repeat(d) + el.tagName.toLowerCase() + (cls ? "." + cls.trim().split(/\s+/).join(".") : "") + href + (text ? ` "${text}"` : ""))
         for (const ch of el.children) walk(ch, d + 1)
       }
-      const roots = [...document.querySelectorAll('[class*="BattlePanel"],[class*="Labyrinth"],[class*="GuildTrial"],[class*="Guild_"]')].filter(el => !el.parentElement?.closest('[class*="BattlePanel"],[class*="Labyrinth"],[class*="GuildTrial"],[class*="Guild_"]'))
+      const ROOTS = '[class*="BattlePanel"],[class*="Labyrinth"],[class*="GuildTrial"],[class*="Guild_"],[class*="GuildPanel_inProgressTab"]'
+      const roots = [...document.querySelectorAll(ROOTS)].filter(el => !el.parentElement?.closest(ROOTS))
       roots.slice(0, 6).forEach(r => walk(r, 0))
       return lines.join("\n")
     }
@@ -5067,7 +5449,7 @@
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
-  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed)$|party|buff|house/
+  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed|new_guild_skilling|guild_skilling_updated|labyrinth_room_progress|guild_updated|guild_characters_updated)$|party|buff|house/
   function onCharacterMessage(obj) {
     // completions only carry inventory counts (and the tools' slots), never the visible gear
     if (obj.type !== "action_completed") Looks.onMessage(obj)
@@ -5096,6 +5478,7 @@
             // labyrinth fights are ordinary battles; only the backdrop changes
             where.labyrinth = !!obj.labyrinth?.isActive
             Stage.setBackground()
+            Life.onMessage(obj) // the skilling rooms are the window's
           }
           else onCharacterMessage(obj)
         } catch (e) {
