@@ -31,6 +31,8 @@ for try in $(seq 1 30); do
   curl -s "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json" | grep -q "\"rev\":\"$REV\"" && break
   timeout 10 tail -f /dev/null || true
 done
+# players who can't reach raw.githubusercontent.com get the manifest from jsDelivr's @main, cached there for days
+curl -s -o /dev/null "https://purge.jsdelivr.net/gh/wow121/mwi-battle-fx@main/assets/manifest.json" || true
 # Syncthing's watcher misses some git object files; rescan so the Windows checkout stays intact
 KEY=$(grep -oP '(?<=<apikey>)[^<]+' ~/.local/state/syncthing/config.xml)
 curl -s -X POST -H "X-API-Key: $KEY" "http://127.0.0.1:8384/rest/db/scan?folder=9cdkn-uyw3k&sub=mwi-battle-fx" >/dev/null

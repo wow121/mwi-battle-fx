@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.4
+// @version      0.13.5
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -492,11 +492,15 @@
     let fetchedAt = GM_getValue("battle_fx_manifest_at_v1", 0)
     let loading = false
     const listeners = []
-    const base = () => (cfg.assetBase || DEFAULT_ASSET_BASE).replace(/\/+$/, "")
+    // an asset base that is just this repo's jsDelivr @main counts as the default: its files and manifest are cached
+    // there for up to a week, so they are taken pinned to the manifest's commit like the default's
+    const custom = () => !!cfg.assetBase && !/^https:\/\/cdn\.jsdelivr\.net\/gh\/wow121\/mwi-battle-fx@main\/*$/.test(cfg.assetBase)
+    const base = () => (custom() ? cfg.assetBase : DEFAULT_ASSET_BASE).replace(/\/+$/, "")
+    let source = ""
     function refresh(force) {
       if (loading || (!force && manifest && Date.now() - fetchedAt < 1800e3)) return
       loading = true
-      const urls = cfg.assetBase ? [base() + "/assets/manifest.json"] : MANIFEST_URLS
+      const urls = custom() ? [base() + "/assets/manifest.json"] : MANIFEST_URLS
       const next = k => {
         if (k >= urls.length) return (loading = false)
         GM_xmlhttpRequest({
@@ -507,6 +511,7 @@
             try {
               manifest = JSON.parse(r.responseText)
               fetchedAt = Date.now()
+              source = urls[k]
               loading = false
               GM_setValue("battle_fx_manifest_v1", manifest)
               GM_setValue("battle_fx_manifest_at_v1", fetchedAt)
@@ -524,8 +529,8 @@
     }
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
-    const url = path => (manifest?.rev && !cfg.assetBase ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
-    return { refresh, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
+    const url = path => (manifest?.rev && !custom() ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
+    return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "" }), refresh, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -4983,7 +4988,8 @@
       GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}（点击检查素材）`, `Version ${GM_info?.script?.version || "?"} (check assets)`), () => {
         Assets.refresh(true)
         const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ") + ` 纸娃娃:${Assets.get("doll") || 0}`
-        alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}`)
+        const i = Assets.info()
+        alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}\n清单版本 ${i.rev || "?"}（${i.source || "本地缓存"}，${i.fetchedAt ? new Date(i.fetchedAt).toLocaleString() : "-"}）\n素材地址 ${i.base || "默认"}\n（正在重新拉取清单，几秒后再点一次可看新结果）`)
       }),
       // #dev-end
       // #release-start
