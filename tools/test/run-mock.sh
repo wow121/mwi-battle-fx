@@ -15,6 +15,7 @@ mkdir -p "$TMP/sprites"
 cp "$REPO/tools/test/drive.mjs" "$TMP/"
 # MOCK=tools/test/guild.html swaps in another page (served as mock.html)
 cp "${MOCK:-$REPO/tools/test/mock.html}" "$TMP/mock.html"
+# DUR=<ms> records longer than the default 18 s
 # SCRIPT=release/mwi-battle-fx.user.js tests the release copy (no lab: the run stops after the live part)
 cp "${SCRIPT:-$REPO/mwi-battle-fx.user.js}" "$TMP/mwi-battle-fx.user.js"
 cp "$ARCH"/sprites/{combat_monsters,avatars,avatar_outfits,items,actions,skills}.svg "$TMP/sprites/"
@@ -22,7 +23,7 @@ cp -r "$REPO/assets" "$TMP/"
 tar -cf "$TMP/in.tar" -C "$TMP" mock.html drive.mjs mwi-battle-fx.user.js sprites assets
 ssh "${SSHO[@]}" "$HOST" "rmdir /s /q C:\\Users\\ruixi\\fs-mine\\bfx-test 2>nul & mkdir C:\\Users\\ruixi\\fs-mine\\bfx-test"
 scp -q "${SSHO[@]}" "$TMP/in.tar" "$HOST:C:/Users/ruixi/fs-mine/bfx-test/"
-ssh "${SSHO[@]}" "$HOST" "cd /d C:\\Users\\ruixi\\fs-mine\\bfx-test && tar -xf in.tar && node drive.mjs && tar -cf frames.tar frames"
+ssh "${SSHO[@]}" "$HOST" "cd /d C:\\Users\\ruixi\\fs-mine\\bfx-test && tar -xf in.tar && set DUR=${DUR:-18000}&& node drive.mjs && tar -cf frames.tar frames"
 mkdir -p "$OUT"
 scp -q "${SSHO[@]}" "$HOST:C:/Users/ruixi/fs-mine/bfx-test/frames.tar" "$OUT/"
 rm -rf "$OUT/frames"

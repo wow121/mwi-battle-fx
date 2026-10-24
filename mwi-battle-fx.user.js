@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.2
+// @version      0.12.3
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2746,8 +2746,32 @@
     const artUrl = path => Assets.url("life/" + path + ".webp")
     const COW_POSES = ["idle", "graze", "milked", "startled", "moo", "happy"]
     const TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
-    const RARE = /treasure_chest|artisans_crate|meteorite_cache/
+    // what a drop is worth a show (per-action chances, game v1.20260927.0): essences 1.7-70%, artisan's crates
+    // 0.01-0.19%, meteorite caches 0.02-0.04% (gathering only), the three skill relics 0.0025-0.003%; transmuting
+    // can give a philosopher's stone (6.5-58% by item) or its crushed shards (25%)
+    const RARE = /treasure_chest|artisans_crate|meteorite_cache|butter_of_proficiency|branch_of_insight|thread_of_expertise|philosophers_/
     const MINOR = /essence/
+    function rarity(id) {
+      if (/philosophers_/.test(id)) return "sage"
+      if (/butter_of_proficiency|branch_of_insight|thread_of_expertise/.test(id)) return "legend"
+      if (/meteorite_cache/.test(id)) return "meteor"
+      if (/artisans_crate|treasure_chest/.test(id)) return "crate"
+      return MINOR.test(id) ? "minor" : null
+    }
+    const RARE_NAMES = {
+      small_artisans_crate: ["小工匠匣", "Small Artisan's Crate"],
+      medium_artisans_crate: ["中工匠匣", "Medium Artisan's Crate"],
+      large_artisans_crate: ["大工匠匣", "Large Artisan's Crate"],
+      small_meteorite_cache: ["小陨石舱", "Small Meteorite Cache"],
+      medium_meteorite_cache: ["中陨石舱", "Medium Meteorite Cache"],
+      large_meteorite_cache: ["大陨石舱", "Large Meteorite Cache"],
+      butter_of_proficiency: ["精通之油", "Butter of Proficiency"],
+      branch_of_insight: ["洞察之枝", "Branch of Insight"],
+      thread_of_expertise: ["专精之线", "Thread of Expertise"],
+      philosophers_stone: ["贤者之石", "Philosopher's Stone"],
+      crushed_philosophers_stone: ["贤者之石碎片", "Crushed Philosopher's Stone"],
+    }
+    const rareName = id => (RARE_NAMES[id] ? L(...RARE_NAMES[id]) : id.replace(/_/g, " "))
     const ENH_COLOR = [[15, "#ffd75a"], [12, "#ff5a3c"], [10, "#ffa53a"], [8, "#c07bff"], [5, "#6fb6ff"], [0, "#e8f4ff"]]
     const enhColor = n => ENH_COLOR.find(([k]) => n >= k)[1]
 
@@ -2819,6 +2843,9 @@
     }
     const dur = () => measured || domSeconds() || 6
     function actionName() {
+      // #dev-start
+      if (labState) return `${SKILL[labState.skill][0]} - ${(LAB_ACTIONS[labState.skill].find(a => a[0] === labState.act) || [, labState.act])[1]}（测试）`
+      // #dev-end
       const t = (headerName()?.querySelector('[class*="Header_displayName"]') || headerName())?.textContent || ""
       const clean = t.replace(/\s*\[.*$/, "").trim()
       if (clean) return clean
@@ -2836,12 +2863,23 @@
         cur = null
         setQueue(obj.characterActions || [], true)
       } else if (obj.type === "actions_updated") {
+        // #dev-start
+        if (labState) {
+          const byId = Object.fromEntries(labState.saved.queue.map(a => [a.id, a]))
+          for (const a of obj.endCharacterActions || []) byId[a.id] = a
+          labState.saved.queue = Object.values(byId).filter(a => !a.isDone)
+          return
+        }
+        // #dev-end
         const byId = Object.fromEntries(queue.map(a => [a.id, a]))
         for (const a of obj.endCharacterActions || []) byId[a.id] = a
         setQueue(Object.values(byId))
       } else if (obj.type === "items_updated") {
         setItems(obj.endCharacterItems)
       } else if (obj.type === "action_completed") {
+        // #dev-start
+        if (labState) return setItems(obj.endCharacterItems)
+        // #dev-end
         onCompleted(obj)
       }
     }
@@ -2889,6 +2927,11 @@
       const before = enhLevel
       enhLevel = hashItem(a.primaryItemHash)?.level ?? enhLevel
       if (!visible()) return
+      if (cfg.lifeIcon) {
+        const big = gains.some(g => ["sage", "legend", "meteor", "crate"].includes(rarity(g.id)))
+        el.querySelector(".bfxl-ico").animate([{ transform: "scale(1)" }, { transform: `scale(${big ? 1.5 : 1.15})`, filter: big ? "drop-shadow(0 0 10px #ffd75a)" : "none" }, { transform: "scale(1)" }], { duration: big ? 1200 : 350 })
+        return
+      }
       play({ skill: skillOf(a.actionHrid), gains, costs, exp, ups, enh: [before, enhLevel], action: a })
     }
 
@@ -2952,6 +2995,29 @@
 .bfxl-pop svg{position:static;width:22px;height:22px}
 .bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
   text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
+.bfxl-big{position:absolute;left:0;top:0}
+.bfxl-big svg{position:static!important;width:100%;height:100%}
+.bfxl-meteor{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle,#fff6c0 0%,#ffb030 45%,#ff5a1a 75%);box-shadow:0 0 10px #ff7a1a,0 0 22px #ff4a00}
+.bfxl-meteor::after{content:"";position:absolute;left:14px;top:4px;width:60px;height:8px;border-radius:4px;background:linear-gradient(90deg,#ffb030cc,#ff5a1a55,transparent)}
+.bfxl-flash{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#ffe0a0 35%,transparent 70%)}
+.bfxl-ring{width:80px;height:24px;border-radius:50%;border:3px solid #ffd9a0;box-shadow:0 0 8px #ffb070}
+.bfxl-dim{inset:0!important;background:#000}
+.bfxl-pillar{top:0!important;width:44px;height:150px;transform-origin:50% 0;background:linear-gradient(90deg,transparent,#fff8d0cc 30%,#fff 50%,#fff8d0cc 70%,transparent);filter:blur(1px)}
+.bfxl-rays{width:120px;height:120px;border-radius:50%;background:repeating-conic-gradient(#fff3a080 0 10deg,transparent 10deg 30deg);-webkit-mask:radial-gradient(circle,#000 20%,transparent 70%);mask:radial-gradient(circle,#000 20%,transparent 70%)}
+.bfxl-circle{border-radius:50%;border:3px double #ff3d6e;box-shadow:0 0 12px #ff3d6e,inset 0 0 12px #ff3d6e;background:repeating-conic-gradient(#ffd75a55 0 4deg,transparent 4deg 30deg)}
+.bfxl-circle.inner{border:2px dashed #ffd75a;box-shadow:0 0 8px #ffd75a;background:none}
+.bfxl-banner.rainbow{background:linear-gradient(90deg,#ff5f5f,#ffd75a,#6fff8f,#5fc8ff,#c77dff,#ff5f5f);-webkit-background-clip:text;background-clip:text;color:transparent!important;text-shadow:none;filter:drop-shadow(0 0 4px #fff) drop-shadow(0 2px 2px #000)}
+.bfxl-banner.sage{color:#ff6b8b;text-shadow:0 0 10px #ff2d55,0 0 4px #ffd75a,0 2px 3px #000}
+.bfxl-ico{display:none;width:46px;height:46px;border-radius:50%;cursor:pointer;position:relative;box-shadow:0 3px 10px #0008}
+.bfxl-ico svg{position:absolute;left:7px;top:7px;width:32px;height:32px;border-radius:50%;background:#1b2033}
+.bfxl.icon{width:46px;border-radius:50%;background:none;box-shadow:none;overflow:visible}
+.bfxl.icon .bfxl-head,.bfxl.icon .bfxl-scene,.bfxl.icon .bfxl-bar,.bfxl.icon .bfxl-lab{display:none}
+.bfxl.icon .bfxl-ico{display:block}
+.bfxl-lab{background:#20263c;padding:6px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px}
+.bfxl-lab select{background:#141828;color:#ddd;border:1px solid #445;border-radius:3px;font-size:11px;max-width:120px}
+.bfxl-lab button{background:#33406a;color:#eef;border:0;border-radius:3px;padding:2px 6px;font-size:11px;cursor:pointer}
+.bfxl-lab button:hover{background:#4a5c96}
+.bfxl-lab b{width:100%;font-size:11px;opacity:.7}
 .bfxl-bar{position:relative;height:14px;background:#11141f}
 .bfxl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#4f8cff,#7fd0ff)}
 .bfxl-bar span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:14px;text-shadow:0 1px 1px #000}
@@ -2962,15 +3028,44 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
+      // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
       $(".bfxl-x").onclick = () => {
-        cfg.life = false
+        cfg.lifeIcon = true
         saveCfg()
         ensure()
-        menu()
       }
+      $(".bfxl-ico").addEventListener("pointerdown", e => {
+        const r = el.getBoundingClientRect()
+        const dx = e.clientX - r.left
+        const dy = e.clientY - r.top
+        let moved = false
+        const move = ev => {
+          if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 5) return
+          moved = true
+          cfg.lifePos = [ev.clientX - dx, ev.clientY - dy]
+          place()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          if (!moved) cfg.lifeIcon = false
+          saveCfg()
+          ensure()
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        e.preventDefault()
+      })
+      // #dev-start
+      const labBtn = document.createElement("button")
+      labBtn.textContent = "🧪"
+      labBtn.title = "生活动画测试"
+      labBtn.onclick = () => lab()
+      $(".bfxl-head").insertBefore(labBtn, $(".bfxl-size"))
+      // #dev-end
       $(".bfxl-min").onclick = () => {
         cfg.lifeMin = !cfg.lifeMin
         saveCfg()
@@ -3042,7 +3137,7 @@
       if (!el) return
       const s = cfg.lifeScale || 1
       el.style.transform = `scale(${s})`
-      const w = 300 * s
+      const w = (cfg.lifeIcon ? 46 : 300) * s
       const h = el.offsetHeight * s
       const [x, y] = cfg.lifePos || defaultPos(w, h)
       el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
@@ -3059,6 +3154,7 @@
       if (!el) build()
       el.style.display = ""
       el.classList.toggle("min", !!cfg.lifeMin)
+      el.classList.toggle("icon", !!cfg.lifeIcon)
       setScene()
       place()
       if (!raf && !cfg.lifeMin) raf = requestAnimationFrame(frame)
@@ -3072,9 +3168,13 @@
       const me = Looks.me
       const key = [cur.id, id, work, tools[skill], me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
       el.querySelector(".bfxl-name").textContent = actionName()
+      el.querySelector(".bfxl-ico").title = actionName()
       el.querySelector(".bfxl-count").textContent = cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
       if (key === sceneKey) return
       sceneKey = key
+      const ico = el.querySelector(".bfxl-ico")
+      ico.innerHTML = ""
+      ico.appendChild(svgUse("skills", skill))
       const scene = el.querySelector(".bfxl-scene")
       el.querySelector(".bfxl-fx").innerHTML = ""
       const bg = kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill
@@ -3301,6 +3401,13 @@
         cycleAt = performance.now()
         t = 0
       }
+      // #dev-start
+      if (labState?.auto && t >= 1) labComplete({})
+      // #dev-end
+      if (cfg.lifeIcon) {
+        el.querySelector(".bfxl-ico").style.background = `conic-gradient(#7fd0ff ${Math.min(1, t) * 360}deg,#2b3350 0)`
+        return
+      }
       const move = held && TOOL_MOVE[held.kind]
       const n = Math.max(1, Math.min(8, Math.round(d / (move ? move[0] : style === "stitch" ? 0.8 : 1.7))))
       // past the end the action is waiting for the server: hold the rest pose
@@ -3445,6 +3552,118 @@
         ],
         { duration: 2200, easing: "ease-out" },
       ).onfinish = () => b.remove()
+      return b
+    }
+    // ----- rare drops: crate < meteorite < relic; philosopher's stones from transmuting -----
+    function fxEl(cls, css) {
+      const e = document.createElement("div")
+      e.className = cls
+      if (css) e.style.cssText = css
+      el.querySelector(".bfxl-fx").appendChild(e)
+      return e
+    }
+    const gone = e => () => e.remove()
+    function bigItem(id, x, y, size, glow, ms, rise = 40) {
+      const b = fxEl("bfxl-big", `width:${size}px;height:${size}px;filter:drop-shadow(0 0 8px ${glow}) drop-shadow(0 0 3px ${glow})`)
+      b.appendChild(svgUse("items", id))
+      b.animate(
+        [
+          { transform: `translate(${x - size / 2}px,${y - size / 2}px) scale(.2)`, opacity: 0 },
+          { transform: `translate(${x - size / 2}px,${y - size / 2 - rise * 0.8}px) scale(1.15)`, opacity: 1, offset: 0.2 },
+          { transform: `translate(${x - size / 2}px,${y - size / 2 - rise}px) scale(1)`, opacity: 1, offset: 0.8 },
+          { transform: `translate(${x - size / 2}px,${y - size / 2 - rise - 10}px) scale(.9)`, opacity: 0 },
+        ],
+        { duration: ms, easing: "ease-out" },
+      ).onfinish = gone(b)
+      return b
+    }
+    function shake(px, ms) {
+      el.querySelector(".bfxl-scene").animate(
+        [0, 1, 2, 3, 4, 5].map(i => ({ transform: i === 5 ? "none" : `translate(${(i % 2 ? -1 : 1) * px * (1 - i / 5)}px,${(i % 3 - 1) * px * 0.6}px)` })),
+        { duration: ms },
+      )
+    }
+    function rareShow(g, skill, cx, cy) {
+      const kind = rarity(g.id)
+      const label = `${rareName(g.id)}${g.n > 1 ? " ×" + g.n : ""}`
+      if (posed) setPose(posed.kind === "cow" ? "startled" : "leaves", 1400)
+      if (kind === "crate") {
+        // bigger crate, bigger show
+        const k = /large/.test(g.id) ? 1.3 : /medium/.test(g.id) ? 1.15 : 1
+        bigItem(g.id, cx, cy - 20, 34 * k, "#ffb300", 2200)
+        burst(skill, cx, cy - 30, Math.round(14 * k), true)
+        banner(L("稀有掉落！", "Rare drop!") + " " + label)
+      } else if (kind === "meteor") {
+        // a burning rock falls out of the sky, hits the ground, and the cache is in the crater
+        const gx = cx - 18
+        const gy = cy + 34
+        const m = fxEl("bfxl-meteor")
+        m.animate([{ transform: "translate(330px,-40px) rotate(-35deg)" }, { transform: `translate(${gx}px,${gy - 8}px) rotate(-35deg)` }], { duration: 650, easing: "cubic-bezier(.5,0,1,1)" }).onfinish = () => {
+          m.remove()
+          const f = fxEl("bfxl-flash")
+          f.animate([{ transform: `translate(${gx - 60}px,${gy - 60}px) scale(.2)`, opacity: 1 }, { transform: `translate(${gx - 60}px,${gy - 60}px) scale(1.6)`, opacity: 0 }], { duration: 500, easing: "ease-out" }).onfinish = gone(f)
+          const r = fxEl("bfxl-ring")
+          r.animate([{ transform: `translate(${gx - 40}px,${gy - 12}px) scale(.2,.2)`, opacity: 1 }, { transform: `translate(${gx - 40}px,${gy - 12}px) scale(2.2,1.2)`, opacity: 0 }], { duration: 700, easing: "ease-out" }).onfinish = gone(r)
+          shake(5, 420)
+          FX.dust ||= [["#c9a77a", "#8b6b4a", "#e8d3b0"], "chip"]
+          burst("dust", gx, gy, 18, true)
+          burst("cheesesmithing", gx, gy - 6, 10, true)
+          bigItem(g.id, gx, gy - 20, 40, "#ff8a3c", 2400, 30)
+          banner(L("天降陨石！", "Meteorite!") + " " + label, "#ffb070")
+        }
+      } else if (kind === "legend") {
+        // the window dims, a light pillar comes down, the relic rises turning in its rays
+        const dim = fxEl("bfxl-dim")
+        dim.animate([{ opacity: 0 }, { opacity: 0.6, offset: 0.15 }, { opacity: 0.6, offset: 0.8 }, { opacity: 0 }], { duration: 4200 }).onfinish = gone(dim)
+        const pillar = fxEl("bfxl-pillar", `left:${cx - 22}px`)
+        pillar.animate([{ transform: "scaleY(0)", opacity: 0 }, { transform: "scaleY(1)", opacity: 1, offset: 0.12 }, { transform: "scaleY(1)", opacity: 0.9, offset: 0.75 }, { transform: "scaleY(1)", opacity: 0 }], { duration: 4000 }).onfinish = gone(pillar)
+        later(350, () => {
+          const rays = fxEl("bfxl-rays", `left:${cx - 60}px;top:${cy - 100}px`)
+          rays.animate([{ transform: "rotate(0) scale(.3)", opacity: 0 }, { transform: "rotate(60deg) scale(1)", opacity: 1, offset: 0.2 }, { transform: "rotate(240deg) scale(1)", opacity: 1, offset: 0.85 }, { transform: "rotate(280deg) scale(1.2)", opacity: 0 }], { duration: 3600 }).onfinish = gone(rays)
+          bigItem(g.id, cx, cy - 10, 48, "#fff3a0", 3600, 30)
+          for (let i = 0; i < 6; i++) later(i * 450, () => burst("enhancing", cx + (Math.random() - 0.5) * 80, cy - 50 - Math.random() * 20, 6, true))
+          const b = banner(L("传说掉落！", "Legendary!") + " " + label, "#fff")
+          b?.classList.add("rainbow")
+        })
+      } else if (kind === "sage") {
+        // a magic circle under the station, power spirals in, a white flash, the stone rises glowing crimson
+        const full = g.id === "philosophers_stone"
+        const ms = full ? 4200 : 2600
+        const ccx = cx
+        const ccy = cy + 30
+        for (const [cls, sz, turn] of [["bfxl-circle", 150, 1], ["bfxl-circle inner", 100, -1]]) {
+          const c = fxEl(cls, `width:${sz}px;height:${sz}px;left:${ccx - sz / 2}px;top:${ccy - sz / 2}px`)
+          c.animate([{ transform: "scaleY(.35) rotate(0) scale(.2)", opacity: 0 }, { transform: `scaleY(.35) rotate(${turn * 90}deg) scale(1)`, opacity: 1, offset: 0.2 }, { transform: `scaleY(.35) rotate(${turn * 400}deg) scale(1)`, opacity: 1, offset: 0.85 }, { transform: `scaleY(.35) rotate(${turn * 460}deg) scale(1.3)`, opacity: 0 }], { duration: ms }).onfinish = gone(c)
+        }
+        const dim = fxEl("bfxl-dim", "background:#2a0018")
+        dim.animate([{ opacity: 0 }, { opacity: 0.55, offset: 0.2 }, { opacity: 0.55, offset: 0.8 }, { opacity: 0 }], { duration: ms }).onfinish = gone(dim)
+        // sparks spiralling into the middle
+        const fx = el.querySelector(".bfxl-fx")
+        for (let i = 0; i < (full ? 26 : 14); i++) {
+          const p = document.createElement("i")
+          const c = i % 3 ? "#ff3d6e" : "#ffd75a"
+          p.style.cssText = `width:5px;height:5px;border-radius:50%;background:${c};box-shadow:0 0 6px ${c}`
+          fx.appendChild(p)
+          const a0 = Math.random() * Math.PI * 2
+          const frames = []
+          for (let k = 0; k <= 8; k++) {
+            const r = 90 * (1 - k / 8)
+            const a = a0 + k * 0.7
+            frames.push({ transform: `translate(${ccx + Math.cos(a) * r}px,${cy - 10 + Math.sin(a) * r * 0.6}px)`, opacity: k === 8 ? 0 : 1 })
+          }
+          p.animate(frames, { duration: 900 + Math.random() * 500, delay: Math.random() * (full ? 900 : 500), easing: "ease-in", fill: "backwards" }).onfinish = gone(p)
+        }
+        later(full ? 1500 : 1000, () => {
+          const f = fxEl("bfxl-flash", "background:radial-gradient(circle,#fff 0%,#ffd0dc 35%,transparent 70%)")
+          f.animate([{ transform: `translate(${ccx - 60}px,${cy - 70}px) scale(.3)`, opacity: 1 }, { transform: `translate(${ccx - 60}px,${cy - 70}px) scale(2.2)`, opacity: 0 }], { duration: 600, easing: "ease-out" }).onfinish = gone(f)
+          shake(full ? 4 : 2, 350)
+          const st = bigItem(g.id, ccx, cy - 10, full ? 52 : 38, "#ff2d55", ms - (full ? 1500 : 1000), 26)
+          st.animate([{ filter: "drop-shadow(0 0 4px #ff2d55) drop-shadow(0 0 2px #ffd75a)" }, { filter: "drop-shadow(0 0 14px #ff2d55) drop-shadow(0 0 6px #ffd75a)" }], { duration: 500, iterations: 8, direction: "alternate" })
+          burst("alchemy", ccx, cy - 20, full ? 20 : 10, true)
+          const b = banner(full ? L("贤者之石！", "Philosopher's Stone!") : label, "#ff6b8b")
+          b?.classList.add("sage")
+        })
+      }
     }
     // one finished action: costs go into the station, gains come out, then experience / level-ups / results
     function play({ skill, gains, costs, exp, ups, enh, action }) {
@@ -3475,35 +3694,161 @@
       }
       if (kind === "alchemy") {
         const ok = gains.length > 0
-        banner(ok ? L("炼金成功", "Success") : L("炼金失败", "Failed"), ok ? "#ffe27a" : "#ff7a6a")
+        // a philosopher's stone has its own show
+        if (!gains.some(g => rarity(g.id) === "sage")) banner(ok ? L("炼金成功", "Success") : L("炼金失败", "Failed"), ok ? "#ffe27a" : "#ff7a6a")
         if (ok) burst("alchemy", cx, cy - 20, 14, true)
         delay = 300
       }
       // gains (the enhanced item itself is shown by the +N above it, not as a gain)
       const shown = kind === "enhancing" ? gains.filter(g => g.id !== hashItem(action.primaryItemHash)?.id) : gains
-      shown.slice(0, 5).forEach((g, i) => {
-        const rare = RARE.test(g.id)
-        const minor = MINOR.test(g.id)
-        pop("+" + fmt(g.n), cx - 16 + i * 10, cy - 30, 60 - i * 6, -70, rare ? 2400 : 1500, {
-          icon: g.id,
-          delay: delay + i * 160,
-          color: rare ? "#ffd75a" : minor ? "#8ff0e0" : "#fff",
-          size: rare ? 15 : 13,
-          glow: rare ? "#ffb300" : minor ? "#3fe0c8" : null,
+      // the biggest find gets its own show; the rest pop up as usual
+      const order = ["sage", "legend", "meteor", "crate"]
+      const star = shown.filter(g => order.includes(rarity(g.id))).sort((a, b) => order.indexOf(rarity(a.id)) - order.indexOf(rarity(b.id)))[0]
+      shown
+        .filter(g => g !== star)
+        .slice(0, 5)
+        .forEach((g, i) => {
+          const minor = rarity(g.id) === "minor"
+          pop("+" + fmt(g.n), cx - 16 + i * 10, cy - 30, 60 - i * 6, -70, 1500, {
+            icon: g.id,
+            delay: delay + i * 160,
+            color: minor ? "#8ff0e0" : "#fff",
+            glow: minor ? "#3fe0c8" : null,
+          })
         })
-        if (rare) later(delay + i * 160, () => key === sceneKey && (banner(L("稀有掉落！", "Rare drop!")), burst(skill, cx, cy - 30, 16, true), setPose(posed?.kind === "cow" ? "startled" : "leaves", 1200)))
-      })
+      if (star) later(delay + 250, () => key === sceneKey && rareShow(star, skill, cx, cy))
       // gatherers and crafters take the product away (on short actions only every third time)
       if ((kind === "gather" || kind === "make") && gains.length && (dur() >= 2.5 || ++walk.carried % 3 === 0)) {
         const main = gains.find(g => !MINOR.test(g.id) && !RARE.test(g.id)) || gains[0]
         later(delay + 300, () => key === sceneKey && carryOut(main.id))
       }
-      if (posed && !shown.some(g => RARE.test(g.id))) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
+      if (posed && !star) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
       if (exp > 0) pop(`+${exp >= 100 ? fmt(exp) : +exp.toFixed(1)} ${L("经验", "XP")}`, 46, 26, 0, -24, 1300, { color: "#9fd3ff", size: 11, delay: delay + 200 })
       // a switch to another action in between clears the scene: late banners are dropped
       for (const [s, lv] of ups) later(delay + 500, () => key === sceneKey && banner(`${SKILL[s] ? L(SKILL[s][0], SKILL[s][1]) : s} Lv.${lv}`))
     }
     // #dev-start
+    // ----- 生活动画测试: any skill / action / tool tier / cycle, and buttons for every kind of result -----
+    // The real action is put aside while testing (game messages still update the inventory and the queue)
+    const LAB_ACTIONS = {"alchemy":[["coinify","点金"],["decompose","分解"],["transmute","转化"],["unrefine","解精炼"]],"brewing":[["milking_tea","挤奶茶"],["defense_coffee","防御咖啡"],["basic_tea_crate","基础茶叶箱"],["magic_coffee","魔法咖啡"],["processing_tea","加工茶"],["super_brewing_tea","超级冲泡茶"],["ultra_foraging_tea","究极采摘茶"],["super_crafting_tea","超级制作茶"],["super_tailoring_tea","超级缝纫茶"],["ultra_enhancing_tea","究极强化茶"]],"cheesesmithing":[["cheese","奶酪"],["cheese_plate_body","奶酪胸甲"],["verdant_plate_legs","翠绿腿甲"],["azure_enhancer","蔚蓝强化器"],["burble_mace","深紫钉头锤"],["crimson_pot","绛红壶"],["rainbow_hatchet","彩虹斧头"],["holy_sword","神圣剑"],["holy_plate_legs","神圣腿甲"],["anchorbound_plate_legs","锚定腿甲"]],"cooking":[["cupcake","纸杯蛋糕"],["yogurt","酸奶"],["blueberry_cake","蓝莓蛋糕"],["blackberry_cake","黑莓蛋糕"],["orange_yogurt","橙子酸奶"],["strawberry_cake","草莓蛋糕"],["mooberry_cake","哞莓蛋糕"],["peach_yogurt","桃子酸奶"],["marsberry_cake","火星莓蛋糕"],["spaceberry_cake","太空莓蛋糕"]],"crafting":[["advanced_task_badge","高级任务徽章"],["earrings_of_gathering","采集耳环"],["ring_of_essence_find","精华发现戒指"],["advanced_milking_charm","高级挤奶护符"],["ring_of_armor","护甲戒指"],["expert_foraging_charm","专家采摘护符"],["crushed_sunstone","太阳石碎片"],["master_enhancing_charm","大师强化护符"],["vampiric_bow","吸血弓"],["grandmaster_cooking_charm","宗师烹饪护符"]],"enhancing":[["enhance","强化"]],"foraging":[["cotton","棉花"],["sugar","糖"],["arabica_coffee_bean","低级咖啡豆"],["shimmering_lake","波光湖泊"],["robusta_coffee_bean","中级咖啡豆"],["liberica_coffee_bean","高级咖啡豆"],["cocoon","蚕茧"],["silly_cow_valley","傻牛山谷"],["marsberry","火星莓"],["radiant_fiber","光辉纤维"]],"milking":[["cow","奶牛"],["verdant_cow","翠绿奶牛"],["azure_cow","蔚蓝奶牛"],["burble_cow","深紫奶牛"],["crimson_cow","绛红奶牛"],["unicow","彩虹奶牛"],["holy_cow","神圣奶牛"]],"tailoring":[["cotton_boots","棉靴"],["linen_fabric","亚麻布料"],["bamboo_boots","竹靴"],["flaming_robe_bottoms","烈焰袍裙"],["silk_hat","丝帽"],["umbral_leather","暗影皮革"],["umbral_tunic","暗影皮衣"],["foragers_bottoms","采摘者下装"],["magicians_hat","魔术师帽"],["gatherer_cape_refined","采集者披风 ★"]],"woodcutting":[["tree","树"],["birch_tree","桦树"],["cedar_tree","雪松树"],["purpleheart_tree","紫心树"],["ginkgo_tree","银杏树"],["redwood_tree","红杉树"],["arcane_tree","奥秘树"]]}
+    const LAB_TOOL = { milking: "brush", foraging: "shears", woodcutting: "hatchet", cheesesmithing: "hammer", crafting: "chisel", tailoring: "needle", cooking: "spatula", brewing: "pot", alchemy: "alembic", enhancing: "enhancer" }
+    const LAB_TIERS = ["cheese", "verdant", "azure", "burble", "crimson", "rainbow", "holy", "celestial"]
+    let labState = null
+    function lab() {
+      if (labState) return labEnd()
+      labState = { saved: { cur, queue, tools: { ...tools }, measured }, skill: "milking", act: "cow", tier: "holy", dur: 3, auto: false, enh: 5, lv: 50, n: 0 }
+      cfg.lifeIcon = false
+      ensure()
+      if (!el) build()
+      const box = document.createElement("div")
+      box.className = "bfxl-lab"
+      const sel = (opts, val, on) => {
+        const s = document.createElement("select")
+        for (const [v, t] of opts) s.add(new Option(t, v, false, v === val))
+        s.onchange = () => on(s.value)
+        box.appendChild(s)
+        return s
+      }
+      const btn = (t, on) => {
+        const b = document.createElement("button")
+        b.textContent = t
+        b.onclick = on
+        box.appendChild(b)
+      }
+      box.innerHTML = "<b>生活动画测试（只在开发版）</b>"
+      let actSel
+      sel(Object.keys(SKILL).map(k => [k, SKILL[k][0]]), labState.skill, v => {
+        labState.skill = v
+        labState.act = LAB_ACTIONS[v][0][0]
+        actSel.innerHTML = ""
+        for (const [id, n] of LAB_ACTIONS[v]) actSel.add(new Option(n, id))
+        labApply()
+      })
+      actSel = sel(LAB_ACTIONS[labState.skill], labState.act, v => ((labState.act = v), labApply()))
+      sel(LAB_TIERS.map(t => [t, t]), labState.tier, v => ((labState.tier = v), labApply()))
+      sel([[1.5, "1.5s"], [3, "3s"], [6, "6s"], [12, "12s"]].map(([v, t]) => [String(v), t]), "3", v => ((labState.dur = +v), labApply()))
+      const auto = document.createElement("label")
+      auto.innerHTML = `<input type="checkbox"> 自动循环`
+      auto.firstChild.onchange = e => (labState.auto = e.target.checked)
+      box.appendChild(auto)
+      btn("完成一次", () => labComplete({}))
+      btn("精华", () => labComplete({ essence: true }))
+      btn("小工匠匣", () => labComplete({ rare: "small_artisans_crate" }))
+      btn("大工匠匣", () => labComplete({ rare: "large_artisans_crate" }))
+      btn("陨石舱", () => labComplete({ rare: "medium_meteorite_cache" }))
+      btn("精通之油", () => labComplete({ rare: "butter_of_proficiency" }))
+      btn("洞察之枝", () => labComplete({ rare: "branch_of_insight" }))
+      btn("贤者之石", () => labComplete({ sage: "philosophers_stone" }))
+      btn("贤者碎片", () => labComplete({ sage: "crushed_philosophers_stone" }))
+      btn("升级", () => labComplete({ up: true }))
+      btn("强化成功", () => labComplete({ enh: 1 }))
+      btn("强化失败", () => labComplete({ enh: -1 }))
+      btn("炼金成功", () => labComplete({ alch: true }))
+      btn("炼金失败", () => labComplete({ alch: false }))
+      btn("结束测试", () => labEnd())
+      el.appendChild(box)
+      labApply()
+    }
+    function labApply() {
+      const { skill, act, tier, dur: d } = labState
+      tools[skill] = `${tier}_${LAB_TOOL[skill]}`
+      const item = skill === "enhancing" ? "holy_sword" : skill === "alchemy" ? (act === "transmute" ? "blazing_trident_refined" : "star_fruit") : ""
+      const fake = { id: -100 - ++labState.n, actionHrid: `/actions/${skill}/${act}`, currentCount: 0, hasMaxCount: false, maxCount: 0, ordinal: 0, isDone: false, primaryItemHash: item ? `0::/item_locations/inventory::/items/${item}::${skill === "enhancing" ? labState.enh : 0}` : "", enhancingProtectionMinLevel: 8 }
+      cur = null
+      setQueue([fake])
+      measured = d
+    }
+    // what a completion of the test action gives
+    function labProduct(skill, act) {
+      if (skill === "milking") return { cow: "milk", unicow: "rainbow_milk" }[act] || act.replace(/_cow$/, "_milk")
+      if (skill === "woodcutting") return act === "tree" ? "log" : act.replace(/_tree$/, "_log")
+      if (skill === "foraging") return Object.keys(FORAGE_AREA).find(k => FORAGE_AREA[k] === act && k !== act) || act
+      return act
+    }
+    function labComplete(o) {
+      const { skill, act } = labState
+      const kind = SKILL[skill][2]
+      const gains = []
+      const costs = []
+      if (kind === "gather" || kind === "make") gains.push({ id: labProduct(skill, act), n: 1 + (Math.random() * 3) | 0 })
+      if (kind === "make") costs.push({ id: { cheesesmithing: "cheese", crafting: "lumber", tailoring: "cotton_fabric", cooking: "milk", brewing: "tea_leaf" }[skill] || "milk", n: 3 })
+      // auto: the game's chances, a bit generous
+      if (o.essence || (labState.auto && Math.random() < 0.1)) gains.push({ id: `${skill}_essence`, n: 1 })
+      if (labState.auto && !o.rare && Math.random() < 0.02) o.rare = ["small_artisans_crate", "medium_meteorite_cache", "thread_of_expertise"][(Math.random() * 3) | 0]
+      if (o.rare) gains.push({ id: o.rare, n: 1 })
+      const ups = o.up ? [[skill, ++labState.lv]] : []
+      let enh = [labState.enh, labState.enh]
+      if (kind === "enhancing") {
+        const ok = o.enh ? o.enh > 0 : Math.random() < 0.5
+        const after = ok ? labState.enh + 1 : labState.enh >= 8 ? labState.enh - 1 : 0
+        enh = [labState.enh, after]
+        labState.enh = after
+        cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/holy_sword::${after}` }
+        queue = [cur]
+      }
+      if (kind === "alchemy") {
+        const ok = o.sage || (o.alch ?? Math.random() < 0.5)
+        if (o.sage) gains.push({ id: o.sage, n: 1 })
+        else if (ok) gains.push(act === "coinify" ? { id: "coin", n: 1200 } : act === "decompose" ? { id: "star_fragment", n: 4 } : { id: "sunstone", n: 1 })
+        costs.push({ id: "star_fruit", n: 1 })
+      }
+      cur = { ...cur, currentCount: cur.currentCount + 1 }
+      queue = [cur]
+      enhLevel = enh[1]
+      cycleAt = performance.now()
+      if (cfg.lifeIcon) return
+      play({ skill, gains, costs, exp: 10 + Math.random() * 30, ups, enh, action: cur })
+    }
+    function labEnd() {
+      const s = labState.saved
+      labState = null
+      el?.querySelector(".bfxl-lab")?.remove()
+      Object.keys(tools).forEach(k => delete tools[k])
+      Object.assign(tools, s.tools)
+      cur = null
+      setQueue(s.queue)
+      measured = s.measured
+    }
     // plays a few fake completions for the current action (or a cow) without the game
     function demo(hrid = cur?.actionHrid || "/actions/milking/cow") {
       if (!isLife(cur) || cur.actionHrid !== hrid) setQueue([{ id: -1, actionHrid: hrid, currentCount: 0, hasMaxCount: false }])
@@ -3514,13 +3859,14 @@
     // #dev-end
     // #release-start
     // const demo = null
+    // const lab = null
     // #release-end
     setInterval(() => {
       ensure()
       if (el && !cfg.lifePos) place()
       if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
     }, 1000)
-    return { onMessage, ensure, demo, state: () => ({ cur, queue, tools, measured, dur: dur(), inv }) }
+    return { onMessage, ensure, demo, lab, state: () => ({ cur, queue, tools, measured, dur: dur(), inv }) }
   })()
 
   // #dev-start
@@ -3983,6 +4329,7 @@
         }
       }),
       GM_registerMenuCommand(L("打开动画测试（自动战斗）", "Open the FX lab (auto battle)"), demo), // #dev
+      GM_registerMenuCommand("生活动画测试（小窗）", () => Life.lab()), // #dev
       GM_registerMenuCommand(Recorder.active() ? L("⏹ 停止录制并下载文件", "⏹ Stop recording and download") : L("⏺ 录制战斗消息（迷宫 / 公会战）", "⏺ Record battle messages (labyrinth / guild)"), () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
       toggle("debug", L("调试：控制台打印战斗消息", "Debug: log battle messages")), // #dev
     ]

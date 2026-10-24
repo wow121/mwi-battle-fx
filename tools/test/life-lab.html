@@ -1,0 +1,38 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
+.ProgressBar_bar{position:relative;width:200px;overflow:hidden;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+</style></head><body>
+<!-- the game's header: action name + seconds per action (run-mock serves this page as mock.html) -->
+<div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm">挤奶 - 奶牛</div></div>
+ <div class="ProgressBar_bar"><div class="ProgressBar_innerBar__q" style="width:0"></div><div class="ProgressBar_text__102Yn" id="pt">2.50s</div></div></div></div>
+<div style="padding:20px">生活技能小窗测试（技能页面）</div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799'}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const inv=(item,count,enh=0)=>({itemLocationHrid:'/item_locations/inventory',itemHrid:'/items/'+item,enhancementLevel:enh,count});
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+const sk=(s,level,experience)=>({skillHrid:'/skills/'+s,level,experience});
+const act=(id,hrid,count,extra={})=>({id,actionHrid:hrid,currentCount:count,hasMaxCount:false,maxCount:0,ordinal:0,isDone:false,primaryItemHash:'',enhancingProtectionMinLevel:0,updatedAt:new Date(T0+(extra.at||0)).toISOString(),...extra});
+let T0=Date.now();
+const done=(a,items,skills)=>feed({type:'action_completed',endCharacterAction:a,endCharacterItems:items,endCharacterSkills:skills});
+const header=(name,s)=>{document.getElementById('nm').textContent=name;document.getElementById('pt').textContent=s};
+async function start(){
+ const D=3000; header('挤奶 - 奶牛','3.00s');
+ feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},characterActions:[act(1,'/actions/milking/cow',0)],characterSkills:[],characterItems:[slot('milking_tool','holy_brush')]});
+ await sleep(800);
+ const L=window.__mwiBattleFx.Life; L.lab();
+ const click=t=>[...document.querySelectorAll('.bfxl-lab button')].find(b=>b.textContent===t).click();
+ const pick=(i,v)=>{const s=document.querySelectorAll('.bfxl-lab select')[i];s.value=v;s.dispatchEvent(new Event('change'))};
+ await sleep(1200); click('小工匠匣'); await sleep(2500); click('大工匠匣'); await sleep(2500); click('陨石舱'); await sleep(3200);
+ click('精通之油'); await sleep(4800);
+ pick(0,'alchemy'); pick(1,'transmute'); await sleep(1500); click('贤者之石'); await sleep(4800); click('贤者碎片'); await sleep(3200);
+ click('结束测试'); await sleep(800); document.querySelector('.bfxl-x').click(); await sleep(1500); document.querySelector('.bfxl-ico').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientX:5,clientY:5})); window.dispatchEvent(new PointerEvent('pointerup',{clientX:5,clientY:5}));
+}
+function back(){}
+</script></body></html>

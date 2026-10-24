@@ -30,7 +30,7 @@ await sleep(1500)
 await send("Runtime.evaluate", { expression: "start()" })
 const t0 = Date.now()
 let n = 0
-while (Date.now() - t0 < 18000) {
+while (Date.now() - t0 < (+process.env.DUR || 18000)) {
   const r = await send("Page.captureScreenshot", { format: "jpeg", quality: 80 })
   fs.writeFileSync(path.join(frames, `f${String(n).padStart(4, "0")}_${Date.now() - t0}.jpg`), Buffer.from(r.result.data, "base64"))
   n++
