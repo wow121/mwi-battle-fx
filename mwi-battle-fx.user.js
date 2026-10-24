@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.1
+// @version      0.13.2
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2983,7 +2983,7 @@
       const st = document.createElement("style")
       st.id = "bfxl-css"
       st.textContent = `
-.bfxl{position:fixed;z-index:1100;width:300px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
+.bfxl{position:fixed;z-index:1100;width:340px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
   box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;transform-origin:0 0;user-select:none}
 .bfxl-head{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 9px;background:#262d47;cursor:move}
 .bfxl-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
@@ -3214,7 +3214,7 @@
       if (!el) return
       const s = cfg.lifeScale || 1
       el.style.transform = `scale(${s})`
-      const w = (cfg.lifeIcon ? 46 : 300) * s
+      const w = (cfg.lifeIcon ? 46 : 340) * s
       const h = el.offsetHeight * s
       const [x, y] = cfg.lifePos || defaultPos(w, h)
       el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
@@ -3364,15 +3364,14 @@
       }
       showEnh()
       buildStage(kind, target)
-      // the teapot is lifted until its body is just over the table and its spout over the table's middle; the chisel
-      // (held level) is raised until its tip is on the table's top, at most a little so it stays in the hand
-      const aim = staged && kind !== "gather" ? el.querySelector(".bfxl-table") : target
-      const top = staged ? aim.offsetTop + aim.offsetHeight * PROP_TOP : aim.offsetTop + aim.offsetHeight * 0.4
+      // the teapot is lifted until its body is just over the station's table and its spout over its middle; the
+      // chisel (held level) is raised until its tip is on the workbench's top, at most a little so it stays in the
+      // hand (those two stations are drawn smaller for that)
       const hand = [workX() + HAND[0], hero.offsetTop + HAND[1]]
-      if (held?.kind === "pot") POUR = [Math.max(-6, Math.min(20, aim.offsetLeft + aim.offsetWidth * 0.3 - hand[0])), Math.max(-16, Math.min(0, top - 14 - hand[1]))]
+      if (held?.kind === "pot") POUR = [Math.max(-6, Math.min(20, target.offsetLeft + target.offsetWidth * 0.25 - hand[0])), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.4 - 14 - hand[1]))]
       if (held?.kind === "chisel") {
         const r = TOOL_REACH.chisel * 0.9
-        POUR = [Math.max(-10, Math.min(24, aim.offsetLeft + aim.offsetWidth * 0.55 - hand[0] - r)), Math.max(-16, Math.min(0, top - hand[1]))]
+        POUR = [Math.max(-10, Math.min(24, target.offsetLeft + target.offsetWidth * 0.3 - hand[0] - r)), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.36 - hand[1]))]
       }
       if (walk.action !== cur.id) {
         walk.action = cur.id
@@ -3412,7 +3411,8 @@
       fillStore()
       if (kind === "gather") return
       table.appendChild(img("prop/" + (kind === "make" ? "table_wood" : "table_stone"), "cell"))
-      table.style.left = target.offsetLeft - table.offsetWidth + 10 + "px"
+      // behind the hero's back at the station, just right of the storage
+      table.style.left = Math.max(store.offsetLeft + store.offsetWidth - 14, workX() - table.offsetWidth + 22) + "px"
       // the materials move from the station onto the table
       const row = target.querySelector(".bfxl-mats")
       if (row) {
@@ -3433,6 +3433,8 @@
       else ids = [work, ...materials().map(([d]) => d)]
       return [...new Set(ids.filter(Boolean))].slice(0, 4)
     }
+    // counts on the shelves: as few characters as possible (999, 12.3K, 123K, 1.2M)
+    const short = n => (n >= 1e6 ? +(n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : n >= 1e3 ? +(n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + "K" : String(n))
     const invCount = id => Object.entries(inv).reduce((t, [k, c]) => (k.startsWith(`/item_locations/inventory::/items/${id}::`) ? t + c : t), 0)
     function fillStore() {
       const slots = el?.querySelectorAll(".bfxl-slot")
@@ -3449,7 +3451,7 @@
           }
         }
         const b = slot.querySelector("b")
-        if (b) b.textContent = fmt(invCount(id))
+        if (b) b.textContent = short(invCount(id))
       })
     }
     // a slot takes something in (or gives it out): a little bounce
@@ -3471,12 +3473,15 @@
       }
     }
     const storeX = () => 26
-    // to the storage (leaving the product there), back to the table with the next materials
+    // to the storage (leaving the product there), to the table with the next materials, back to the station
     function fetchMoves(product) {
       const first = materials()[0]?.[0] || null
+      const table = el.querySelector(".bfxl-table")
+      const tableX = table.offsetLeft + table.offsetWidth / 2 - HAND[0] + 6
       return [
         { to: storeX(), carry: product, speed: 190, then: () => (product && bumpStore(product), first && bumpStore(first)) },
-        { to: workX(), work: true, carry: first, speed: 190, then: () => setMats(true) },
+        { to: tableX, carry: first, speed: 190, then: () => setMats(true) },
+        { to: workX(), work: true, speed: 160 },
       ]
     }
     // where the hero stands to work: the tool's reach short of the target's front
@@ -3484,10 +3489,6 @@
       const target = el?.querySelector(".bfxl-target")
       if (!target || !cur) return 62
       const kind = SKILL[skillOf(cur.actionHrid)][2]
-      // with a materials table: right behind it, reaching over it to the station
-      const table = el.querySelector(".bfxl-table")
-      if (staged && kind !== "gather" && table) return Math.max(4, table.offsetLeft - HAND[0] + 4)
-      if (kind === "enhancing") return 70 // the horn is blown from a step away
       const reach = held ? TOOL_REACH[held.kind] || 44 : 30
       const front = target.offsetLeft + target.offsetWidth * (kind === "gather" ? 0.2 : 0.1)
       return Math.max(4, Math.min(150, front - HAND[0] - reach * 0.45))
