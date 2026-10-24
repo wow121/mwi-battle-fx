@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.5
+// @version      0.13.6
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -36,7 +36,14 @@
   const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
-  const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
+  // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
+  // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
+  const ASSET_REV = "978bfe1d9f"
+  const MANIFEST_URLS = [
+    "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json",
+    DEFAULT_ASSET_BASE.replace(/@main$/, "@" + ASSET_REV) + "/assets/manifest.json",
+    DEFAULT_ASSET_BASE + "/assets/manifest.json",
+  ]
   const cfg = { ...DEFAULTS, ...GM_getValue("battle_fx_cfg_v1", {}) }
   const saveCfg = () => GM_setValue("battle_fx_cfg_v1", cfg)
 
@@ -510,6 +517,8 @@
           onload: r => {
             try {
               manifest = JSON.parse(r.responseText)
+              // a manifest taken from a commit before its pin has no rev: it is that commit
+              if (!manifest.rev) manifest.rev = (/@([0-9a-f]{7,40})\//.exec(urls[k]) || [])[1]
               fetchedAt = Date.now()
               source = urls[k]
               loading = false

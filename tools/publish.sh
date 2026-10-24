@@ -22,7 +22,10 @@ m = json.load(open(p))
 m["rev"] = sys.argv[1]
 json.dump(m, open(p, "w"), separators=(",", ":"))
 EOF
-git add assets/manifest.json
+# the scripts carry the art commit too (their fallback manifest when raw.githubusercontent.com is out of reach)
+sed -i "s/^  const ASSET_REV = \".*\"$/  const ASSET_REV = \"$REV\"/" mwi-battle-fx.user.js
+python3 -I tools/build-release.py
+git add assets/manifest.json mwi-battle-fx.user.js release/mwi-battle-fx.user.js
 git commit -q -m "Pin assets to $REV$TRAILER"
 git push -q
 # The userscript reads its manifest (and updates itself) from raw.githubusercontent.com, which follows the
