@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.5
+// @version      0.12.6
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeScale: 1 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeScale: 1 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
@@ -2862,6 +2862,7 @@
         for (const k of Object.keys(inv)) delete inv[k]
         for (const k of Object.keys(tools)) delete tools[k]
         setItems(obj.characterItems)
+        setBuffMaps(obj)
         for (const s of obj.characterSkills || []) skills[s.skillHrid] = { level: s.level, experience: s.experience }
         cur = null
         setQueue(obj.characterActions || [], true)
@@ -2879,6 +2880,8 @@
         setQueue(Object.values(byId))
       } else if (obj.type === "items_updated") {
         setItems(obj.endCharacterItems)
+      } else if (/buff|house/.test(obj.type)) {
+        setBuffMaps(obj)
       } else if (obj.type === "action_completed") {
         // #dev-start
         if (labState) return setItems(obj.endCharacterItems)
@@ -3033,6 +3036,10 @@
 .bfxl-lab button:hover{background:#4a5c96}
 .bfxl-lab b{width:100%;font-size:11px;opacity:.7}
 .bfxl-bar{position:relative;height:14px;background:#11141f}
+.bfxl-info{padding:3px 8px 4px;background:#171b2b;font-size:10.5px;line-height:1.5;color:#c8d0e8}
+.bfxl-info div{display:flex;flex-wrap:wrap;column-gap:9px}
+.bfxl-info span{white-space:nowrap}
+.bfxl.min .bfxl-info,.bfxl.icon .bfxl-info{display:none!important}
 .bfxl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#4f8cff,#7fd0ff)}
 .bfxl-bar span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:14px;text-shadow:0 1px 1px #000}
 `
@@ -3042,7 +3049,7 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-ico"></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
       // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
@@ -3080,6 +3087,12 @@
       labBtn.onclick = () => lab()
       $(".bfxl-head").insertBefore(labBtn, $(".bfxl-size"))
       // #dev-end
+      $(".bfxl-info-btn").onclick = () => {
+        cfg.lifeInfo = !cfg.lifeInfo
+        saveCfg()
+        showInfo()
+        place()
+      }
       $(".bfxl-min").onclick = () => {
         cfg.lifeMin = !cfg.lifeMin
         saveCfg()
@@ -3170,6 +3183,7 @@
       el.classList.toggle("min", !!cfg.lifeMin)
       el.classList.toggle("icon", !!cfg.lifeIcon)
       setScene()
+      showInfo()
       place()
       if (!raf && !cfg.lifeMin) raf = requestAnimationFrame(frame)
     }
@@ -3317,6 +3331,148 @@
         return later(500, () => setPose("swayr", 500))
       }
       setPose("idle", 0)
+    }
+  // LZString.decompressFromUTF16 (lz-string 1.5, MIT): the game keeps its static data in localStorage this way
+  function lzUTF16(input) {
+    if (!input) return null
+    const reset = 16384
+    const next = i => input.charCodeAt(i) - 32
+    const dict = [0, 1, 2]
+    const out = []
+    let enlargeIn = 4
+    let dictSize = 4
+    let numBits = 3
+    let val = next(0)
+    let pos = reset
+    let index = 1
+    const read = n => {
+      let bits = 0
+      for (let power = 1, max = 1 << n; power !== max; power <<= 1) {
+        const b = val & pos
+        pos >>= 1
+        if (pos === 0) {
+          pos = reset
+          val = next(index++)
+        }
+        if (b > 0) bits |= power
+      }
+      return bits
+    }
+    const first = read(2)
+    if (first === 2) return ""
+    let w = String.fromCharCode(read(first === 0 ? 8 : 16))
+    dict[3] = w
+    out.push(w)
+    for (;;) {
+      if (index > input.length) return ""
+      let c = read(numBits)
+      if (c === 2) return out.join("")
+      if (c < 2) {
+        dict[dictSize++] = String.fromCharCode(read(c === 0 ? 8 : 16))
+        c = dictSize - 1
+        if (--enlargeIn === 0) enlargeIn = 1 << numBits++
+      }
+      const entry = dict[c] !== undefined ? dict[c] : c === dictSize ? w + w.charAt(0) : null
+      if (entry === null) return null
+      out.push(entry)
+      dict[dictSize++] = w + entry.charAt(0)
+      w = entry
+      if (--enlargeIn === 0) enlargeIn = 1 << numBits++
+    }
+  }
+    // ----- the game's static data (localStorage initClientData) and the character's buffs, for the info lines -----
+    let gd = null
+    let gdTried = 0
+    function gameData() {
+      if (gd || Date.now() - gdTried < 10000) return gd
+      gdTried = Date.now()
+      try {
+        const all = JSON.parse(lzUTF16(W.localStorage.getItem("initClientData")) || "null")
+        const h = all?.clientData || all?.data || all
+        if (!h?.actionDetailMap) return null
+        // only what the info lines need
+        const actions = {}
+        for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9 }
+        const items = {}
+        for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate }
+        gd = { actions, items, enhance: h.enhancementLevelSuccessRateTable || [] }
+      } catch (e) {
+        if (cfg.debug) console.warn("[生活动画] initClientData", e) // #dev
+      }
+      return gd
+    }
+    const buffMaps = {} // "<source>ActionTypeBuffsMap" -> action type -> buffs (equipment, teas, house, community, ...)
+    function setBuffMaps(obj) {
+      for (const k of Object.keys(obj)) if (/ActionTypeBuffsMap$/.test(k)) buffMaps[k] = obj[k] || {}
+    }
+    // summed buffs of one action type: buff type (short) -> value
+    function buffsFor(skill) {
+      const out = {}
+      for (const m of Object.values(buffMaps))
+        for (const b of m?.["/action_types/" + skill] || []) {
+          const t = shortId(b.typeHrid)
+          out[t] = (out[t] || 0) + (b.flatBoost || 0) + (b.ratioBoost || 0)
+        }
+      return out
+    }
+    const pctS = v => (v >= 0 ? "+" : "") + (Math.round(v * 1000) / 10).toString() + "%"
+    // the game's action panel in two lines: time and speed, efficiency, actions per hour; experience, drops and
+    // finds, or the success rate for enhancing and alchemy
+    function infoLines() {
+      if (!cur) return []
+      const skill = skillOf(cur.actionHrid)
+      const kind = SKILL[skill][2]
+      const b = buffsFor(skill)
+      const g = gameData()
+      const a = g?.actions[cur.actionHrid]
+      const level = (skills["/skills/" + skill]?.level || 0) + (b[skill + "_level"] || 0)
+      const speed = b.action_speed || 0
+      const time = a?.time ? a.time / (1 + speed) : dur()
+      const work = hashItem(cur.primaryItemHash)
+      const item = work && g?.items[work.id]
+      // enhancing has no efficiency; alchemy is levelled against the item, the rest against the action
+      const req = kind === "alchemy" ? item?.level || 0 : a?.level || 0
+      const eff = kind === "enhancing" ? 0 : Math.max(0, level - req) * 0.01 + (b.efficiency || 0)
+      const line1 = [`⏱ ${time.toFixed(2)}s`, `${L("速度", "Speed")} ${pctS(speed)}`]
+      if (kind !== "enhancing") line1.push(`${L("效率", "Efficiency")} ${pctS(eff)}`)
+      line1.push(`≈${Math.round((3600 / time) * (1 + eff))}${L("次/时", "/h")}`)
+      const line2 = [`${L("经验", "XP")} ${pctS(b.wisdom || 0)}`]
+      if (kind === "gather") {
+        line2.push(`${L("采集", "Gathering")} ${pctS(b.gathering || 0)}`)
+        if (b.processing) line2.push(`${L("加工", "Processing")} ${pctS(b.processing)}`)
+      }
+      if (kind === "make") {
+        if (b.artisan) line2.push(`${L("工匠", "Artisan")} ${pctS(b.artisan)}`)
+        if (b.gourmet) line2.push(`${L("美食", "Gourmet")} ${pctS(b.gourmet)}`)
+      }
+      if (kind === "enhancing" && item && g) {
+        const lv = work.level
+        const base = g.enhance[lv] ?? 0
+        const ratio = (level >= item.level ? (level - item.level) * 0.0005 : -0.5 * (1 - level / item.level)) + (b.enhancing_success || 0)
+        line2.unshift(`${L("成功率", "Success")} ${(Math.min(1, base * (1 + ratio)) * 100).toFixed(1)}% (+${lv}→+${lv + 1})`)
+        if (b.blessed) line2.push(`${L("祝福", "Blessed")} ${pctS(b.blessed)}`)
+        if (cur.enhancingMaxLevel) line2.push(`${L("目标", "Target")} +${cur.enhancingMaxLevel}`)
+      }
+      if (kind === "alchemy" && g) {
+        const how = shortId(cur.actionHrid)
+        const base = how === "coinify" ? 0.7 : how === "decompose" ? 0.6 : item?.transmute || 0
+        const cat = hashItem(cur.secondaryItemHash)?.id || ""
+        const catalyst = cat === "prime_catalyst" ? 0.25 : /catalyst/.test(cat) ? 0.15 : 0
+        const lvRatio = item && level < item.level ? -0.9 * (1 - level / item.level) : 0
+        if (base) line2.unshift(`${L("成功率", "Success")} ${(Math.min(1, base * (1 + lvRatio + (b.alchemy_success || 0) + catalyst)) * 100).toFixed(1)}%`)
+      }
+      line2.push(`${L("精华", "Essence")} ${pctS(b.essence_find || 0)}`, `${L("稀有", "Rare")} ${pctS(b.rare_find || 0)}`)
+      return [line1, line2]
+    }
+    function showInfo() {
+      const box = el?.querySelector(".bfxl-info")
+      if (!box) return
+      box.style.display = cfg.lifeInfo ? "" : "none"
+      if (!cfg.lifeInfo) return
+      const html = infoLines()
+        .map(l => `<div>${l.map(x => `<span>${x}</span>`).join("")}</div>`)
+        .join("")
+      if (box.innerHTML !== html) box.innerHTML = html
     }
     function showEnh() {
       const t = el?.querySelector(".bfxl-enh")
@@ -4405,7 +4561,7 @@
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
-  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed)$|party/
+  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed)$|party|buff|house/
   function onCharacterMessage(obj) {
     // completions only carry inventory counts (and the tools' slots), never the visible gear
     if (obj.type !== "action_completed") Looks.onMessage(obj)
