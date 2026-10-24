@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.11.3
+// @version      0.11.4
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -769,6 +769,7 @@
 .bfx-guild .bfx-loc{left:84px}
 .bfx-world{position:absolute;inset:0}
 .bfx-guild{cursor:grab;touch-action:none}
+.bfx-stage.bfx-hot{cursor:pointer}
 .bfx-zoom{display:none;position:absolute;left:4px;top:2px;z-index:20;gap:3px;pointer-events:auto!important}
 .bfx-guild .bfx-zoom{display:flex}
 .bfx-zoom button{width:22px;height:20px;padding:0;font:13px/18px sans-serif;color:#dfe6ff;background:rgba(20,26,52,.85);border:1px solid #4a5590;border-radius:6px;cursor:pointer}
@@ -1040,6 +1041,30 @@
       stageEl.addEventListener("pointermove", e => drag && setView(view.z, drag.vx + e.clientX - drag.x, drag.vy + e.clientY - drag.y))
       stageEl.addEventListener("pointerup", () => (drag = null))
       stageEl.addEventListener("dblclick", () => guild() && setView(1, 0, 0))
+      // live: a click on a unit goes on to its game card under the stage, which opens the game's own
+      // unit popup (loot, exp, consumables)
+      const unitAt = e => {
+        if (mode !== "live" || e.target.closest("button")) return null
+        let best = null
+        for (const side of ["p", "m"])
+          for (const a of actors[side]) {
+            const r = a.el.getBoundingClientRect()
+            const h = a.el.querySelector(".bfx-hud")?.getBoundingClientRect()
+            const bottom = Math.max(r.bottom, h?.bottom || 0)
+            if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > bottom) continue
+            const d = Math.abs(e.clientX - (r.left + r.right) / 2)
+            if (!best || d < best.d) best = { a, d }
+          }
+        return best && cardEl(best.a.side, best.a.i)
+      }
+      stageEl.addEventListener("click", e => {
+        const card = unitAt(e)
+        if (!card) return
+        e.stopPropagation()
+        // the deepest part of the card, so the click bubbles through whichever element listens
+        ;(card.querySelector('[class*="CombatUnit_unitIconContainer"]') || card).click()
+      })
+      stageEl.addEventListener("mousemove", e => stageEl.classList.toggle("bfx-hot", !!unitAt(e)))
       stageEl.querySelector(".bfx-zoom").addEventListener("click", e => {
         const f = +e.target.closest("button")?.dataset.z
         if (f === 0) setView(1, 0, 0)
