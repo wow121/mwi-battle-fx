@@ -64,6 +64,14 @@ STATIONS = [
     ("alchemy", "an alchemy table with a bubbling alembic and flasks"),
     ("enhancing", "an enhancing altar: a stone pedestal with glowing blue runes and small floating crystals"),
 ]
+# storage (left of the window, the inventory's counts are drawn on it) and the small table that holds the materials
+PROPS = [
+    ("storage_wood", "an indoor storage shelf: a sturdy wooden shelving unit with three EMPTY open shelves (nothing on them), a crate and a sack on the floor beside it"),
+    ("storage_crates", "an outdoor storage corner: a stack of open wooden crates and a woven basket with flat EMPTY tops, a small barrel"),
+    ("storage_arcane", "a magical storage cabinet: a dark wooden and stone cabinet with three EMPTY open shelves edged with faintly glowing blue runes"),
+    ("table_wood", "a small low wooden side table with a plain EMPTY flat top, about half a person's height"),
+    ("table_stone", "a small low stone side table with a plain EMPTY flat top and faint glowing blue runes on its front, about half a person's height"),
+]
 TIERS = ["cheese", "verdant", "azure", "burble", "crimson", "rainbow", "holy", "celestial"]
 TOOLS = {
     "brush": "a milking brush",
@@ -159,6 +167,12 @@ for area, plants in AREAS.items():
     )
     job("lg_plants_" + area, prompt, [os.path.join(REF, f"i_{i}.png") for i in names], "magenta")
     groups["lg_plants_" + area] = {"grid": [3, 2], "dir": "plant", "ids": names + [area]}
+
+prompt = f"Image: STORAGE and SIDE TABLES for a cute 2D side-view idle game, in {STYLE}. Everything is EMPTY: no items on any shelf or table top, they will be added later.\n" + grid(
+    3, 2, [d for _, d in PROPS], "magenta", "Each is drawn in side view, standing on the ground, seen straight from the front."
+)
+job("lg_props", prompt, [os.path.join(REF, "s_crafting.png")], "magenta")
+groups["lg_props"] = {"grid": [3, 2], "dir": "prop", "ids": [i for i, _ in PROPS]}
 
 prompt = f"Image: WORK STATIONS for a cute 2D side-view idle game, in {STYLE}; the attached skill icons (in this order) give each station's theme and colours.\n" + grid(
     4, 2, [d for _, d in STATIONS], "magenta", "Each station is drawn in side view at about the height of a person, with a flat top where an item can rest."

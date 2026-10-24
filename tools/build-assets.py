@@ -438,7 +438,7 @@ TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
 LIFE_MARGIN = 24
 _groups = os.path.join(RAW, "life-groups.json")
 GROUPS = json.load(open(_groups)) if os.path.exists(_groups) else {}
-life = {"bg": [], "t": [], "plant": [], "station": [], "tool": [], "tool_geo": {}}
+life = {"bg": [], "t": [], "plant": [], "station": [], "tool": [], "prop": [], "tool_geo": {}}
 
 
 def tool_geo(path, kind):

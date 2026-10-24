@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.12.9
+// @version      0.13.0
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2795,6 +2795,7 @@
     let lastF = 0
     let sceneKey = ""
     let held = null // the drawn tool in the hand: { kind, geo }
+    let staged = false // the storage (left) and the materials table (by the station) are drawn
     // the hero walks: in from the left when an action starts, out to the left with the product and back
     const walk = { x: -60, moves: [], action: null, carried: 0 }
     let posed = null // the drawn cow / tree: { kind: "cow" | "tree", imgs: { pose: img }, until, base }
@@ -3017,6 +3018,12 @@
 .bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
   text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
 .bfxl-big{position:absolute;left:0;top:0}
+.bfxl-store{position:absolute;left:-10px;bottom:2px;width:100px;height:100px;pointer-events:none}
+.bfxl-table{position:absolute;bottom:4px;width:56px;height:56px;pointer-events:none}
+.bfxl-store img.cell,.bfxl-table img.cell{position:absolute;left:-4.7%;top:-4.7%;width:109.4%;height:109.4%}
+.bfxl-slot{position:absolute;width:18px;height:18px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 1px #0009)}
+.bfxl-slot svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-slot b{position:absolute;left:50%;top:100%;transform:translateX(-50%);font:700 8.5px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000,0 0 1px #000}
 .bfxl-mats{position:absolute;left:4%;right:4%;display:flex;justify-content:center;gap:1px;transform:translateY(-100%);pointer-events:none;z-index:1}
 .bfxl-mat{position:relative;width:19px;height:19px;filter:drop-shadow(0 1px 1px #0008)}
 .bfxl-mat svg{position:absolute;left:0;top:0;width:100%;height:100%}
@@ -3075,7 +3082,7 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
       // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
@@ -3210,6 +3217,7 @@
       el.classList.toggle("icon", !!cfg.lifeIcon)
       setScene()
       showInfo()
+      fillStore()
       place()
       if (!raf && !cfg.lifeMin) raf = requestAnimationFrame(frame)
     }
@@ -3338,26 +3346,130 @@
         }
       }
       showEnh()
-      // the teapot is lifted until its body is just over the brewing table and its spout over the table's middle;
-      // the chisel (held level) is raised until its tip is on the workbench's top, at most a little so it stays in
-      // the hand (the bench is drawn a bit smaller for that)
+      buildStage(kind, target)
+      // the teapot is lifted until its body is just over the table and its spout over the table's middle; the chisel
+      // (held level) is raised until its tip is on the table's top, at most a little so it stays in the hand
+      const aim = staged && kind !== "gather" ? el.querySelector(".bfxl-table") : target
+      const top = staged ? aim.offsetTop + aim.offsetHeight * PROP_TOP : aim.offsetTop + aim.offsetHeight * 0.4
       const hand = [workX() + HAND[0], hero.offsetTop + HAND[1]]
-      if (held?.kind === "pot") POUR = [Math.max(-6, Math.min(20, target.offsetLeft + target.offsetWidth * 0.25 - hand[0])), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.4 - 14 - hand[1]))]
+      if (held?.kind === "pot") POUR = [Math.max(-6, Math.min(20, aim.offsetLeft + aim.offsetWidth * 0.3 - hand[0])), Math.max(-16, Math.min(0, top - 14 - hand[1]))]
       if (held?.kind === "chisel") {
         const r = TOOL_REACH.chisel * 0.9
-        POUR = [Math.max(-10, Math.min(24, target.offsetLeft + target.offsetWidth * 0.3 - hand[0] - r)), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.36 - hand[1]))]
+        POUR = [Math.max(-10, Math.min(24, aim.offsetLeft + aim.offsetWidth * 0.55 - hand[0] - r)), Math.max(-16, Math.min(0, top - hand[1]))]
       }
       if (walk.action !== cur.id) {
         walk.action = cur.id
         walk.x = -60
-        walk.moves = [{ to: workX(), work: true }]
+        // crafters fetch the first materials from the storage and lay them on the table
+        walk.moves = staged && kind !== "gather" ? fetchMoves(null) : [{ to: workX(), work: true }]
+        if (staged && kind !== "gather") setMats(false)
       } else walk.moves = walk.moves.map(m => (m.work ? { ...m, to: workX() } : m))
+    }
+    // ----- storage and materials table -----
+    // where things sit, as fractions of a prop's 512px cell: storage slots [x, the shelf / top they stand on]
+    const STORE_SLOTS = {
+      storage_wood: [[0.45, 0.4], [0.72, 0.4], [0.45, 0.625], [0.72, 0.625]],
+      storage_crates: [[0.51, 0.37], [0.3, 0.62], [0.86, 0.49], [0.65, 0.7]],
+      storage_arcane: [[0.4, 0.45], [0.66, 0.45], [0.4, 0.66], [0.66, 0.66]],
+    }
+    const PROP_TOP = 0.43 // the side tables' top
+    function buildStage(kind, target) {
+      const store = el.querySelector(".bfxl-store")
+      const table = el.querySelector(".bfxl-table")
+      store.innerHTML = ""
+      table.innerHTML = ""
+      const storeId = kind === "gather" ? "storage_crates" : kind === "make" ? "storage_wood" : "storage_arcane"
+      staged = art("prop", storeId)
+      store.style.display = staged ? "" : "none"
+      table.style.display = staged && kind !== "gather" ? "" : "none"
+      if (!staged) return
+      store.dataset.prop = storeId
+      store.appendChild(img("prop/" + storeId, "cell"))
+      STORE_SLOTS[storeId].forEach(([x, y], i) => {
+        const slot = document.createElement("div")
+        slot.className = "bfxl-slot"
+        Object.assign(slot.style, { left: x * 100 + "%", top: y * 100 + "%" })
+        slot.dataset.i = i
+        store.appendChild(slot)
+      })
+      fillStore()
+      if (kind === "gather") return
+      table.appendChild(img("prop/" + (kind === "make" ? "table_wood" : "table_stone"), "cell"))
+      table.style.left = target.offsetLeft - table.offsetWidth + 10 + "px"
+      // the materials move from the station onto the table
+      const row = target.querySelector(".bfxl-mats")
+      if (row) {
+        Object.assign(row.style, { top: PROP_TOP * 100 + "%", left: "6%", right: "6%" })
+        table.appendChild(row)
+      }
+    }
+    // the items this action is about, with the inventory's counts: what comes out and what goes in
+    function storeItems() {
+      const skill = skillOf(cur.actionHrid)
+      const kind = SKILL[skill][2]
+      const g = gameData()
+      const work = hashItem(cur.primaryItemHash)?.id
+      let ids = []
+      if (kind === "gather") ids = [...(g?.actions[cur.actionHrid]?.drops || []).map(([d]) => d), skill + "_essence"]
+      else if (kind === "make") ids = [shortId(cur.actionHrid), ...materials().map(([d]) => d)]
+      else if (kind === "alchemy") ids = [alchemyOutputs()[0], ...materials().map(([d]) => d)]
+      else ids = [work, ...materials().map(([d]) => d)]
+      return [...new Set(ids.filter(Boolean))].slice(0, 4)
+    }
+    const invCount = id => Object.entries(inv).reduce((t, [k, c]) => (k.startsWith(`/item_locations/inventory::/items/${id}::`) ? t + c : t), 0)
+    function fillStore() {
+      const slots = el?.querySelectorAll(".bfxl-slot")
+      if (!slots?.length || !cur) return
+      const items = storeItems()
+      slots.forEach((slot, i) => {
+        const id = items[i]
+        if (slot.dataset.id !== (id || "")) {
+          slot.dataset.id = id || ""
+          slot.innerHTML = ""
+          if (id) {
+            slot.appendChild(svgUse("items", id))
+            slot.appendChild(document.createElement("b"))
+          }
+        }
+        const b = slot.querySelector("b")
+        if (b) b.textContent = fmt(invCount(id))
+      })
+    }
+    // a slot takes something in (or gives it out): a little bounce
+    function bumpStore(id) {
+      fillStore()
+      const slot = [...(el.querySelectorAll(".bfxl-slot") || [])].find(s => s.dataset.id === id) || el.querySelector(".bfxl-slot")
+      slot?.animate([{ transform: "translate(-50%,-100%) scale(1)" }, { transform: "translate(-50%,-100%) scale(1.35)" }, { transform: "translate(-50%,-100%) scale(1)" }], { duration: 350 })
+    }
+    // the table's materials shown / hidden; laid down with a little drop
+    function setMats(on) {
+      const row = el.querySelector(".bfxl-mats")
+      if (!row) return
+      row.style.visibility = on ? "visible" : "hidden"
+      // drop what is left of the fly-into-the-station animations
+      for (const m of row.children) m.getAnimations().forEach(a => a.cancel())
+      if (on) {
+        ;[...row.children].forEach((m, i) => m.animate([{ transform: "translateY(-10px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: i * 70, easing: "ease-out", fill: "backwards" }))
+        markShort()
+      }
+    }
+    const storeX = () => 26
+    // to the storage (leaving the product there), back to the table with the next materials
+    function fetchMoves(product) {
+      const first = materials()[0]?.[0] || null
+      return [
+        { to: storeX(), carry: product, speed: 190, then: () => (product && bumpStore(product), first && bumpStore(first)) },
+        { to: workX(), work: true, carry: first, speed: 190, then: () => setMats(true) },
+      ]
     }
     // where the hero stands to work: the tool's reach short of the target's front
     function workX() {
       const target = el?.querySelector(".bfxl-target")
       if (!target || !cur) return 62
       const kind = SKILL[skillOf(cur.actionHrid)][2]
+      // with a materials table: right behind it, reaching over it to the station
+      const table = el.querySelector(".bfxl-table")
+      if (staged && kind !== "gather" && table) return Math.max(4, table.offsetLeft - HAND[0] + 4)
       if (kind === "enhancing") return 70 // the horn is blown from a step away
       const reach = held ? TOOL_REACH[held.kind] || 44 : 30
       const front = target.offsetLeft + target.offsetWidth * (kind === "gather" ? 0.2 : 0.1)
@@ -3366,7 +3478,7 @@
     // carries the product (icon over the head) to the left edge, drops it, walks back
     function carryOut(item) {
       const back = workX()
-      walk.moves.push({ to: 6, carry: item, speed: 190 }, { to: back, work: true, speed: 190 })
+      walk.moves.push({ to: staged ? storeX() : 6, carry: item, speed: 190, then: () => staged && bumpStore(item) }, { to: back, work: true, speed: 190 })
     }
     function img(path, cls) {
       const im = document.createElement("img")
@@ -3454,7 +3566,7 @@
         // only what the info lines need
         const actions = {}
         const pairs = list => (list || []).map(x => [shortId(x.itemHrid), x.count])
-        for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9, inputs: pairs(a.inputItems), upgrade: shortId(a.upgradeItemHrid) || null }
+        for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9, inputs: pairs(a.inputItems), upgrade: shortId(a.upgradeItemHrid) || null, drops: pairs(a.dropTable) }
         const items = {}
         for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate, bulk: it.alchemyDetail?.bulkMultiplier || 1, costs: pairs(it.enhancementCosts), decompose: pairs(it.alchemyDetail?.decomposeItems), drops: pairs(it.alchemyDetail?.transmuteDropTable) }
         gd = { actions, items, enhance: h.enhancementLevelSuccessRateTable || [] }
@@ -3585,8 +3697,23 @@
         m.classList.toggle("short", m.dataset.id !== "coin" && have < +m.dataset.n)
       }
     }
-    // the table's materials are used up (shrink into the middle) and laid out again
-    function useMaterials(delay) {
+    // the table's materials go into the station; with a storage the hero takes the product there and brings the next
+    // materials (on short actions every third time; otherwise the table is laid again at once)
+    function useMaterials(delay, kind, gains, key) {
+      if (staged) {
+        const table = el.querySelector(".bfxl-table")
+        const target = el.querySelector(".bfxl-target")
+        const dx = target.offsetLeft + target.offsetWidth / 2 - (table.offsetLeft + table.offsetWidth / 2)
+        const mats = [...el.querySelectorAll(".bfxl-mat")]
+        mats.forEach((m, i) => m.animate([{ transform: "none", opacity: 1 }, { transform: `translate(${dx}px,-30px) scale(.3)`, opacity: 0 }], { duration: 450, delay: delay + i * 60, easing: "ease-in", fill: "forwards" }))
+        later(delay + 450 + mats.length * 60, () => key === sceneKey && setMats(false))
+        const fetch = dur() >= 2.5 || ++walk.carried % 3 === 0
+        if (fetch) {
+          const main = gains.find(g => !MINOR.test(g.id) && !RARE.test(g.id)) || gains[0]
+          later(delay + 700, () => key === sceneKey && walk.moves.push(...fetchMoves(main?.id || null)))
+        } else later(delay + 900, () => key === sceneKey && setMats(true))
+        return
+      }
       const mats = [...el.querySelectorAll(".bfxl-mat")]
       mats.forEach((m, i) =>
         m.animate(
@@ -3764,6 +3891,7 @@
         if (k >= 1) {
           walk.moves.shift()
           if (m.carry) dropCarry()
+          m.then?.()
         }
       }
       if (hero) {
@@ -4176,12 +4304,12 @@
       let delay = 0
       if (kind === "make") {
         // the table's materials go in (or, without game data, the costs fly in from the hero)
-        if (el.querySelector(".bfxl-mat")) useMaterials(0)
+        if (el.querySelector(".bfxl-mat")) useMaterials(0, kind, gains, key)
         else costs.forEach((c, i) => pop("-" + fmt(c.n), 100, 60 + i * 6, cx - 120, cy - 70, 650, { icon: c.id, color: "#ffb0a0", size: 11, delay: i * 90, from: 1 }))
         delay = 420
         target.animate([{ transform: "scale(1)" }, { transform: "scale(1.08,0.94)" }, { transform: "scale(1)" }], { duration: 300, delay })
       }
-      if (kind === "enhancing" || kind === "alchemy") useMaterials(150)
+      if (kind === "enhancing" || kind === "alchemy") useMaterials(150, kind, gains, key)
       if (kind === "enhancing") {
         const [b, a] = enh
         showEnh()
@@ -4213,8 +4341,9 @@
           })
         })
       if (star) later(delay + 250, () => key === sceneKey && rareShow(star, skill, cx, cy))
-      // gatherers and crafters take the product away (on short actions only every third time)
-      if ((kind === "gather" || kind === "make") && gains.length && (dur() >= 2.5 || ++walk.carried % 3 === 0)) {
+      // gatherers and crafters take the product away (on short actions only every third time; a crafter with a
+      // storage does that on the way to the next materials)
+      if ((kind === "gather" || (kind === "make" && !staged)) && gains.length && (dur() >= 2.5 || ++walk.carried % 3 === 0)) {
         const main = gains.find(g => !MINOR.test(g.id) && !RARE.test(g.id)) || gains[0]
         later(delay + 300, () => key === sceneKey && carryOut(main.id))
       }
