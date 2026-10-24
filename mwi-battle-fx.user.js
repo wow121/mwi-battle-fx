@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.13.2
+// @version      0.13.3
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeScale: 1 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
@@ -2985,6 +2985,8 @@
       st.textContent = `
 .bfxl{position:fixed;z-index:1100;width:340px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
   box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;transform-origin:0 0;user-select:none}
+.bfxl-grip{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:5;background:linear-gradient(135deg,transparent 50%,#8a93b8 50%,#8a93b8 60%,transparent 60%,transparent 72%,#8a93b8 72%,#8a93b8 82%,transparent 82%)}
+.bfxl.icon .bfxl-grip{display:none}
 .bfxl-head{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 9px;background:#262d47;cursor:move}
 .bfxl-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .bfxl-count{opacity:.75;white-space:nowrap}
@@ -3148,12 +3150,32 @@
         saveCfg()
         ensure()
       }
+      // size: a share of the screen's width (the layout is drawn 340 px wide and scaled), at most half of it
       $(".bfxl-size").onclick = () => {
-        const sizes = [0.8, 1, 1.25, 1.5]
-        cfg.lifeScale = sizes[(sizes.indexOf(cfg.lifeScale) + 1) % sizes.length]
+        const sizes = [0.15, 0.2, 0.3, 0.4, 0.5]
+        cfg.lifeW = sizes.find(v => v > (cfg.lifeW || 0.2) + 0.001) || sizes[0]
         saveCfg()
         place()
       }
+      const grip = document.createElement("div")
+      grip.className = "bfxl-grip"
+      el.appendChild(grip)
+      grip.addEventListener("pointerdown", e => {
+        const left = el.getBoundingClientRect().left
+        const move = ev => {
+          cfg.lifeW = Math.max(0.12, Math.min(0.5, (ev.clientX - left) / innerWidth))
+          place()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          saveCfg()
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        e.preventDefault()
+        e.stopPropagation()
+      })
       // drag by the title bar
       $(".bfxl-head").addEventListener("pointerdown", e => {
         if (e.target.closest("button")) return
@@ -3209,10 +3231,12 @@
       const top = chatTop()
       return [left ? left + 8 : innerWidth - w - 16, (top || innerHeight - 8) - h - 8]
     }
+    // the window's scale: its share of the screen's width over the 340 px it is laid out in
+    const winScale = () => (Math.min(0.5, Math.max(0.12, cfg.lifeW || 0.2)) * innerWidth) / 340
     // keeps the window on screen; dragged spots are kept, double-clicking the title bar goes back to the default
     function place() {
       if (!el) return
-      const s = cfg.lifeScale || 1
+      const s = cfg.lifeIcon ? Math.min(1.2, winScale()) : winScale()
       el.style.transform = `scale(${s})`
       const w = (cfg.lifeIcon ? 46 : 340) * s
       const h = el.offsetHeight * s
@@ -3959,7 +3983,7 @@
     function targetAt() {
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
       const r = el.querySelector(".bfxl-target").getBoundingClientRect()
-      const k = cfg.lifeScale || 1
+      const k = winScale()
       return [(r.left - s.left + r.width / 2) / k, (r.top - s.top + r.height / 2) / k]
     }
     // rings of power from the horn's bell to the item on the altar
@@ -3968,7 +3992,7 @@
       const work = el.querySelector(".bfxl-work")
       if (!hero || !work) return
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
-      const k = cfg.lifeScale || 1
+      const k = winScale()
       const a = ((-32 * Math.PI) / 180)
       const r = (TOOL_REACH.enhancer || 44) * 0.85
       const bx = hero.offsetLeft + HAND[0] + Math.cos(a) * r
@@ -4000,7 +4024,7 @@
       if (!work) return targetAt()
       const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
       const w = work.getBoundingClientRect()
-      const k = cfg.lifeScale || 1
+      const k = winScale()
       // kept low enough that what pops up over it stays in the window
       return [(w.left - s.left + w.width / 2) / k, Math.max(44, (w.top - s.top + w.height / 2) / k)]
     }
