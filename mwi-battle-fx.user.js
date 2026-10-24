@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.15.1
+// @version      0.15.2
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2886,7 +2886,7 @@
     // (actionCounter), its success rate, double-progress chance, progress per attempt, the work done / needed, the
     // attempt's time and for enhancing the current / target level. Which skill a labyrinth room is comes from the
     // labyrinth's room grid (path[0] is where the character is). The scene has no storage (a trial takes nothing
-    // from the inventory); a guild trial keeps the skill's own backdrop, a labyrinth room the depth's.
+    // from the inventory); a guild trial has its project's site as the backdrop, a labyrinth room the depth's.
     let trial = null // { from, key, skill, title, data, at, ended }
     const guildChars = {} // character id -> { name, avatarHrid, avatarOutfitHrid, ... } (the guild's members)
     let myId = null
@@ -3945,8 +3945,10 @@
       ico.appendChild(svgUse("skills", skill))
       const scene = el.querySelector(".bfxl-scene")
       el.querySelector(".bfxl-fx").innerHTML = ""
-      const bg = kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill
-      // a labyrinth room is in the labyrinth's depth backdrop; a guild trial keeps the skill's own backdrop
+      // a guild trial: the site drawn for its project (lb_guild_*), else the skill's own backdrop
+      const guildBg = trial?.from === "guild" && art("bg", "guild_" + skill) ? "guild_" + skill : null
+      const bg = guildBg || (kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill)
+      // a labyrinth room is in the labyrinth's depth backdrop
       const trialBg = trial?.from === "lab" ? labyrinthBg(labyrinth?.currentFloor) : null
       if (trialBg && Assets.has("bg", trialBg)) scene.style.background = `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
       else scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])

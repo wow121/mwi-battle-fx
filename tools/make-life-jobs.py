@@ -221,6 +221,26 @@ prompt = f"Image: the EXIT GATE of a labyrinth room for a cute 2D side-view idle
 job("lg_gate", prompt, [os.path.join(SHEETS, "bg_labyrinth.png")], "magenta")
 groups["lg_gate"] = {"grid": [2, 2], "dir": "gate", "ids": [f"gate_{k + 1}" for k in range(4)], "out": 512}
 
+# a backdrop for each guild project: the site where the whole guild works on it
+GUILD_SITES = {
+    "woodcutting": "a guild lumber camp in an old forest: a wide clearing, log piles, a sawhorse and a lumber cart at the edges, guild tents and banners among the trees",
+    "milking": "a guild dairy yard in green pastures: wooden fences, a big barn and milk sheds at the back, churns and hay at the edges, guild banners",
+    "foraging": "a guild harvest field: rows of crops and orchards fading into the distance, baskets and sacks at the edges, a windmill and guild banners",
+    "cheesesmithing": "a guild cheese foundry yard: stone forges and chimneys at the back, racks of cheese-metal ingots, anvils at the edges, guild banners",
+    "crafting": "a guild shipyard on a riverbank: workshops and timber stacks at the back, the river in the distance, saws and crates at the edges, guild banners",
+    "tailoring": "a guild weaving hall: high timber roof, shelves of dyed yarn and fabric bolts at the back, spinning wheels at the edges, guild banners",
+    "cooking": "a guild feast hall kitchen: big hearths and ovens at the back, hanging pots, long tables with ingredients at the edges, guild banners",
+    "brewing": "a guild tea house courtyard: tea shelves and herb racks at the back, steaming kettles at the edges, lanterns and guild banners",
+    "alchemy": "a guild alchemy sanctum: tall arched windows, shelves of glowing flasks at the back, arcane instruments at the edges, guild banners",
+    "enhancing": "a guild relic hall: grand stone pillars and stained glass at the back, rune-carved pedestals at the edges, guild banners",
+}
+for skill, desc in GUILD_SITES.items():
+    prompt = f"""Image: a wide BACKGROUND for a 2D side-view idle game, in the richly detailed painted style of the first attached image (match its art style and level of detail; not its content); the second attached image shows the guild project that will stand in the middle of this scene, for its theme and colours.
+Scene: {desc}.
+Composition: landscape 1536x1024, camera at eye level from the side. The image will be shown cropped to a wide 2:1 strip around its lower middle. A flat ground strip covers the bottom ~30% where a crowd of guild members and the big project will stand: keep the middle of the ground and the space above it open and a bit softer; put the scenery toward the back and the left and right edges. Do not draw the project itself. No characters, no animals, no people, no text, no UI.
+"""
+    job("lb_guild_" + skill, prompt, [os.path.join(SHEETS, "bg_guild_trial.png"), os.path.join(SHEETS, f"lg_proj_{skill}.png")], "none")
+
 # labyrinth backdrops by depth (the battle stage's too): floors 1-4, 5-8, 9-12, 13-16, 17-20
 DEPTHS = [
     "the upper halls: worn mossy stone walls, torches, roots breaking through the ceiling, a calm green-gold light",
