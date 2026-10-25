@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.16.1
+// @version      0.16.2
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -31,7 +31,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = false
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2, trialOverlay: true }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
@@ -795,9 +795,10 @@
 .bfx-ring{position:absolute;border-radius:50%;border:2px solid;transform:translate(-50%,-50%);animation:bfx-ring 2.4s ease-in-out infinite}
 @keyframes bfx-ring{0%,100%{opacity:.45}50%{opacity:.95}}
 /* chips float above the name (growing upward) so a buff never pushes the name and bars down */
-.bfx-chips{position:absolute;left:0;right:0;bottom:100%;display:flex;justify-content:center;flex-wrap:wrap-reverse;gap:2px;margin-bottom:2px}
+.bfx-chips{position:absolute;left:0;right:0;bottom:100%;display:flex;justify-content:center;flex-wrap:nowrap;gap:2px;margin-bottom:2px}
 .bfx-chip{width:14px;height:14px;border-radius:50%;font:700 9px/14px sans-serif;text-align:center;color:#1a1a1a;box-shadow:0 0 3px rgba(0,0,0,.8)}
 .bfx-chip.debuff{color:#fff;background:#5a1a24!important;border:1px solid #ff5a6a;line-height:12px}
+.bfx-chip.more{width:auto!important;padding:0 3px;border-radius:7px;color:#fff;background:rgba(20,24,40,.85);border:1px solid rgba(255,255,255,.35);box-sizing:border-box}
 .bfx-bubble{position:absolute;left:-12%;right:-12%;top:-8%;bottom:-4%;border-radius:50%;border:2px solid rgba(255,226,122,.85);background:radial-gradient(ellipse at 50% 35%,rgba(255,240,180,.08),rgba(255,214,90,.22) 70%,rgba(255,214,90,.05));box-shadow:0 0 14px rgba(255,214,90,.7),inset 0 0 12px rgba(255,214,90,.5);animation:bfx-ring 1.6s ease-in-out infinite;pointer-events:none}
 .bfx-hpt{position:absolute;left:0;right:0;top:-1px;font-size:9px;line-height:5px;text-align:center;text-shadow:0 0 2px #000,0 0 2px #000}
 .bfx-stage>*{pointer-events:none}
@@ -2093,14 +2094,22 @@
         }),
       )
       renderLook(a, chips.filter(([, kind]) => kind === "buff").map(([k]) => k))
+      // one row only, sized to the unit (small units on a phone): what doesn't fit folds into a "+N" chip,
+      // so a stack of buffs never covers the sprite
+      const size = Math.max(8, Math.min(14, Math.round(a.s * 0.16)))
+      const fit = Math.max(1, Math.floor((a.s + 2) / (size + 2)))
+      const vis = chips.length > fit ? chips.slice(0, fit - 1) : chips
+      const chipEl = (cls, bg, text) => {
+        const c = document.createElement("div")
+        c.className = "bfx-chip " + cls
+        Object.assign(c.style, { width: size + "px", height: size + "px", fontSize: Math.round(size * 0.64) + "px", lineHeight: size - (cls === "debuff" ? 2 : 0) + "px" })
+        if (bg) c.style.background = bg
+        c.textContent = text
+        return c
+      }
       a.chipsEl.replaceChildren(
-        ...chips.map(([k, kind]) => {
-          const c = document.createElement("div")
-          c.className = "bfx-chip " + kind
-          c.style.background = AURA[k] || ELEMENT_COLOR.buff
-          c.textContent = (abilityInfo("/abilities/" + k)?.name || "?")[0]
-          return c
-        }),
+        ...vis.map(([k, kind]) => chipEl(kind, AURA[k] || ELEMENT_COLOR.buff, (abilityInfo("/abilities/" + k)?.name || "?")[0])),
+        ...(chips.length > vis.length ? [chipEl("more", "", "+" + (chips.length - vis.length))] : []),
       )
     }
     // effects cast on the same actor back to back queue up instead of piling on top of each other
@@ -3212,6 +3221,12 @@
 .bfxl-count{opacity:.75;white-space:nowrap}
 .bfxl-head button{background:none;border:0;color:#ccd;cursor:pointer;font-size:14px;line-height:1;padding:0 3px}
 .bfxl-head button:hover{color:#fff}
+.bfxl-head,.bfxl-grip,.bfxl-ico{touch-action:none}
+@media (pointer:coarse){
+.bfxl-head{padding:3px 4px 3px 9px;gap:2px}
+.bfxl-head button{font-size:17px;padding:5px 7px}
+.bfxl-grip{width:24px;height:24px}
+}
 .bfxl.min .bfxl-view,.bfxl.min .bfxl-bar{display:none}
 .bfxl-view{position:relative;overflow:hidden;height:150px}
 .bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0}
@@ -3365,15 +3380,17 @@
           cfg.lifePos = [ev.clientX - dx, ev.clientY - dy]
           place()
         }
-        const up = () => {
+        const up = ev => {
           removeEventListener("pointermove", move)
           removeEventListener("pointerup", up)
-          if (!moved) cfg.lifeIcon = false
+          removeEventListener("pointercancel", up)
+          if (!moved && ev.type === "pointerup") cfg.lifeIcon = false
           saveCfg()
           ensure()
         }
         addEventListener("pointermove", move)
         addEventListener("pointerup", up)
+        addEventListener("pointercancel", up)
         e.preventDefault()
       })
       $(".bfxl-info-btn").onclick = () => {
@@ -3388,9 +3405,11 @@
         ensure()
       }
       // size: a share of the screen's width (the layout is drawn 340 px wide and scaled), at most half of it
+      // (a phone keeps its own share, from under half the screen to all of it)
       $(".bfxl-size").onclick = () => {
-        const sizes = [0.15, 0.2, 0.3, 0.4, 0.5]
-        cfg.lifeW = sizes.find(v => v > (cfg.lifeW || 0.2) + 0.001) || sizes[0]
+        const k = widthKey()
+        const sizes = narrow() ? [0.45, 0.62, 0.8, 1] : [0.15, 0.2, 0.3, 0.4, 0.5]
+        cfg[k] = sizes.find(v => v > (cfg[k] || DEFAULTS[k]) + 0.001) || sizes[0]
         saveCfg()
         place()
       }
@@ -3399,17 +3418,20 @@
       el.appendChild(grip)
       grip.addEventListener("pointerdown", e => {
         const left = el.getBoundingClientRect().left
+        const [lo, hi] = widthRange()
         const move = ev => {
-          cfg.lifeW = Math.max(0.12, Math.min(0.5, (ev.clientX - left) / innerWidth))
+          cfg[widthKey()] = Math.max(lo, Math.min(hi, (ev.clientX - left) / innerWidth))
           place()
         }
         const up = () => {
           removeEventListener("pointermove", move)
           removeEventListener("pointerup", up)
+          removeEventListener("pointercancel", up)
           saveCfg()
         }
         addEventListener("pointermove", move)
         addEventListener("pointerup", up)
+        addEventListener("pointercancel", up)
         e.preventDefault()
         e.stopPropagation()
       })
@@ -3419,24 +3441,31 @@
         const r = el.getBoundingClientRect()
         const dx = e.clientX - r.left
         const dy = e.clientY - r.top
+        let moved = false
         const move = ev => {
+          if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 5) return
+          moved = true
           cfg.lifePos = [ev.clientX - dx, ev.clientY - dy]
           place()
         }
-        const up = () => {
+        const up = ev => {
           removeEventListener("pointermove", move)
           removeEventListener("pointerup", up)
+          removeEventListener("pointercancel", up)
+          // a double tap / double click (two taps without moving) puts the window back in its default spot
+          if (!moved && ev.type === "pointerup") {
+            if (performance.now() - lastTap < 400) {
+              cfg.lifePos = null
+              place()
+              lastTap = 0
+            } else lastTap = performance.now()
+          }
           saveCfg()
         }
         addEventListener("pointermove", move)
         addEventListener("pointerup", up)
+        addEventListener("pointercancel", up)
         e.preventDefault()
-      })
-      $(".bfxl-head").addEventListener("dblclick", e => {
-        if (e.target.closest("button")) return
-        cfg.lifePos = null
-        saveCfg()
-        place()
       })
       addEventListener("resize", place)
     }
@@ -3464,15 +3493,31 @@
     }
     // default spot: just above the chat, against the skill list (bottom right when neither is found)
     function defaultPos(w, h) {
+      // a phone: no skill list beside the panel; top right, just under the game's header
+      if (narrow()) {
+        const hd = document.querySelector('[class*="Header_header"]') || document.querySelector('[class*="Header_"]')
+        const b = hd ? hd.getBoundingClientRect().bottom : 0
+        return [innerWidth - w - 4, (b > 0 && b < innerHeight * 0.4 ? b : 0) + 4]
+      }
       const left = navRight()
       const top = chatTop()
       return [left ? left + 8 : innerWidth - w - 16, (top || innerHeight - 8) - h - 8]
     }
     // the window's scale: its share of the screen's width over the 340 px it is laid out in
-    const winScale = () => (Math.min(0.5, Math.max(0.12, cfg.lifeW || 0.2)) * innerWidth) / 340
+    // a phone (narrow screen) gets its own, much bigger share: a fifth of 390 px would leave a 78 px picture
+    // (screen.width too: a page without a viewport tag is laid out ~980 px wide on a phone and zoomed out)
+    const narrow = () => Math.min(innerWidth, screen.width || innerWidth) < 700
+    const widthKey = () => (narrow() ? "lifeWm" : "lifeW")
+    const widthRange = () => (narrow() ? [0.35, 1] : [0.12, 0.5])
+    const winScale = () => {
+      const [lo, hi] = widthRange()
+      const k = widthKey()
+      return Math.min(innerWidth - 8, Math.min(hi, Math.max(lo, cfg[k] || DEFAULTS[k])) * innerWidth) / 340
+    }
     // keeps the window on screen; dragged spots are kept, double-clicking the title bar goes back to the default
     // only the picture is scaled: the title bar, bars, bonus lines and buttons keep their size
     let curScale = 1 // the picture's scale as last placed (for measuring in it)
+    let lastTap = 0 // last still tap on the title bar (double tap = back to the default spot)
     function place() {
       if (!el) return
       if (docked) {
