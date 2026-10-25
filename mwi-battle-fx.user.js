@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.16.2
+// @version      0.16.3
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -1597,14 +1597,21 @@
       a.mpI.style.width = pct(u.mp, u.maxMp)
       a.hpT.textContent = `${fmt(u.hp)}/${fmt(u.maxHp)}`
     }
+    // a hit landing shows the unit's latest HP, not the one of the update it came from: in a guild trial
+    // dozens of hits fly at once and an older, slower one would put the bar back up
     function setHp(a, t) {
-      a.hpI.style.width = pct(t.hp, t.maxHp)
-      a.hpT.textContent = `${fmt(t.hp)}/${fmt(t.maxHp)}`
+      const u = shown[a.side]?.[a.i]
+      const hp = u && typeof u.hp === "number" ? u.hp : t.hp
+      const max = u?.maxHp || t.maxHp
+      a.hpI.style.width = pct(hp, max)
+      a.hpT.textContent = `${fmt(hp)}/${fmt(max)}`
     }
     // bars and dead/alive state catch up with the real numbers after the animations
+    // (at most 900 ms late: not pushed back by every update, or a guild trial's steady stream never lets it run)
     function syncSoon() {
-      clearTimeout(syncTimer)
+      if (syncTimer) return
       syncTimer = setTimeout(() => {
+        syncTimer = 0
         for (const side of ["p", "m"])
           for (const a of actors[side]) {
             const u = shown[side][a.i]
