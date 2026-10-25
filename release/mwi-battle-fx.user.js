@@ -2,10 +2,10 @@
 // @name         MWI 战斗动画
 // @name:en      MWI Battle FX
 // @namespace    mwi-battle-fx-release
-// @version      0.11.4
+// @version      0.16.0
 // @license      MIT
-// @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
-// @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
+// @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
+// @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
 // @match        https://www.milkywayidle.com/*
 // @match        https://milkywayidle.com/*
 // @match        https://test.milkywayidle.com/*
@@ -31,10 +31,17 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = false
   // ---------- settings ----------
-  const DEFAULTS = { enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2, trialOverlay: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
-  const MANIFEST_URLS = ["https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json", DEFAULT_ASSET_BASE + "/assets/manifest.json"]
+  // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
+  // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
+  const ASSET_REV = "d571ef0002"
+  const MANIFEST_URLS = [
+    "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json",
+    DEFAULT_ASSET_BASE.replace(/@main$/, "@" + ASSET_REV) + "/assets/manifest.json",
+    DEFAULT_ASSET_BASE + "/assets/manifest.json",
+  ]
   const cfg = { ...DEFAULTS, ...GM_getValue("battle_fx_cfg_v1", {}) }
   const saveCfg = () => GM_setValue("battle_fx_cfg_v1", cfg)
 
@@ -470,8 +477,13 @@
     return null
   }
   // location from the current combat action; when that is unknown, from the monsters on the field
+  // the labyrinth's backdrop by depth: floors 1-4, 5-8, 9-12, 13-16, 17+ (falls back to the one labyrinth backdrop)
+  function labyrinthBg(floor) {
+    const d = "labyrinth_d" + Math.min(5, Math.max(1, Math.ceil((floor || 1) / 4)))
+    return Assets.has("bg", d) ? d : "labyrinth"
+  }
   function stageLocation() {
-    if (where.labyrinth) return "labyrinth"
+    if (where.labyrinth) return labyrinthBg(where.floor)
     const loc = ZONE_LOC[where.zone]
     if (loc) return loc
     const votes = {}
@@ -488,11 +500,15 @@
     let fetchedAt = GM_getValue("battle_fx_manifest_at_v1", 0)
     let loading = false
     const listeners = []
-    const base = () => (cfg.assetBase || DEFAULT_ASSET_BASE).replace(/\/+$/, "")
+    // an asset base that is just this repo's jsDelivr @main counts as the default: its files and manifest are cached
+    // there for up to a week, so they are taken pinned to the manifest's commit like the default's
+    const custom = () => !!cfg.assetBase && !/^https:\/\/cdn\.jsdelivr\.net\/gh\/wow121\/mwi-battle-fx@main\/*$/.test(cfg.assetBase)
+    const base = () => (custom() ? cfg.assetBase : DEFAULT_ASSET_BASE).replace(/\/+$/, "")
+    let source = ""
     function refresh(force) {
       if (loading || (!force && manifest && Date.now() - fetchedAt < 1800e3)) return
       loading = true
-      const urls = cfg.assetBase ? [base() + "/assets/manifest.json"] : MANIFEST_URLS
+      const urls = custom() ? [base() + "/assets/manifest.json"] : MANIFEST_URLS
       const next = k => {
         if (k >= urls.length) return (loading = false)
         GM_xmlhttpRequest({
@@ -502,7 +518,10 @@
           onload: r => {
             try {
               manifest = JSON.parse(r.responseText)
+              // a manifest taken from a commit before its pin has no rev: it is that commit
+              if (!manifest.rev) manifest.rev = (/@([0-9a-f]{7,40})\//.exec(urls[k]) || [])[1]
               fetchedAt = Date.now()
+              source = urls[k]
               loading = false
               GM_setValue("battle_fx_manifest_v1", manifest)
               GM_setValue("battle_fx_manifest_at_v1", fetchedAt)
@@ -519,8 +538,8 @@
     }
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
-    const url = path => (manifest?.rev && !cfg.assetBase ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
-    return { refresh, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
+    const url = path => (manifest?.rev && !custom() ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
+    return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "" }), refresh, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -550,6 +569,15 @@
       }
       return items
     }
+    // skill -> { id, enh } of the skilling tools (for the skilling window's guild trials)
+    function toolsFrom(list) {
+      const out = {}
+      for (const it of Array.isArray(list) ? list : Object.values(list || {})) {
+        const slot = shortId(it?.itemLocationHrid) || ""
+        if (slot.endsWith("_tool") && it.itemHrid) out[slot.replace(/_tool$/, "")] = { id: shortId(it.itemHrid), enh: it.enhancementLevel || 0 }
+      }
+      return out
+    }
     // slot -> enhancement level (+N) of the visible gear
     function enhFrom(list) {
       const enh = {}
@@ -570,7 +598,7 @@
         const p = obj.profile || {}
         const name = p.sharableCharacter?.name
         if (name) {
-          profiles[name] = { ...avatarOf(p.sharableCharacter), items: itemsFrom(p.wearableItemMap), enh: enhFrom(p.wearableItemMap) }
+          profiles[name] = { ...avatarOf(p.sharableCharacter), items: itemsFrom(p.wearableItemMap), enh: enhFrom(p.wearableItemMap), tools: toolsFrom(p.wearableItemMap) }
           GM_setValue("battle_fx_profiles_v1", profiles)
         }
       } else if (Array.isArray(obj.endCharacterItems)) {
@@ -655,7 +683,7 @@
       u.lookId = null
       if (/shield|bulwark|aegis|buckler/.test(u.items.off_hand || u.items.two_hand || "")) u.tank = true
     }
-    return { onMessage, assign, assignGuild, me }
+    return { onMessage, assign, assignGuild, me, toolOf: (name, skill) => profiles[name]?.tools?.[skill] || null }
   })()
 
   // ---------- paper-doll layers: drawn side-view weapons / off-hands for the held gear ----------
@@ -1087,7 +1115,7 @@
       } else if (mode === "test") {
         text = title(Lab.loc())
         tier = Lab.tier()
-      } else if (where.labyrinth) text = L("迷宫", "Labyrinth")
+      } else if (where.labyrinth) text = L("迷宫", "Labyrinth") + (where.floor ? L(` · 第${where.floor}层`, ` · Floor ${where.floor}`) : "")
       else {
         const zone = where.zone && ZONE_ZH[where.zone] ? where.zone : stageLocation()
         text = zone ? title(zone) : ""
@@ -2556,7 +2584,7 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -2663,6 +2691,2338 @@
     return { ensure, active: () => !!slot?.isConnected }
   })()
 
+  // ---------- 生活技能: a floating window that plays the current gathering / production / enhancing action ----------
+  // Driven by action_completed (end item counts, skills, the action itself) against the inventory from
+  // init_character_data: gains / costs are the count changes. The cycle length comes from the header's progress
+  // bar text, else from the server times of two completions. Only the game's own sprites so far (avatar + outfit,
+  // items, actions, skills); hidden while fighting or idle.
+  const Life = (() => {
+    const SVGNS = "http://www.w3.org/2000/svg"
+    const SKILL = {
+      milking: ["挤奶", "Milking", "gather", "squeeze"],
+      foraging: ["采摘", "Foraging", "gather", "chop"],
+      woodcutting: ["伐木", "Woodcutting", "gather", "chop"],
+      cheesesmithing: ["奶酪锻造", "Cheesesmithing", "make", "chop"],
+      crafting: ["制作", "Crafting", "make", "chop"],
+      tailoring: ["缝纫", "Tailoring", "make", "stitch"],
+      cooking: ["烹饪", "Cooking", "make", "stir"],
+      brewing: ["冲泡", "Brewing", "make", "stir"],
+      alchemy: ["炼金", "Alchemy", "alchemy", "pour"],
+      enhancing: ["强化", "Enhancing", "enhancing", "chop"],
+    }
+    // particles per skill: colours + shape
+    const FX = {
+      milking: [["#ffffff", "#f3ecd6"], "drop"],
+      foraging: [["#7bd35a", "#b6e36b", "#e9d36b"], "leaf"],
+      woodcutting: [["#c48a4a", "#8a5a2b", "#e0b47a"], "chip"],
+      cheesesmithing: [["#ffb347", "#ffd76a", "#fff3b0"], "spark"],
+      crafting: [["#d9a066", "#a8743f"], "chip"],
+      tailoring: [["#f6a6d0", "#9ad0ff", "#fff"], "dot"],
+      cooking: [["#ffffffb0", "#ffe9c9a0"], "puff"],
+      brewing: [["#9be8ff", "#c6a0ff", "#fff"], "bubble"],
+      alchemy: [["#d07bff", "#ffe36b", "#7ff0ff"], "spark"],
+      enhancing: [["#7fd0ff", "#ffffff", "#ffe36b"], "spark"],
+    }
+    const BG = {
+      gather: "linear-gradient(#8fd0ff 0%,#cfeeff 58%,#7cc36a 58%,#5a9e4a 100%)",
+      woodcutting: "linear-gradient(#a9d8b0 0%,#dff2d8 58%,#5e9d4c 58%,#3f7a37 100%)",
+      make: "linear-gradient(#5b4636 0%,#7a5d45 60%,#4a3628 60%,#3a2a1f 100%)",
+      alchemy: "linear-gradient(#2a1f45 0%,#463370 62%,#2b2140 62%,#1d1630 100%)",
+      enhancing: "linear-gradient(#1f2a44 0%,#33456e 62%,#262c3e 62%,#191d2a 100%)",
+    }
+    // milking / woodcutting / foraging-area actions drawn in the game's actions sheet; single-item foraging uses the item
+    const ACTION_ART = new Set("azure_cow burble_cow cow crimson_cow holy_cow unicow verdant_cow arcane_tree birch_tree cedar_tree ginkgo_tree purpleheart_tree redwood_tree tree asteroid_belt burble_beach farmland misty_forest olympus_mons shimmering_lake silly_cow_valley".split(" "))
+    const FORAGE_AREA = {"apple":"shimmering_lake","arabica_coffee_bean":"shimmering_lake","asteroid_belt":"asteroid_belt","bamboo_branch":"burble_beach","blackberry":"misty_forest","blueberry":"shimmering_lake","burble_beach":"burble_beach","cocoon":"silly_cow_valley","cotton":"farmland","dragon_fruit":"olympus_mons","egg":"farmland","excelsa_coffee_bean":"silly_cow_valley","farmland":"farmland","fieriosa_coffee_bean":"olympus_mons","flax":"shimmering_lake","liberica_coffee_bean":"burble_beach","marsberry":"olympus_mons","misty_forest":"misty_forest","mooberry":"silly_cow_valley","olympus_mons":"olympus_mons","orange":"misty_forest","peach":"silly_cow_valley","plum":"burble_beach","radiant_fiber":"asteroid_belt","robusta_coffee_bean":"misty_forest","shimmering_lake":"shimmering_lake","silly_cow_valley":"silly_cow_valley","spaceberry":"asteroid_belt","spacia_coffee_bean":"asteroid_belt","star_fruit":"asteroid_belt","strawberry":"burble_beach","sugar":"farmland","wheat":"farmland"}
+    // drawn art (assets/life, see tools/make-life-jobs.py); anything missing falls back to the game's sprites
+    const art = (kind, id) => !!id && !!Assets.get("life")?.[kind]?.includes(id)
+    const artUrl = path => Assets.url("life/" + path + ".webp")
+    const COW_POSES = ["idle", "graze", "milked", "startled", "moo", "happy"]
+    const TREE_POSES = ["idle", "hit", "swayl", "swayr", "rustle", "leaves"]
+    // what a drop is worth a show (per-action chances, game v1.20260927.0): essences 1.7-70%, artisan's crates
+    // 0.01-0.19%, meteorite caches 0.02-0.04% (gathering only), the three skill relics 0.0025-0.003%; transmuting
+    // can give a philosopher's stone (6.5-58% by item; its crushed shards, 25%, are an ordinary gain)
+    const RARE = /treasure_chest|artisans_crate|meteorite_cache|butter_of_proficiency|branch_of_insight|thread_of_expertise|^philosophers_stone$/
+    const MINOR = /essence/
+    function rarity(id) {
+      if (id === "philosophers_stone") return "sage"
+      if (/butter_of_proficiency|branch_of_insight|thread_of_expertise/.test(id)) return "legend"
+      if (/meteorite_cache/.test(id)) return "meteor"
+      if (/artisans_crate|treasure_chest/.test(id)) return "crate"
+      return MINOR.test(id) ? "minor" : null
+    }
+    const RARE_NAMES = {
+      small_artisans_crate: ["小工匠匣", "Small Artisan's Crate"],
+      medium_artisans_crate: ["中工匠匣", "Medium Artisan's Crate"],
+      large_artisans_crate: ["大工匠匣", "Large Artisan's Crate"],
+      small_meteorite_cache: ["小陨石舱", "Small Meteorite Cache"],
+      medium_meteorite_cache: ["中陨石舱", "Medium Meteorite Cache"],
+      large_meteorite_cache: ["大陨石舱", "Large Meteorite Cache"],
+      butter_of_proficiency: ["精通之油", "Butter of Proficiency"],
+      branch_of_insight: ["洞察之枝", "Branch of Insight"],
+      thread_of_expertise: ["专精之线", "Thread of Expertise"],
+      philosophers_stone: ["贤者之石", "Philosopher's Stone"],
+      crushed_philosophers_stone: ["贤者之石碎片", "Crushed Philosopher's Stone"],
+    }
+    const rareName = id => (RARE_NAMES[id] ? L(...RARE_NAMES[id]) : id.replace(/_/g, " "))
+    const ENH_COLOR = [[15, "#ffd75a"], [12, "#ff5a3c"], [10, "#ffa53a"], [8, "#c07bff"], [5, "#6fb6ff"], [0, "#e8f4ff"]]
+    const enhColor = n => ENH_COLOR.find(([k]) => n >= k)[1]
+    // how big the enhancing show is: 0 below +5, then +5 / +8 / +10 / +12 / +15
+    const enhStage = n => (n >= 15 ? 5 : n >= 12 ? 4 : n >= 10 ? 3 : n >= 8 ? 2 : n >= 5 ? 1 : 0)
+    // a colour for the level; from +15 a hue that keeps turning
+    const enhTint = n => (n >= 15 ? `hsl(${(performance.now() / 8) % 360},100%,65%)` : enhColor(n))
+
+    const inv = {} // "<location>::<item>::<enh>" -> count
+    const tools = {} // skill -> tool item id
+    const toolEnh = {} // skill -> its enhancement level
+    const skills = {} // skill hrid -> { level, experience }
+    let queue = [] // the character's actions, not done, by ordinal
+    let cur = null // the running one (queue[0])
+    let cycleAt = 0 // performance.now() the current cycle started
+    let measured = 0 // seconds between the last two completions (server time)
+    let lastDone = null // { id, count, at: server ms }
+    const seen = new Set() // duplicate action_completed (the server sometimes sends one twice)
+    let enhLevel = 0 // level of the item being enhanced before this attempt
+    let el = null
+    let raf = 0
+    let lastF = 0
+    let sceneKey = ""
+    let held = null // the drawn tool in the hand: { kind, geo }
+    let staged = false // the storage (left) and the materials table (by the station) are drawn
+    // the hero walks: in from the left when an action starts, out to the left with the product and back
+    const walk = { x: -60, moves: [], action: null, carried: 0 }
+    let posed = null // the drawn cow / tree: { kind: "cow" | "tree", imgs: { pose: img }, until, base }
+
+    const skillOf = hrid => (hrid ? String(hrid).split("/")[2] : null)
+    const keyOf = it => `${it.itemLocationHrid}::${it.itemHrid}::${it.enhancementLevel || 0}`
+    const hashItem = h => {
+      const p = String(h || "").split("::")
+      return p.length >= 4 ? { id: shortId(p[2]), level: +p[3] || 0 } : null
+    }
+    const isLife = a => !!a && !!SKILL[skillOf(a.actionHrid)]
+    function setItems(list, withTools = true) {
+      for (const it of list || []) {
+        inv[keyOf(it)] = it.count
+        const loc = shortId(it.itemLocationHrid) || ""
+        if (withTools && loc.endsWith("_tool")) {
+          const s = loc.replace(/_tool$/, "")
+          if (it.count > 0) {
+            tools[s] = shortId(it.itemHrid)
+            toolEnh[s] = it.enhancementLevel || 0
+          } else if (tools[s] === shortId(it.itemHrid)) delete tools[s]
+        }
+      }
+    }
+    // resume: the page was just loaded mid-action, so the cycle starts where the header's bar is; a newly started
+    // action starts at 0 (the bar may still show the previous action, full)
+    let lastPlayAt = 0
+    let deferTimer = 0
+    let deferFrom = 0 // when the running action was first found ended / replaced
+    function setQueue(list, resume = false) {
+      queue = list.filter(a => !a.isDone).sort((a, b) => (a.ordinal || 0) - (b.ordinal || 0))
+      if (trial) return // the trial has the window; the queue takes over when it ends
+      const next = queue[0] || null
+      clearTimeout(deferTimer)
+      // the running skilling action ends or changes: the last completion's show plays out first, and an action that
+      // just ended stays a moment longer (its last completion can come after the message that ends it)
+      if (!resume && isLife(cur) && next?.id !== cur.id && visible()) {
+        const t = performance.now()
+        deferFrom ||= t
+        // re-checked when the time is up: a late completion in between has its own show to finish
+        const wait = Math.max(isLife(next) ? 0 : deferFrom + 1500 - t, lastPlayAt + 3200 - t)
+        if (wait > 0) {
+          deferTimer = setTimeout(() => setQueue(queue), wait)
+          return
+        }
+      }
+      deferFrom = 0
+      if (next?.id !== cur?.id) {
+        if (next?.actionHrid !== cur?.actionHrid) measured = 0
+        cur = next
+        enhLevel = hashItem(cur?.primaryItemHash)?.level || 0
+        cycleAt = performance.now() - (resume ? domProgress() * dur() * 1000 : 0)
+        lastDone = null
+      } else cur = next
+      ensure()
+    }
+
+    // ----- trials: guild skilling trials and labyrinth skilling rooms -----
+    // Not actions: new_guild_skilling / guild_skilling_updated and labyrinth_room_progress carry one attempt each
+    // (actionCounter), its success rate, double-progress chance, progress per attempt, the work done / needed, the
+    // attempt's time and for enhancing the current / target level. Which skill a labyrinth room is comes from the
+    // labyrinth's room grid (path[0] is where the character is). The scene has no storage (a trial takes nothing
+    // from the inventory); a guild trial has its project's site as the backdrop, a labyrinth room the depth's.
+    let trial = null // { from, key, skill, title, data, at, ended }
+    const guildChars = {} // character id -> { name, avatarHrid, avatarOutfitHrid, ... } (the guild's members)
+    let myId = null
+    // the other guild members in this trial, with their looks (their tools are not sent: they hold the viewer's)
+    const trialMates = () => (trial?.from === "guild" ? (trial.data.participantIds || []).filter(id => id !== myId).slice(0, 60) : [])
+    let labyrinth = null
+    const labPath = () => {
+      try {
+        const p = labyrinth?.pathData
+        return (Array.isArray(p) ? p : JSON.parse(p || "[]"))[0] || null
+      } catch {
+        return null
+      }
+    }
+    function labRoom() {
+      const p = labPath()
+      const room = p && labyrinth?.roomData?.[p.y]?.[p.x]
+      return room ? { ...room, key: `${p.x},${p.y}` } : null
+    }
+    // the cow / tree / field / product shown for a trial of this skill: the best one the character's level allows
+    function trialActionId(skill, level) {
+      const g = gameData()
+      if (SKILL[skill][2] !== "gather") return skill + "_essence"
+      let best = { milking: "cow", woodcutting: "tree", foraging: "farmland" }[skill]
+      let bestLv = -1
+      for (const [k, a] of Object.entries(g?.actions || {})) {
+        const id = shortId(k)
+        if (skillOf(k) !== skill || !ACTION_ART.has(id) || a.level > level || a.level < bestLv) continue
+        best = id
+        bestLv = a.level
+      }
+      return best
+    }
+    // a guild trial and a labyrinth room can run at the same time: each keeps its own state from its own messages,
+    // and the scene shows the one whose panel is on screen (pickTrial)
+    const trials = {} // "guild" | "lab" -> { from, key, skill, title, data, at, ended, cur }
+    function onTrial(from, obj) {
+      let skill
+      let key
+      let title
+      const old = trials[from]
+      if (from === "guild") {
+        skill = shortId(obj.trialHrid)
+        key = `guild:${obj.trialHrid}:${obj.tier}`
+        title = `${L("公会试炼", "Guild trial")} · ${L(...(SKILL[skill] || [skill, skill]).slice(0, 2))} T${obj.tier}`
+      } else {
+        const room = labRoom()
+        skill = shortId(room?.skillHrid) || old?.skill
+        key = room ? `lab:${room.key}` : old?.key
+        title = `${L("迷宫", "Labyrinth")} · ${L(...(SKILL[skill] || [skill, skill]).slice(0, 2))}${room?.recommendedLevel ? " Lv." + room.recommendedLevel : ""}`
+      }
+      if (!SKILL[skill] || !key) return
+      let t = old
+      if (t && t.key !== key) {
+        // the next tier / room: the one before is through, its show plays out first
+        if (!t.ended) trialEnd(t, true)
+        const wait = 3000 - (performance.now() - t.ended)
+        if (wait > 0) return later(wait, () => onTrial(from, obj))
+        t = null
+      }
+      if (!t) {
+        const id = trialActionId(skill, skills["/skills/" + skill]?.level || 1)
+        t = trials[from] = { from, key, skill, title, data: obj, at: performance.now(), ended: 0 }
+        t.cur = { id: "trial:" + key, trial: true, actionHrid: `/actions/${skill}/${id}`, currentCount: obj.actionCounter || 0, hasMaxCount: false, primaryItemHash: SKILL[skill][2] === "gather" ? "" : `0::/item_locations/inventory::/items/${skill}_essence::${obj.currentEnhLevel || 0}` }
+        ensure()
+        trialFinish(t, obj)
+        return
+      }
+      const prev = t.data
+      t.data = obj
+      t.at = performance.now()
+      if ((obj.actionCounter || 0) <= (prev.actionCounter || 0)) return
+      t.cur = { ...t.cur, currentCount: obj.actionCounter }
+      if (t === trial) {
+        cur = t.cur
+        measured = (obj.actionTimeMs || 0) / 1000 || measured
+        cycleAt = performance.now()
+        if (visible() && !cfg.lifeIcon) playTrial(prev, obj)
+        else enhLevel = obj.currentEnhLevel || 0
+      }
+      trialFinish(t, obj)
+    }
+    // the trial to show: the one whose panel is on screen (the test panel's in the window)
+    function pickTrial() {
+      for (const from of ["lab", "guild"]) if (trials[from] && trialHost(trials[from])) return trials[from]
+      return null
+    }
+    // one attempt: progress gained (doubled), failed, or for enhancing the level gone up / down
+    function playTrial(prev, obj) {
+      lastPlayAt = performance.now()
+      setScene()
+      const [cx, cy] = targetAt()
+      const skill = trial.skill
+      if (obj.targetLevel !== null && obj.targetLevel !== undefined) {
+        const b = prev.currentEnhLevel || 0
+        const a = obj.currentEnhLevel || 0
+        enhLevel = a
+        cur = trial.cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/${skill}_essence::${a}` }
+        showEnh()
+        trialStage(true)
+        if (a > b) enhSuccess(b, a)
+        else enhFail(b, a, false)
+        return
+      }
+      const gain = (obj.currentWorkValue || 0) - (prev.currentWorkValue || 0)
+      trialStage(true)
+      const double = gain > 0 && obj.progressPerAction && gain >= obj.progressPerAction * 1.9
+      const who = trial.from === "guild" ? memberAct(gain > 0) : null
+      if (who) {
+        // one of the guild: the strike lands on the project, the progress rises from them
+        const [mx, my] = boxAt(who.el)
+        if (gain > 0) {
+          later(480, () => {
+            if (!tstage) return
+            const [px, py] = boxAt(tstage.project)
+            burst(skill, px + (mx < px ? -30 : 30), py + 10, double ? 14 : 7, double)
+            produceArc(mx, my)
+            tstage.project.animate([{ transform: "translateX(0)" }, { transform: `translateX(${mx < px ? 2 : -2}px)` }, { transform: "translateX(0)" }], { duration: 200 })
+          })
+          pop(`+${fmt(gain)}`, mx - 10, my - 40, 0, -30, 1400, { color: "#ffd75a", size: double ? 15 : 12, glow: double ? "#ffb300" : null, delay: 450 })
+          if (double) later(450, () => banner(L("双倍进度！", "Double progress!")))
+        } else pop(L("失败", "Failed"), mx - 12, my - 40, 0, -20, 1100, { color: "#ff7a6a", size: 11, delay: 200 })
+        return
+      }
+      if (gain > 0) {
+        pop(`+${fmt(gain)} ${L("进度", "progress")}`, cx - 20, cy - 30, 30, -60, 1500, { color: "#ffd75a", size: double ? 15 : 13, glow: double ? "#ffb300" : null })
+        burst(skill, cx, cy - 20, double ? 16 : 8, double)
+        if (double) banner(L("双倍进度！", "Double progress!"))
+        if (posed) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
+      } else {
+        pop(L("失败", "Failed"), cx - 14, cy - 30, 0, -30, 1100, { color: "#ff7a6a", size: 13 })
+        el.querySelector(".bfxl-target").animate([{ transform: "translateX(0)" }, { transform: "translateX(-4px)" }, { transform: "translateX(4px)" }, { transform: "translateX(0)" }], { duration: 300 })
+      }
+    }
+    // the trial is through: work done, or the target level reached
+    function trialFinish(t, obj) {
+      if (!t || t.ended) return
+      const done = obj.targetLevel !== null && obj.targetLevel !== undefined ? (obj.currentEnhLevel || 0) >= obj.targetLevel : obj.targetWorkValue > 0 && obj.currentWorkValue >= obj.targetWorkValue
+      if (done) trialEnd(t, true)
+    }
+    function trialEnd(t, ok, why) {
+      if (!t || t.ended) return
+      t.ended = performance.now()
+      if (t === trial && visible() && !cfg.lifeIcon) {
+        trialFinale(ok)
+        const [cx, cy] = targetAt()
+        const b = banner(ok ? (t.from === "guild" ? L("试炼完成！", "Trial cleared!") : L("房间通关！", "Room cleared!")) : why || L("试炼结束", "Trial over"), ok ? "#ffd75a" : "#ff7a6a")
+        if (ok) {
+          b?.classList.add("bless")
+          burst("enhancing", cx, cy - 20, 24, true)
+          FX.fireworks ||= [["#ff4d4d", "#ffb84d", "#fff04d", "#4dff88", "#4dc3ff", "#b84dff"], "spark"]
+          for (let i = 0; i < 3; i++) later(250 + i * 300, () => burst("fireworks", cx + (Math.random() - 0.5) * 140, cy - 20, 12, true))
+        }
+      }
+      later(3200, () => {
+        if (trials[t.from] === t) delete trials[t.from]
+        ensure()
+      })
+    }
+    // the labyrinth moved on: the character left the room (cleared above, or failed / gave up)
+    function trialCheckRoom() {
+      const t = trials.lab
+      if (!t || t.ended) return
+      const room = labRoom()
+      if (!labyrinth?.isActive || !room || `lab:${room.key}` !== t.key || room.roomType !== "/labyrinth_room_types/skilling") trialEnd(t, false, L("离开房间", "Left the room"))
+    }
+    // the guild's trial state: this skill's party done (or the trials closed)
+    function trialCheckGuild(obj) {
+      const t = trials.guild
+      if (!t || t.ended) return
+      let data
+      try {
+        data = JSON.parse(obj.guild?.currentTrialsData || "{}")
+      } catch {
+        return
+      }
+      const party = data?.skilling?.parties?.["/guild_skilling/" + t.skill]
+      if (party?.done || (data?.skilling && data.skilling.status !== "in_progress")) trialEnd(t, !!party?.done && (party.highestTier || 0) >= (t.data.tier || 1), L("试炼结束", "Trial over"))
+    }
+    // a trial that went quiet (timed out, page asleep): wound up
+    function trialTick() {
+      for (const t of Object.values(trials)) {
+        if (t.ended) continue
+        const d = t.data
+        const quiet = performance.now() - t.at > Math.max(15000, 4 * (d.actionTimeMs || 0))
+        const timedOut = d.timeoutAt && Date.now() > Date.parse(d.timeoutAt)
+        if (timedOut) trialEnd(t, false, L("时间到", "Time's up"))
+        else if (quiet) trialEnd(t, false)
+      }
+    }
+    function trialLines() {
+      const d = trial.data
+      const pct = v => (Math.round((v || 0) * 1000) / 10).toString() + "%"
+      const line1 = [`⏱ ${((d.actionTimeMs || 0) / 1000).toFixed(2)}s`, `${L("成功率", "Success")} ${pct(d.successRate)}`]
+      if (d.efficiency) line1.push(`${L("效率", "Efficiency")} +${pct(d.efficiency)}`)
+      const line2 = []
+      if (d.targetLevel !== null && d.targetLevel !== undefined) line2.push(`${L("目标", "Target")} +${d.targetLevel}`, `${L("当前", "Now")} +${d.currentEnhLevel || 0}`)
+      else line2.push(`${L("每次进度", "Per attempt")} ${fmt(d.progressPerAction || 0)}`)
+      line2.push(`${L("双倍进度", "Double progress")} ${pct(d.doubleProgressChance)}`, `${L("次数", "Attempts")} ${d.actionCounter || 0}`)
+      return [line1, line2]
+    }
+    // the trial's own bar: work done / needed (or levels), time left
+    function showTrialBar() {
+      if (el) showSeal()
+      const bar = el?.querySelector(".bfxl-tbar")
+      if (!bar) return
+      bar.style.display = trial ? "" : "none"
+      if (!trial) return
+      const d = trial.data
+      const enh = d.targetLevel !== null && d.targetLevel !== undefined
+      const k = enh ? (d.currentEnhLevel || 0) / (d.targetLevel || 1) : d.targetWorkValue ? (d.currentWorkValue || 0) / d.targetWorkValue : d.currentProgress || 0
+      bar.querySelector("i").style.width = Math.min(100, k * 100) + "%"
+      let left = ""
+      if (d.timeoutAt) {
+        const s = Math.max(0, Math.round((Date.parse(d.timeoutAt) - Date.now()) / 1000))
+        left = ` · ${L("剩余", "left")} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
+      }
+      bar.querySelector("span").textContent = (enh ? `+${d.currentEnhLevel || 0} / +${d.targetLevel}` : `${fmt(d.currentWorkValue || 0)} / ${fmt(d.targetWorkValue || 0)} (${(k * 100).toFixed(1)}%)`) + left
+    }
+
+    // ----- the game's header: the action's name, its seconds per action and how far the bar is -----
+    const headerName = () => document.querySelector('[class*="Header_actionName"]')
+    const headerScope = () => headerName()?.parentElement?.parentElement || null
+    function domSeconds() {
+      const t = headerScope()?.querySelector('[class*="ProgressBar_text"]')?.textContent || ""
+      const m = /(\d+(?:\.\d+)?)\s*s/.exec(t)
+      const v = m ? +m[1] : 0
+      return v >= 0.5 && v <= 3600 ? v : 0
+    }
+    function domProgress() {
+      const bar = headerScope()?.querySelector('[class*="ProgressBar_innerBar"]')
+      const w = bar?.parentElement?.getBoundingClientRect().width
+      return bar && w ? Math.max(0, Math.min(1, bar.getBoundingClientRect().width / w)) : 0
+    }
+    const dur = () => measured || domSeconds() || 6
+    function actionName() {
+      if (trial) return trial.title
+      const t = (headerName()?.querySelector('[class*="Header_displayName"]') || headerName())?.textContent || ""
+      const clean = t.replace(/\s*\[.*$/, "").trim()
+      if (clean) return clean
+      const id = shortId(cur?.actionHrid) || ""
+      return id.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+    }
+
+    // ----- messages -----
+    function onMessage(obj) {
+      if (obj.guildSharableCharacterMap) Object.assign(guildChars, obj.guildSharableCharacterMap)
+      if (obj.type === "init_character_data") {
+        myId = obj.character?.id ?? myId
+        for (const k of Object.keys(inv)) delete inv[k]
+        for (const k of Object.keys(tools)) delete tools[k]
+        setItems(obj.characterItems)
+        setBuffMaps(obj)
+        for (const s of obj.characterSkills || []) skills[s.skillHrid] = { level: s.level, experience: s.experience }
+        cur = null
+        setQueue(obj.characterActions || [], true)
+      } else if (obj.type === "actions_updated") {
+        const byId = Object.fromEntries(queue.map(a => [a.id, a]))
+        for (const a of obj.endCharacterActions || []) byId[a.id] = a
+        setQueue(Object.values(byId))
+      } else if (obj.type === "items_updated") {
+        setItems(obj.endCharacterItems)
+      } else if (/buff|house/.test(obj.type)) {
+        setBuffMaps(obj)
+      } else if (obj.type === "new_guild_skilling" || obj.type === "guild_skilling_updated") {
+        onTrial("guild", obj)
+      } else if (obj.type === "labyrinth_room_progress") {
+        onTrial("lab", obj)
+      } else if (obj.type === "labyrinth_updated") {
+        labyrinth = obj.labyrinth || labyrinth
+        trialCheckRoom()
+      } else if (obj.type === "guild_updated") {
+        trialCheckGuild(obj)
+      } else if (obj.type === "action_completed") {
+        onCompleted(obj)
+      }
+    }
+    function onCompleted(obj) {
+      const a = obj.endCharacterAction
+      if (!a) return
+      const key = `${a.id}|${a.currentCount}|${a.updatedAt}`
+      if (seen.has(key)) return
+      seen.add(key)
+      if (seen.size > 200) seen.delete(seen.values().next().value)
+      // item count changes, before the inventory takes the new counts
+      const gains = []
+      const costs = []
+      for (const it of obj.endCharacterItems || []) {
+        if (shortId(it.itemLocationHrid) !== "inventory") continue
+        const d = it.count - (inv[keyOf(it)] || 0)
+        const g = { id: shortId(it.itemHrid), level: it.enhancementLevel || 0, n: Math.abs(d) }
+        if (d > 0) gains.push(g)
+        else if (d < 0) costs.push(g)
+      }
+      setItems(obj.endCharacterItems)
+      const ups = []
+      let exp = 0
+      for (const s of obj.endCharacterSkills || []) {
+        const old = skills[s.skillHrid]
+        if (s.skillHrid !== "/skills/total_level" && old) {
+          exp += Math.max(0, s.experience - old.experience)
+          if (s.level > old.level) ups.push([shortId(s.skillHrid), s.level])
+        }
+        skills[s.skillHrid] = { level: s.level, experience: s.experience }
+      }
+      const i = queue.findIndex(x => x.id === a.id)
+      if (i >= 0) queue[i] = a
+      if (cur?.id === a.id) cur = a
+      if (!isLife(a) || trial) return
+      if (cur?.id !== a.id) setQueue(queue)
+      // the cycle: server time between two completions of this action
+      const at = Date.parse(a.updatedAt)
+      if (lastDone?.id === a.id && a.currentCount === lastDone.count + 1 && at > lastDone.at) {
+        const s = (at - lastDone.at) / 1000
+        if (s >= 0.5 && s <= 3600) measured = s
+      }
+      lastDone = { id: a.id, count: a.currentCount, at }
+      cycleAt = performance.now()
+      const before = enhLevel
+      enhLevel = hashItem(a.primaryItemHash)?.level ?? enhLevel
+      if (!visible()) return
+      if (cfg.lifeIcon) {
+        const big = gains.some(g => ["sage", "legend", "meteor", "crate"].includes(rarity(g.id)))
+        el.querySelector(".bfxl-ico").animate([{ transform: "scale(1)" }, { transform: `scale(${big ? 1.5 : 1.15})`, filter: big ? "drop-shadow(0 0 10px #ffd75a)" : "none" }, { transform: "scale(1)" }], { duration: big ? 1200 : 350 })
+        return
+      }
+      play({ skill: skillOf(a.actionHrid), gains, costs, exp, ups, enh: [before, enhLevel], action: a })
+    }
+
+    // ----- the window -----
+    const sheet = name => Stage.sheet(name)
+    function svgUse(sheetName, id, cls) {
+      const s = document.createElementNS(SVGNS, "svg")
+      s.setAttribute("viewBox", "0 0 100 100")
+      if (cls) s.setAttribute("class", cls)
+      const url = id && sheet(sheetName)
+      if (url) {
+        const u = document.createElementNS(SVGNS, "use")
+        u.setAttribute("href", url + "#" + id)
+        s.appendChild(u)
+      }
+      return s
+    }
+    const visible = () => !!el && el.style.display !== "none" && !document.hidden
+    function injectCss() {
+      if (document.getElementById("bfxl-css")) return
+      const st = document.createElement("style")
+      st.id = "bfxl-css"
+      st.textContent = `
+.bfxl{position:fixed;z-index:1100;width:340px;border-radius:10px;overflow:hidden;background:#1b2033;color:#eee;
+  box-shadow:0 6px 24px #0008;font:12px/1.3 sans-serif;user-select:none}
+.bfxl.docked{position:absolute;left:0;top:0;right:0;bottom:0;width:auto!important;border-radius:0;box-shadow:none;z-index:15}
+.bfxl.docked .bfxl-size,.bfxl.docked .bfxl-min,.bfxl.docked .bfxl-x,.bfxl.docked .bfxl-grip{display:none}
+.bfxl.docked .bfxl-head{cursor:default;padding-right:110px}
+.bfxl-grip{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:5;background:linear-gradient(135deg,transparent 50%,#8a93b8 50%,#8a93b8 60%,transparent 60%,transparent 72%,#8a93b8 72%,#8a93b8 82%,transparent 82%)}
+.bfxl.icon .bfxl-grip{display:none}
+.bfxl-head{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 9px;background:#262d47;cursor:move}
+.bfxl-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.bfxl-count{opacity:.75;white-space:nowrap}
+.bfxl-head button{background:none;border:0;color:#ccd;cursor:pointer;font-size:14px;line-height:1;padding:0 3px}
+.bfxl-head button:hover{color:#fff}
+.bfxl.min .bfxl-view,.bfxl.min .bfxl-bar{display:none}
+.bfxl-view{position:relative;overflow:hidden;height:150px}
+.bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0}
+.bfxl-scene svg{position:absolute;overflow:visible}
+.bfxl-hero{position:absolute;left:62px;bottom:10px;width:96px;height:96px}
+.bfxl-hero>svg{left:0;top:0;width:100%;height:100%}
+.bfxl-tool{position:absolute;left:56%;top:26%;width:50%;height:50%;transform-origin:14% 86%}
+.bfxl-tool svg{left:0;top:0;width:100%;height:100%}
+.bfxl-target{position:absolute;right:30px;bottom:12px;width:100px;height:100px;transform-origin:50% 100%}
+.bfxl-target>svg{left:0;top:0;width:100%;height:100%}
+.bfxl-target.station>svg{left:14%;top:34%;width:72%;height:72%;opacity:.85}
+.bfxl-target img{position:absolute;pointer-events:none}
+.bfxl-target.cow{width:118px;height:118px;right:22px;bottom:4px}
+.bfxl-target.tree{width:136px;height:136px;right:14px;bottom:2px}
+.bfxl-target img.pose{left:-18.75%;top:-18.75%;width:137.5%;height:137.5%}
+.bfxl-target.plant{width:96px;height:96px}
+.bfxl-target img.cell{left:-4.7%;top:-4.7%;width:109.4%;height:109.4%}
+.bfxl-target.station.drawn{width:84px;height:112px;bottom:6px;right:36px}
+.bfxl-target.station.drawn img.cell{left:-6.25%;top:-4.7%;width:112.5%;height:109.4%}
+.bfxl-target.station.drawn .bfxl-work{top:-12%;left:22%;width:56%;height:42%}
+.bfxl-target.station.drawn.crafting{width:76px;height:101px}
+.bfxl-target.station.drawn.brewing{width:72px;height:96px}
+.bfxl-target.station.drawn.enhancing{width:76px;height:101px}
+.bfxl-tool.drawn{z-index:1}
+.bfxl-tool.ench5 img{filter:drop-shadow(0 0 2px #6fb6ff) drop-shadow(0 0 4px #6fb6ff)}
+.bfxl-tool.ench8 img{filter:drop-shadow(0 0 2px #c07bff) drop-shadow(0 0 5px #c07bff)}
+.bfxl-tool.ench10 img{animation:bfxl-b10 2.4s ease-in-out infinite}
+.bfxl-tool.ench12 img{animation:bfxl-b12 1.4s ease-in-out infinite}
+.bfxl-tool.ench15 img{animation:bfxl-b15 1.6s linear infinite}
+@keyframes bfxl-b10{0%,100%{filter:drop-shadow(0 0 2px #ffa53a) drop-shadow(0 0 3px #ffa53a)}50%{filter:drop-shadow(0 0 3px #ffa53a) drop-shadow(0 0 8px #ffa53a)}}
+@keyframes bfxl-b12{0%,100%{filter:drop-shadow(0 0 2px #ff5a3c) drop-shadow(0 0 4px #ffd75a)}50%{filter:drop-shadow(0 0 4px #ff5a3c) drop-shadow(0 0 10px #ffd75a)}}
+@keyframes bfxl-b15{0%{filter:drop-shadow(0 0 3px #ff4d4d) drop-shadow(0 0 7px #ff4d4d)}17%{filter:drop-shadow(0 0 3px #ffb84d) drop-shadow(0 0 7px #ffb84d)}33%{filter:drop-shadow(0 0 3px #fff04d) drop-shadow(0 0 7px #fff04d)}50%{filter:drop-shadow(0 0 3px #4dff88) drop-shadow(0 0 7px #4dff88)}67%{filter:drop-shadow(0 0 3px #4dc3ff) drop-shadow(0 0 7px #4dc3ff)}83%{filter:drop-shadow(0 0 3px #b84dff) drop-shadow(0 0 7px #b84dff)}100%{filter:drop-shadow(0 0 3px #ff4d4d) drop-shadow(0 0 7px #ff4d4d)}}
+.bfxl-hero{z-index:2}
+.bfxl-carry{position:absolute;left:30%;top:-26%;width:40%;height:40%;filter:drop-shadow(0 2px 2px #0006)}
+.bfxl-carry svg{left:0;top:0;width:100%;height:100%}
+.bfxl-tool.drawn img{width:100%;height:100%;position:absolute;left:0;top:0}
+.bfxl-work{position:absolute;left:25%;top:-10%;width:50%;height:50%;filter:drop-shadow(0 0 5px #fffa)}
+.bfxl-work svg{left:0;top:0;width:100%;height:100%}
+.bfxl-enh{position:absolute;left:0;right:0;top:-22%;text-align:center;font:700 16px sans-serif;text-shadow:0 1px 3px #000}
+.bfxl-fx{position:absolute;inset:0;pointer-events:none;z-index:3}
+.bfxl-fx>*{position:absolute;left:0;top:0;will-change:transform,opacity}
+.bfxl-pop{white-space:nowrap;font-weight:700;text-shadow:0 1px 2px #000,0 0 3px #000;display:flex;align-items:center;gap:2px}
+.bfxl-pop svg{position:static;width:22px;height:22px}
+.bfxl-banner{left:0!important;right:0;top:34%!important;text-align:center;font:800 18px sans-serif;color:#ffe27a;
+  text-shadow:0 0 8px #ff9d00,0 2px 3px #000}
+.bfxl-big{position:absolute;left:0;top:0}
+.bfxl-store{position:absolute;left:-10px;bottom:2px;width:100px;height:100px;pointer-events:none}
+.bfxl-table{position:absolute;bottom:4px;width:56px;height:56px;pointer-events:none}
+.bfxl-store img.cell,.bfxl-table img.cell{position:absolute;left:-4.7%;top:-4.7%;width:109.4%;height:109.4%}
+.bfxl-slot{position:absolute;width:18px;height:18px;transform:translate(-50%,-100%);filter:drop-shadow(0 1px 1px #0009)}
+.bfxl-slot svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-slot b{position:absolute;left:50%;top:100%;transform:translateX(-50%);font:700 8.5px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000,0 0 1px #000}
+.bfxl-target.proj{width:190px;height:127px;right:auto;left:75px;bottom:2px}
+.bfxl-seal{position:absolute;left:50%;top:6px;width:44px;height:44px;margin-left:-22px;border-radius:50%;z-index:4;pointer-events:none;
+  background:conic-gradient(#ffd75a var(--p,0deg),#3a2f5a55 0);box-shadow:0 0 10px #ffd75a88,inset 0 0 6px #000;animation:bfxl-seal 9s linear infinite}
+.bfxl-seal i{position:absolute;inset:4px;border-radius:50%;background:radial-gradient(circle,#2a2140 55%,#4a3a70);border:1px dashed #ffd75aaa}
+.bfxl-seal b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 10px sans-serif;color:#ffe9a0;text-shadow:0 0 4px #000}
+.bfxl-seal.broken{background:conic-gradient(#ff4a3a var(--p,0deg),#3a0f0f88 0);box-shadow:0 0 12px #ff3a2a}
+@keyframes bfxl-seal{to{rotate:360deg}}
+.bfxl-seal b{animation:bfxl-seal 9s linear infinite reverse}
+.bfxl-target.obst{width:150px;height:100px;right:62px;bottom:4px}
+.bfxl-target.source{right:150px}
+.bfxl-project{position:absolute;width:150px;height:100px;right:6px;bottom:2px;pointer-events:none}
+.bfxl-gate{position:absolute;width:126px;height:84px;right:-8px;bottom:4px;pointer-events:none}
+.bfxl-target img.stage,.bfxl-project img.stage,.bfxl-gate img.stage{position:absolute;left:-3.125%;top:-4.6875%;width:106.25%;height:109.375%;pointer-events:none}
+.bfxl-mates{position:absolute;inset:0;pointer-events:none;z-index:1}
+.bfxl-crowd{position:absolute;inset:0;pointer-events:none;z-index:0}
+.bfxl-crowd b{display:none}
+.bfxl-mate{position:absolute;width:96px;height:96px;transform:scale(.82);transform-origin:50% 100%;filter:brightness(.92)}
+.bfxl-mate>svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-mate b{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font:700 9px sans-serif;color:#fff;white-space:nowrap;text-shadow:0 0 2px #000,0 0 2px #000}
+.bfxl-mats{position:absolute;left:4%;right:4%;display:flex;justify-content:center;gap:1px;transform:translateY(-100%);pointer-events:none;z-index:1}
+.bfxl-mat{position:relative;width:19px;height:19px;filter:drop-shadow(0 1px 1px #0008)}
+.bfxl-mat svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-mat b{position:absolute;right:-3px;bottom:-4px;font:700 8px sans-serif;color:#fff;text-shadow:0 0 2px #000,0 0 2px #000}
+.bfxl-mat.short{opacity:.55;filter:grayscale(.7)}
+.bfxl-rune{position:absolute;left:8%;top:-8px;width:84%;aspect-ratio:1;border-radius:50%;border:2px solid var(--enh,#7fd0ff);box-shadow:0 0 8px var(--enh,#7fd0ff),inset 0 0 8px var(--enh,#7fd0ff);background:repeating-conic-gradient(#ffffff55 0 3deg,transparent 3deg 24deg);animation:bfxl-rune 7s linear infinite;pointer-events:none}
+.st3 .bfxl-rune,.st4 .bfxl-rune{animation-duration:4s;border-width:3px}
+.st5 .bfxl-rune{animation:bfxl-rune 3s linear infinite,bfxl-hue 2s linear infinite;border-width:3px}
+.st5 .bfxl-orbit{filter:hue-rotate(0);animation-name:bfxl-orbit;animation-iteration-count:infinite}
+.st5 .bfxl-orbit i{animation:bfxl-hue 1.5s linear infinite}
+@keyframes bfxl-hue{to{filter:hue-rotate(360deg)}}
+@keyframes bfxl-rune{from{transform:scaleY(.3) rotate(0)}to{transform:scaleY(.3) rotate(360deg)}}
+.bfxl-orbit{position:absolute;left:50%;top:9%;width:0;height:0;animation:bfxl-orbit 2.4s linear infinite;pointer-events:none}
+.bfxl-orbit i{position:absolute;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:#fff;box-shadow:0 0 6px var(--enh,#7fd0ff),0 0 3px #fff}
+@keyframes bfxl-orbit{from{transform:scaleY(.4) rotate(0)}to{transform:scaleY(.4) rotate(360deg)}}
+.bfxl-beam{height:6px;transform-origin:0 50%;border-radius:3px;background:linear-gradient(90deg,#bfe8ff00,#bfe8ff 20%,#fff 60%,#7fd0ff);box-shadow:0 0 8px #7fd0ff}
+.bfxl-fu{width:44px;height:44px;background:radial-gradient(circle,#ff4a3a,#c8141c);border:2px solid #ffd75a;border-radius:4px;box-shadow:0 0 14px #ff3b30,0 0 4px #ffd75a;display:flex;align-items:center;justify-content:center}
+.bfxl-fu span{transform:rotate(-45deg);font:900 28px serif;color:#ffd75a;text-shadow:0 1px 2px #6a0000}
+.bfxl-banner.bless{color:#ffd75a;text-shadow:0 0 10px #ff3b30,0 0 4px #ff8a1a,0 2px 3px #000}
+.bfxl-num{font:900 24px sans-serif;width:60px;text-align:center}
+.bfxl-shield{width:52px;height:52px;border-radius:50%;border:2px solid #9fe0ff;background:radial-gradient(circle,#7fd0ff22 40%,#7fd0ff66 75%,transparent);box-shadow:0 0 12px #7fd0ff}
+.bfxl-wave{width:16px;height:16px;border-radius:50%;border:2px solid #9fe0ff;box-shadow:0 0 6px #7fd0ff,inset 0 0 4px #7fd0ff}
+.bfxl-big svg{position:static!important;width:100%;height:100%}
+.bfxl-meteor{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle,#fff6c0 0%,#ffb030 45%,#ff5a1a 75%);box-shadow:0 0 10px #ff7a1a,0 0 22px #ff4a00}
+.bfxl-meteor::after{content:"";position:absolute;left:14px;top:4px;width:60px;height:8px;border-radius:4px;background:linear-gradient(90deg,#ffb030cc,#ff5a1a55,transparent)}
+.bfxl-flash{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#ffe0a0 35%,transparent 70%)}
+.bfxl-ring{width:80px;height:24px;border-radius:50%;border:3px solid #ffd9a0;box-shadow:0 0 8px #ffb070}
+.bfxl-dim{inset:0!important;background:#000}
+.bfxl-pillar{top:0!important;width:44px;height:150px;transform-origin:50% 0;background:linear-gradient(90deg,transparent,#fff8d0cc 30%,#fff 50%,#fff8d0cc 70%,transparent);filter:blur(1px)}
+.bfxl-rays{width:120px;height:120px;border-radius:50%;background:repeating-conic-gradient(#fff3a080 0 10deg,transparent 10deg 30deg);-webkit-mask:radial-gradient(circle,#000 20%,transparent 70%);mask:radial-gradient(circle,#000 20%,transparent 70%)}
+.bfxl-circle{border-radius:50%;border:3px double #ff3d6e;box-shadow:0 0 12px #ff3d6e,inset 0 0 12px #ff3d6e;background:repeating-conic-gradient(#ffd75a55 0 4deg,transparent 4deg 30deg)}
+.bfxl-circle.inner{border:2px dashed #ffd75a;box-shadow:0 0 8px #ffd75a;background:none}
+.bfxl-banner.rainbow{background:linear-gradient(90deg,#ff5f5f,#ffd75a,#6fff8f,#5fc8ff,#c77dff,#ff5f5f);-webkit-background-clip:text;background-clip:text;color:transparent!important;text-shadow:none;filter:drop-shadow(0 0 4px #fff) drop-shadow(0 2px 2px #000)}
+.bfxl-banner.sage{color:#ff6b8b;text-shadow:0 0 10px #ff2d55,0 0 4px #ffd75a,0 2px 3px #000}
+.bfxl-ico{display:none;width:46px;height:46px;border-radius:50%;cursor:pointer;position:relative;box-shadow:0 3px 10px #0008}
+.bfxl-ico svg{position:absolute;left:7px;top:7px;width:32px;height:32px;border-radius:50%;background:#1b2033}
+.bfxl.icon{width:46px;border-radius:50%;background:none;box-shadow:none;overflow:visible}
+.bfxl.icon .bfxl-head,.bfxl.icon .bfxl-view,.bfxl.icon .bfxl-bar,.bfxl.icon .bfxl-lab{display:none}
+.bfxl.icon .bfxl-ico{display:block}
+.bfxl-lab{background:#20263c;padding:6px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px}
+.bfxl-lab select{background:#141828;color:#ddd;border:1px solid #445;border-radius:3px;font-size:11px;max-width:120px}
+.bfxl-lab button{background:#33406a;color:#eef;border:0;border-radius:3px;padding:2px 6px;font-size:11px;cursor:pointer}
+.bfxl-lab button:hover{background:#4a5c96}
+.bfxl-lab b{width:100%;font-size:11px;opacity:.7}
+.bfxl-bar{position:relative;height:14px;background:#11141f}
+.bfxl-tbar{position:relative;height:13px;background:#1c1710}
+.bfxl-tbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#c98a00,#ffd75a)}
+.bfxl-tbar span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:13px;text-shadow:0 1px 1px #000,0 0 2px #000}
+.bfxl.min .bfxl-tbar,.bfxl.icon .bfxl-tbar{display:none!important}
+.bfxl-info{padding:3px 8px 4px;background:#171b2b;font-size:10.5px;line-height:1.5;color:#c8d0e8}
+.bfxl-info div{display:flex;flex-wrap:wrap;column-gap:9px}
+.bfxl-info span{white-space:nowrap}
+.bfxl.min .bfxl-info,.bfxl.icon .bfxl-info{display:none!important}
+.bfxl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#4f8cff,#7fd0ff)}
+.bfxl-bar span{position:absolute;inset:0;text-align:center;font-size:10px;line-height:14px;text-shadow:0 1px 1px #000}
+`
+      document.head.appendChild(st)
+    }
+    function build() {
+      injectCss()
+      el = document.createElement("div")
+      el.className = "bfxl"
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-tbar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
+      document.body.appendChild(el)
+      const $ = s => el.querySelector(s)
+      // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
+      $(".bfxl-x").onclick = () => {
+        cfg.lifeIcon = true
+        saveCfg()
+        ensure()
+      }
+      $(".bfxl-ico").addEventListener("pointerdown", e => {
+        const r = el.getBoundingClientRect()
+        const dx = e.clientX - r.left
+        const dy = e.clientY - r.top
+        let moved = false
+        const move = ev => {
+          if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 5) return
+          moved = true
+          cfg.lifePos = [ev.clientX - dx, ev.clientY - dy]
+          place()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          if (!moved) cfg.lifeIcon = false
+          saveCfg()
+          ensure()
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        e.preventDefault()
+      })
+      $(".bfxl-info-btn").onclick = () => {
+        cfg.lifeInfo = !cfg.lifeInfo
+        saveCfg()
+        showInfo()
+        place()
+      }
+      $(".bfxl-min").onclick = () => {
+        cfg.lifeMin = !cfg.lifeMin
+        saveCfg()
+        ensure()
+      }
+      // size: a share of the screen's width (the layout is drawn 340 px wide and scaled), at most half of it
+      $(".bfxl-size").onclick = () => {
+        const sizes = [0.15, 0.2, 0.3, 0.4, 0.5]
+        cfg.lifeW = sizes.find(v => v > (cfg.lifeW || 0.2) + 0.001) || sizes[0]
+        saveCfg()
+        place()
+      }
+      const grip = document.createElement("div")
+      grip.className = "bfxl-grip"
+      el.appendChild(grip)
+      grip.addEventListener("pointerdown", e => {
+        const left = el.getBoundingClientRect().left
+        const move = ev => {
+          cfg.lifeW = Math.max(0.12, Math.min(0.5, (ev.clientX - left) / innerWidth))
+          place()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          saveCfg()
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        e.preventDefault()
+        e.stopPropagation()
+      })
+      // drag by the title bar
+      $(".bfxl-head").addEventListener("pointerdown", e => {
+        if (e.target.closest("button") || docked) return
+        const r = el.getBoundingClientRect()
+        const dx = e.clientX - r.left
+        const dy = e.clientY - r.top
+        const move = ev => {
+          cfg.lifePos = [ev.clientX - dx, ev.clientY - dy]
+          place()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          saveCfg()
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        e.preventDefault()
+      })
+      $(".bfxl-head").addEventListener("dblclick", e => {
+        if (e.target.closest("button")) return
+        cfg.lifePos = null
+        saveCfg()
+        place()
+      })
+      addEventListener("resize", place)
+    }
+    // the game's layout: the skill list on the left, chat under the main panel. Found by shape, not by class
+    // hashes: the outermost box (up to the page) of a navigation link that stays a narrow column, and the
+    // biggest visible element whose class mentions chat
+    function navRight() {
+      let e = document.querySelector('[class*="NavigationBar_"]')
+      let right = 0
+      while (e && e !== document.body) {
+        const r = e.getBoundingClientRect()
+        if (r.width > 0 && r.width < 420 && r.height > innerHeight * 0.5) right = r.right
+        e = e.parentElement
+      }
+      return right
+    }
+    function chatTop() {
+      let best = null
+      for (const e of document.querySelectorAll('[class*="Chat"],[class*="chat"]')) {
+        const r = e.getBoundingClientRect()
+        if (r.width < 200 || r.height < 80 || r.top < innerHeight * 0.3) continue
+        if (!best || r.width * r.height > best.width * best.height) best = r
+      }
+      return best ? best.top : 0
+    }
+    // default spot: just above the chat, against the skill list (bottom right when neither is found)
+    function defaultPos(w, h) {
+      const left = navRight()
+      const top = chatTop()
+      return [left ? left + 8 : innerWidth - w - 16, (top || innerHeight - 8) - h - 8]
+    }
+    // the window's scale: its share of the screen's width over the 340 px it is laid out in
+    const winScale = () => (Math.min(0.5, Math.max(0.12, cfg.lifeW || 0.2)) * innerWidth) / 340
+    // keeps the window on screen; dragged spots are kept, double-clicking the title bar goes back to the default
+    // only the picture is scaled: the title bar, bars, bonus lines and buttons keep their size
+    let curScale = 1 // the picture's scale as last placed (for measuring in it)
+    function place() {
+      if (!el) return
+      if (docked) {
+        // laid over the game's panel: as wide as it (at most 2.2x), the panel grown to hold it
+        const view = el.querySelector(".bfxl-view")
+        const bars = el.offsetHeight - view.offsetHeight
+        const s = (curScale = Math.max(0.5, Math.min(docked.clientWidth / 340, 2.2)))
+        view.style.height = 150 * s + "px"
+        docked.style.minHeight = Math.ceil(150 * s + bars) + "px"
+        const scene = el.querySelector(".bfxl-scene")
+        scene.style.transform = `scale(${s})`
+        scene.style.marginLeft = Math.max(0, (docked.clientWidth - 340 * s) / 2) + "px"
+        return
+      }
+      el.querySelector(".bfxl-scene").style.marginLeft = ""
+      const s = (curScale = winScale())
+      el.style.width = cfg.lifeIcon ? "" : 340 * s + "px"
+      el.querySelector(".bfxl-view").style.height = 150 * s + "px"
+      el.querySelector(".bfxl-scene").style.transform = `scale(${s})`
+      const w = cfg.lifeIcon ? 46 : 340 * s
+      const h = el.offsetHeight
+      const [x, y] = cfg.lifePos || defaultPos(w, h)
+      el.style.left = Math.max(0, Math.min(innerWidth - w, x)) + "px"
+      el.style.top = Math.max(0, Math.min(innerHeight - Math.min(h, 40), y)) + "px"
+    }
+    // a trial is shown like the battle stage: laid over the game's own panel for it (the guild page's 进行中 tab
+    // or the labyrinth's 房间 tab), with a corner button back to the original; not as the floating window (trials
+    // from the test panel excepted)
+    let docked = null
+    let trialBtn = null
+    function trialHost(t) {
+      // the guild page's 进行中 tab; the labyrinth page's 房间 tab (its fights are the battle stage's)
+      const panel = document.querySelector(t?.from === "guild" ? '[class*="GuildPanel_inProgressTab"]' : '[class*="LabyrinthPanel_roomTab"]')
+      return t && panel?.offsetParent && !panel.querySelector('[class*="BattlePanel_battleArea"]') ? panel : null
+    }
+    function dock(host) {
+      if (host !== docked || (host && el.parentElement !== host)) {
+        if (docked) docked.style.minHeight = ""
+        trialBtn?.remove()
+        trialBtn = null
+        docked = host
+        el.classList.toggle("docked", !!host)
+        // the floating window's own spot and width must not move it inside the panel
+        Object.assign(el.style, { left: "", top: "", width: "" })
+        if (host) {
+          if (getComputedStyle(host).position === "static") host.style.position = "relative"
+          host.style.minHeight = "330px"
+          host.appendChild(el)
+        } else document.body.appendChild(el)
+        layoutDirty = true
+      }
+      if (!host) return
+      Stage.injectCss() // the corner button's style
+      if (!trialBtn?.isConnected) {
+        trialBtn = document.createElement("button")
+        trialBtn.className = "bfx-toggle"
+        trialBtn.addEventListener("click", e => {
+          e.stopPropagation()
+          cfg.trialOverlay = !cfg.trialOverlay
+          saveCfg()
+          ensure()
+        })
+        host.appendChild(trialBtn)
+      }
+      trialBtn.textContent = cfg.trialOverlay ? L("切换到原版", "Original view") : L("切换到动画", "Animated view")
+    }
+    function ensure() {
+      // the trial on screen takes the scene; with none, the queue's action is back
+      const pick = pickTrial()
+      if (pick !== trial) {
+        trial = pick
+        sceneKey = ""
+        if (pick) {
+          cur = pick.cur
+          enhLevel = pick.data.currentEnhLevel || 0
+          measured = (pick.data.actionTimeMs || 0) / 1000
+          cycleAt = performance.now()
+          lastDone = null
+        } else {
+          cur = null
+          return setQueue(queue)
+        }
+      }
+      const host = trial ? trialHost(trial) : null
+      // the test panel's trials show in the floating window
+      let shown = trial ? !!host : true
+      const want = cfg.life && isLife(cur) && document.body && shown
+      if (el && !want && docked) dock(null)
+      if (!want) {
+        if (el) el.style.display = "none"
+        cancelAnimationFrame(raf)
+        raf = 0
+        return
+      }
+      if (!el) build()
+      dock(host)
+      el.style.display = host && !cfg.trialOverlay ? "none" : ""
+      el.classList.toggle("min", !!cfg.lifeMin && !docked)
+      el.classList.toggle("icon", !!cfg.lifeIcon && !docked)
+      if (cfg.lifeMin || cfg.lifeIcon) layoutDirty = true
+      setScene()
+      showInfo()
+      fillStore()
+      showTrialBar()
+      place()
+      if (!raf && !cfg.lifeMin) raf = requestAnimationFrame(frame)
+    }
+    // a tool in the hand: the drawn one, its grip (found by build-assets.py) on the front hand, turned about the
+    // grip and glowing by its level like the battle stage's weapons (+5 blue, +8 purple, +10 orange, +12 red, +15
+    // rainbow); the game's icon when it has no drawing
+    function makeTool(id, lv) {
+      const node = document.createElement("div")
+      node.className = "bfxl-tool"
+      const geo = id && Assets.get("life")?.tool_geo?.[id]
+      if (!art("tool", id) || !geo) {
+        if (id) node.appendChild(svgUse("items", id))
+        return { node, held: null }
+      }
+      const kind = id.split("_").pop()
+      const [gx, gy, , reach] = geo
+      const w = (TOOL_REACH[kind] || 44) / reach
+      const h = w * TOOL_FRAME
+      node.classList.add("drawn")
+      Object.assign(node.style, { left: HAND[0] - gx * w + "px", top: HAND[1] - gy * h + "px", width: w + "px", height: h + "px", transformOrigin: `${gx * 100}% ${gy * 100}%` })
+      node.appendChild(img("tool/" + id))
+      const tier = [15, 12, 10, 8, 5].find(n => lv >= n)
+      if (tier) node.classList.add("ench" + tier)
+      return { node, held: { kind, geo } }
+    }
+    // ----- trial scenes -----
+    // A guild trial is everyone's one big project (lg_proj_*: 4 stages of the same thing) that grows with the
+    // progress. Everyone works it as equals (the viewer too, among them): they stand around it in rows, holding
+    // their tools; a success is acted out by one of them (the messages don't say whose: picked at random) striking
+    // the project, a failure by one fumbling. A labyrinth skilling room is the skill's own scene in the depth's
+    // backdrop with the room's seal over it, a ring of runes lighting up with the progress.
+    let tstage = null // { stages: [img], shown, project }
+    let members = [] // guild trial: [{ el, ang, kind, slot: { x, bottom, k, flip }, act: { t0, ok } | null }]
+    function stageImgs(box, path) {
+      return [1, 2, 3, 4].map(k => {
+        const im = img(`${path}_${k}`, "stage")
+        im.style.visibility = k === 1 ? "visible" : "hidden"
+        box.appendChild(im)
+        return im
+      })
+    }
+    function buildTrialScene(skill, id, target) {
+      if (trial.from !== "guild" || !art("project", skill + "_1")) return false
+      tstage = { shown: -1 }
+      target.classList.add("proj")
+      tstage.stages = stageImgs(target, `project/${skill}`)
+      tstage.project = target
+      trialStage(false)
+      return true
+    }
+    const trialProgress = d => (d.targetLevel !== null && d.targetLevel !== undefined ? (d.currentEnhLevel || 0) / (d.targetLevel || 1) : d.targetWorkValue ? (d.currentWorkValue || 0) / d.targetWorkValue : d.currentProgress || 0)
+    // the project's stage (the last one only when it is through), the seal's ring
+    function trialStage(show) {
+      showSeal()
+      if (!tstage || !trial) return
+      const p = trialProgress(trial.data)
+      const k = p >= 1 ? 3 : p >= 2 / 3 ? 2 : p >= 1 / 3 ? 1 : 0
+      if (k === tstage.shown || (k === 3 && show)) return
+      const was = tstage.shown
+      tstage.shown = k
+      tstage.stages.forEach((im, i) => (im.style.visibility = i === k ? "visible" : "hidden"))
+      if (show && was >= 0 && k > was) {
+        const box = tstage.project
+        box.animate([{ filter: "brightness(2.2)", transform: "scale(1.06)" }, { filter: "none", transform: "none" }], { duration: 600, easing: "ease-out" })
+        const [x, y] = boxAt(box)
+        burst(trial.skill, x, y, 14, true)
+        banner(L(`阶段 ${k + 1} / 4`, `Stage ${k + 1} / 4`), "#ffd75a")
+      }
+    }
+    // the middle of an element in scene pixels
+    function boxAt(e) {
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const r = e.getBoundingClientRect()
+      return [(r.left - s.left + r.width / 2) / curScale, (r.top - s.top + r.height / 2) / curScale]
+    }
+    // milk / produce thrown into the vat / wagon by whoever got it
+    function produceArc(x0, y0) {
+      if (!tstage) return
+      const [x1, y1] = boxAt(tstage.project)
+      const item = trial.skill === "milking" ? "milk" : trial.skill === "foraging" ? gameData()?.actions[cur.actionHrid]?.drops?.[0]?.[0] || "apple" : null
+      if (!item) return
+      for (let i = 0; i < 2; i++) {
+        const p = fxEl("bfxl-big", "width:16px;height:16px")
+        p.appendChild(svgUse("items", item))
+        p.animate(
+          [{ transform: `translate(${x0 - 8}px,${y0 - 20}px) scale(.6)`, opacity: 0 }, { transform: `translate(${(x0 + x1) / 2 - 8}px,${Math.min(y0, y1) - 50}px) scale(1)`, opacity: 1, offset: 0.5 }, { transform: `translate(${x1 - 8}px,${y1 - 10}px) scale(.5)`, opacity: 0 }],
+          { duration: 750, delay: i * 120, easing: "ease-in-out", fill: "backwards" },
+        ).onfinish = gone(p)
+      }
+    }
+    // ----- the labyrinth room's seal: a ring of runes over the scene, lit by the progress -----
+    function showSeal() {
+      const room = trial?.from === "lab"
+      let seal = el?.querySelector(".bfxl-seal")
+      if (!room || seal?.dataset.key !== trial.key) seal?.remove()
+      if (!room) return
+      seal = el.querySelector(".bfxl-seal")
+      if (!seal) {
+        seal = document.createElement("div")
+        seal.className = "bfxl-seal"
+        seal.innerHTML = "<i></i><b></b>"
+        seal.dataset.key = trial.key
+        el.querySelector(".bfxl-scene").appendChild(seal)
+      }
+      const d = trial.data
+      const p = Math.min(1, trialProgress(d))
+      seal.style.setProperty("--p", p * 360 + "deg")
+      seal.querySelector("b").textContent = d.targetLevel !== null && d.targetLevel !== undefined ? `+${d.currentEnhLevel || 0}/${d.targetLevel}` : Math.floor(p * 100) + "%"
+    }
+    // the end of a trial: the project's last stage with its own flourish; the room's seal breaking (or cracking red)
+    function trialFinale(ok) {
+      const seal = el.querySelector(".bfxl-seal")
+      if (seal) {
+        const [x, y] = boxAt(seal)
+        if (ok) {
+          seal.animate([{ transform: "scale(1)", filter: "brightness(1)" }, { transform: "scale(1.4)", filter: "brightness(3)" }, { transform: "scale(.2)", opacity: 0 }], { duration: 700, easing: "ease-in", fill: "forwards" })
+          later(500, () => {
+            FX.shards ||= [["#ffd75a", "#9fe0ff", "#ffffff"], "chip"]
+            burst("shards", x, y, 24, true)
+            bigItem("labyrinth_token", x, y + 30, 34, "#ffd75a", 2000, 30)
+          })
+        } else {
+          seal.classList.add("broken")
+          seal.animate([{ transform: "translateX(0)" }, { transform: "translateX(-4px)" }, { transform: "translateX(4px)" }, { transform: "translateX(0)" }], { duration: 400 })
+          const f = fxEl("bfxl-dim", "background:#600")
+          f.animate([{ opacity: 0 }, { opacity: 0.45 }, { opacity: 0 }], { duration: 900 }).onfinish = gone(f)
+        }
+        return true
+      }
+      if (!tstage) return false
+      const box = tstage.project
+      const [x, y] = boxAt(box)
+      const showLast = () => {
+        tstage.shown = 3
+        tstage.stages.forEach((im, i) => (im.style.visibility = i === 3 ? "visible" : "hidden"))
+        box.animate([{ filter: "brightness(2.5)", transform: "scale(1.08)" }, { filter: "none", transform: "none" }], { duration: 800, easing: "ease-out" })
+        burst("enhancing", x, y - 10, 20, true)
+      }
+      if (!ok) return true
+      if (trial.skill === "woodcutting") {
+        // the old tree comes down
+        const st = tstage.stages[2]
+        st.style.transformOrigin = "75% 92%"
+        st.animate([{ transform: "rotate(0)" }, { transform: "rotate(78deg)" }], { duration: 900, easing: "cubic-bezier(.5,0,1,1)", fill: "forwards" }).onfinish = () => {
+          st.getAnimations().forEach(a => a.cancel())
+          showLast()
+          shake(6, 500)
+          FX.dust ||= [["#c9a77a", "#8b6b4a", "#e8d3b0"], "chip"]
+          burst("dust", x + 40, y + 40, 24, true)
+          banner("Timber!", "#ffe27a")
+        }
+        return true
+      }
+      showLast()
+      if (trial.skill === "tailoring") box.animate([{ transform: "scaleY(.6)" }, { transform: "scaleY(1.05)" }, { transform: "none" }], { duration: 700, easing: "ease-out" })
+      if (trial.skill === "brewing" || trial.skill === "cooking") {
+        FX.steam ||= [["#ffffffc0", "#ffe9c9b0"], "puff"]
+        for (let i = 0; i < 3; i++) later(i * 250, () => burst("steam", x + (Math.random() - 0.5) * 60, y - 30, 8, true))
+      }
+      // everyone cheers
+      for (const m of members) m.el.animate([{ translate: "0 0" }, { translate: "0 -10px" }, { translate: "0 0" }], { duration: 400, iterations: 3, delay: Math.random() * 300 })
+      return true
+    }
+    // ----- the guild's members around the project -----
+    // order around it: shuffled by id (the same each time), so the viewer is just one of them
+    const mix = id => (Math.imul(Number(id) || 7, 2654435761) >>> 0) % 997
+    function buildMates(skill) {
+      el.querySelectorAll(".bfxl-mates,.bfxl-crowd").forEach(e => e.remove())
+      members = []
+      const guild = trial?.from === "guild" && tstage
+      el.querySelector(".bfxl-hero").style.display = guild ? "none" : ""
+      if (!guild) return
+      const ids = [...new Set([myId, ...(trial.data.participantIds || [])])].filter(id => id !== null && id !== undefined).slice(0, 60)
+      ids.sort((a, b) => mix(a) - mix(b))
+      const front = document.createElement("div")
+      front.className = "bfxl-mates"
+      const back = document.createElement("div")
+      back.className = "bfxl-crowd"
+      const slots = memberSlots(ids.length)
+      ids.forEach((id, i) => {
+        const me = id === myId
+        const c = me ? { name: Looks.me.name, avatarHrid: Looks.me.avatar, avatarOutfitHrid: Looks.me.outfit } : guildChars[id] || {}
+        const m = document.createElement("div")
+        m.className = "bfxl-mate"
+        const body = document.createElementNS(SVGNS, "svg")
+        body.setAttribute("viewBox", "0 0 100 100")
+        for (const [sh, sid] of [["avatars", shortId(c.avatarHrid) || "person_default"], ["avatar_outfits", shortId(c.avatarOutfitHrid)]]) {
+          if (!sid || !sheet(sh)) continue
+          const u = document.createElementNS(SVGNS, "use")
+          u.setAttribute("href", sheet(sh) + "#" + sid)
+          body.appendChild(u)
+        }
+        m.appendChild(body)
+        const own = me ? { id: tools[skill], enh: toolEnh[skill] || 0 } : Looks.toolOf(c.name, skill)
+        const made = makeTool(own?.id || tools[skill], own ? own.enh : 0)
+        m.appendChild(made.node)
+        const name = document.createElement("b")
+        name.textContent = c.name || "#" + id
+        m.appendChild(name)
+        const slot = slots[i]
+        ;(slot.front ? front : back).appendChild(m)
+        members.push({ el: m, tool: made.node, ang: made.held?.geo[2], kind: made.held?.kind || held?.kind, slot, act: null, phase: Math.random() })
+      })
+      const scene = el.querySelector(".bfxl-scene")
+      scene.insertBefore(front, el.querySelector(".bfxl-hero"))
+      scene.insertBefore(back, el.querySelector(".bfxl-target"))
+      placeMates()
+    }
+    // rows around the project: four in front at its sides, then rows of 6 / 9 / 9... behind, smaller and higher
+    function memberSlots(n) {
+      const out = []
+      const rows = [4, 6, 9, 9, 9, 9, 9, 9]
+      let r = 0
+      let j = 0
+      for (let i = 0; i < n; i++) {
+        if (j >= rows[r]) {
+          r++
+          j = 0
+        }
+        out.push({ row: r, j, of: Math.min(rows[r], n - (i - j)), front: r === 0 })
+        j++
+      }
+      return out
+    }
+    function placeMates() {
+      if (!el || !members.length || !tstage) return
+      const proj = tstage.project
+      const left = proj.offsetLeft
+      const right = proj.offsetLeft + proj.offsetWidth
+      const mid = (left + right) / 2
+      for (const m of members) {
+        const { row, j, of } = m.slot
+        let x
+        let k
+        let bottom
+        if (row === 0) {
+          // two on each side, facing it
+          const side = j % 2 ? 1 : -1
+          const step = Math.floor(j / 2)
+          x = side < 0 ? left + 6 - 34 - 30 * step : right - 6 + 34 + 30 * step
+          k = 0.8
+          bottom = 8 + 6 * step
+        } else {
+          x = 20 + ((300 / Math.max(1, of - 1)) * j || 150) + (row % 2) * 8
+          k = Math.max(0.3, 0.62 - 0.07 * row)
+          bottom = 40 + 11 * row
+        }
+        x = Math.max(10, Math.min(330, x))
+        m.slot.x = x
+        m.slot.k = k
+        m.slot.flip = x > mid
+        m.el.style.left = x - 48 + "px"
+        m.el.style.bottom = bottom + "px"
+        m.el.style.zIndex = 20 - row
+        m.el.style.transform = `scale(${m.slot.flip ? -k : k},${k})`
+        m.el.querySelector("b").style.transform = m.slot.flip ? "translateX(-50%) scaleX(-1)" : ""
+        m.el.querySelector("b").style.display = row <= 1 ? "" : "none"
+      }
+    }
+    // one member acts out an attempt: a stride to the project and a strike (ok) or a droop (not)
+    function memberAct(ok) {
+      if (!members.length) return null
+      // the front and the next row are seen best: they get most of it
+      const pool = members.filter(m => m.slot.row <= 1 && !m.act)
+      const m = (pool.length && Math.random() < 0.8 ? pool : members)[(Math.random() * (pool.length && Math.random() < 0.8 ? pool.length : members.length)) | 0]
+      if (!m) return null
+      m.act = { t0: performance.now(), ok }
+      return m
+    }
+    // the members' frame: idle sway, or the act in progress
+    function animateMembers(now) {
+      for (const m of members) {
+        if (!m.kind) continue
+        const toward = m.slot.flip ? -1 : 1
+        let f = 0
+        let lunge = 0
+        let droop = 0
+        if (m.act) {
+          const p = (now - m.act.t0) / 700
+          if (p >= 1) m.act = null
+          else if (m.act.ok) {
+            f = p
+            lunge = Math.sin(Math.PI * p) * 10
+          } else droop = Math.sin(Math.PI * p)
+        }
+        const [dir, x, y, turn] = m.act && m.act.ok ? toolPose(m.kind, f) : toolPose(m.kind, 0)
+        const sway = m.act ? 0 : 5 * Math.sin(now / 600 + m.phase * 6)
+        const rot = (dir === null ? 0 : dir - (m.ang ?? held?.geo[2] ?? 0)) + turn + sway + droop * 35
+        m.tool.style.transform = `translate(${x}px,${y + droop * 4}px) rotate(${rot}deg)`
+        m.el.style.translate = `${lunge * toward * m.slot.k}px 0`
+      }
+    }
+    // the static parts: background, hero, the thing being worked on; rebuilt when any of them changes
+    function setScene() {
+      const skill = skillOf(cur.actionHrid)
+      const [, , kind] = SKILL[skill]
+      const id = shortId(cur.actionHrid)
+      const work = hashItem(cur.primaryItemHash)?.id
+      const me = Looks.me
+      const key = [cur.id, id, work, tools[skill], toolEnh[skill], !!gameData(), trialMates().map(i => i + (guildChars[i]?.avatarHrid || "") + (Looks.toolOf(guildChars[i]?.name, skill)?.id || "")).join(), me.avatar, me.outfit, sheet("avatars"), sheet("items"), sheet("actions"), sheet("skills"), Assets.get("rev")].join("|")
+      el.querySelector(".bfxl-name").textContent = actionName()
+      el.querySelector(".bfxl-ico").title = actionName()
+      el.querySelector(".bfxl-count").textContent = cur.trial ? "" : cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : cur.currentCount ? "#" + cur.currentCount : ""
+      if (key === sceneKey) return
+      sceneKey = key
+      const ico = el.querySelector(".bfxl-ico")
+      ico.innerHTML = ""
+      ico.appendChild(svgUse("skills", skill))
+      const scene = el.querySelector(".bfxl-scene")
+      el.querySelector(".bfxl-fx").innerHTML = ""
+      // a guild trial: the site drawn for its project (lb_guild_*), else the skill's own backdrop
+      const guildBg = trial?.from === "guild" && art("bg", "guild_" + skill) ? "guild_" + skill : null
+      const bg = guildBg || (kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill)
+      // a labyrinth room is in the labyrinth's depth backdrop
+      const trialBg = trial?.from === "lab" ? labyrinthBg(labyrinth?.currentFloor) : null
+      if (trialBg && Assets.has("bg", trialBg)) scene.style.background = `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
+      else scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
+      // hero: avatar + outfit, the skill's tool in the front hand
+      const hero = el.querySelector(".bfxl-hero")
+      hero.innerHTML = ""
+      hero.getAnimations().forEach(a => a.cancel()) // e.g. faded out through a labyrinth gate
+      const body = document.createElementNS(SVGNS, "svg")
+      body.setAttribute("viewBox", "0 0 100 100")
+      for (const [sh, sid] of [["avatars", me.avatar], ["avatar_outfits", me.outfit]]) {
+        if (!sid || !sheet(sh)) continue
+        const u = document.createElementNS(SVGNS, "use")
+        u.setAttribute("href", sheet(sh) + "#" + sid)
+        body.appendChild(u)
+      }
+      hero.appendChild(body)
+      const made = makeTool(tools[skill], toolEnh[skill] || 0)
+      const tool = made.node
+      held = made.held
+      hero.appendChild(tool)
+      // target: the cow / tree / field, or the skill's station with the item on it
+      const target = el.querySelector(".bfxl-target")
+      target.innerHTML = ""
+      target.className = "bfxl-target"
+      posed = null
+      tstage = null
+      el.querySelectorAll(".bfxl-project,.bfxl-gate").forEach(e => e.remove())
+      if (cur.trial && buildTrialScene(skill, id, target)) {
+        // a trial's own scene: the guild's big project, or the labyrinth room's obstacle before its gate
+      } else if (kind === "gather") {
+        if (art("t", id)) {
+          // the cow / tree pose frames, all loaded up front and switched by visibility
+          const cow = id.endsWith("cow")
+          target.classList.add(cow ? "cow" : "tree")
+          posed = { kind: cow ? "cow" : "tree", imgs: {}, until: 0, base: "idle", next: performance.now() + 3000 }
+          for (const p of cow ? COW_POSES : TREE_POSES) {
+            const im = img(`t/${id}/${p}`, "pose")
+            im.style.visibility = p === "idle" ? "visible" : "hidden"
+            posed.imgs[p] = im
+            target.appendChild(im)
+          }
+        } else if (art("plant", id)) {
+          target.classList.add("plant")
+          target.appendChild(img("plant/" + id, "cell"))
+        } else target.appendChild(ACTION_ART.has(id) && sheet("actions") ? svgUse("actions", id) : svgUse("items", id))
+      } else {
+        target.classList.add("station")
+        if (art("station", skill)) {
+          target.classList.add("drawn", skill)
+          target.appendChild(img("station/" + skill, "cell"))
+        } else target.appendChild(svgUse("skills", skill))
+        const w = document.createElement("div")
+        w.className = "bfxl-work"
+        // over the station: what comes out (alchemy: coins, what it decomposes into, or every possible transmute
+        // result in turn); for enhancing the item itself
+        const outs = kind === "make" ? [id] : kind === "alchemy" ? alchemyOutputs() : [work]
+        outs.forEach((o, i) => {
+          const sv = svgUse("items", o)
+          if (i) sv.style.visibility = "hidden"
+          w.appendChild(sv)
+        })
+        target.appendChild(w)
+        // what goes in, laid out on the table top
+        const mats = materials()
+        if (mats.length) {
+          const row = document.createElement("div")
+          row.className = "bfxl-mats"
+          row.style.top = (TABLE_TOP[skill] ?? 0.35) * 100 + "%"
+          const [x0, x1] = TABLE_X[skill] || [0.04, 0.96]
+          Object.assign(row.style, { left: x0 * 100 + "%", right: (1 - x1) * 100 + "%" })
+          for (const [mid, n] of mats) {
+            const m = document.createElement("div")
+            m.className = "bfxl-mat"
+            m.dataset.id = mid
+            m.dataset.n = n
+            m.appendChild(svgUse("items", mid))
+            if (n > 1) m.insertAdjacentHTML("beforeend", `<b>${n >= 1000 ? fmt(n) : n}</b>`)
+            row.appendChild(m)
+          }
+          target.appendChild(row)
+          markShort()
+        }
+        if (kind === "enhancing") {
+          // a slowly turning rune circle on the altar, sparks circling the item
+          const rune = document.createElement("div")
+          rune.className = "bfxl-rune"
+          target.insertBefore(rune, w)
+          const orbit = document.createElement("div")
+          orbit.className = "bfxl-orbit"
+          orbit.innerHTML = "<i></i><i></i><i></i>"
+          target.appendChild(orbit)
+          const t = document.createElement("div")
+          t.className = "bfxl-enh"
+          target.appendChild(t)
+        }
+      }
+      showEnh()
+      buildMates(skill) // after the target: the trial's layout decides where they stand
+      buildStage(kind, target)
+      relayout()
+      if (walk.action !== cur.id) {
+        walk.action = cur.id
+        walk.x = -60
+        // crafters fetch the first materials from the storage and lay them on the table
+        walk.moves = staged && kind !== "gather" ? fetchMoves(null) : [{ to: workX(), work: true }]
+        if (staged && kind !== "gather") setMats(false)
+      } else walk.moves = walk.moves.map(m => (m.work ? { ...m, to: workX() } : m))
+    }
+    // positions measured from the laid-out scene: where the table stands, where the teapot / chisel aim. Measured
+    // while the picture is hidden (window collapsed or an icon) they are all zero, so they are measured again the
+    // first time it shows; a hero standing at a wrong spot walks to the right one
+    let layoutDirty = true
+    function relayout() {
+      const scene = el.querySelector(".bfxl-scene")
+      layoutDirty = !scene.offsetWidth
+      if (layoutDirty || !cur) return
+      const target = el.querySelector(".bfxl-target")
+      const hero = el.querySelector(".bfxl-hero")
+      const store = el.querySelector(".bfxl-store")
+      const table = el.querySelector(".bfxl-table")
+      // the table: behind the hero's back at the station, just right of the storage
+      if (staged && table.style.display !== "none") table.style.left = Math.max(store.offsetLeft + store.offsetWidth - 14, workX() - table.offsetWidth + 22) + "px"
+      // the teapot is lifted until its body is just over the station's table and its spout over its middle; the
+      // chisel (held level) is raised until its tip is on the workbench's top, at most a little so it stays in the
+      // hand (those two stations are drawn smaller for that)
+      const hand = [workX() + HAND[0], hero.offsetTop + HAND[1]]
+      if (held?.kind === "pot") POUR = [Math.max(-6, Math.min(20, target.offsetLeft + target.offsetWidth * 0.25 - hand[0])), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.4 - 14 - hand[1]))]
+      if (held?.kind === "chisel") {
+        const r = TOOL_REACH.chisel * 0.9
+        POUR = [Math.max(-10, Math.min(24, target.offsetLeft + target.offsetWidth * 0.3 - hand[0] - r)), Math.max(-16, Math.min(0, target.offsetTop + target.offsetHeight * 0.36 - hand[1]))]
+      }
+      const x = workX()
+      placeMates()
+      walk.moves = walk.moves.map(m => (m.work ? { ...m, to: x } : m))
+      if (!walk.moves.length && Math.abs(walk.x - x) > 2 && walk.action === cur.id) walk.moves.push({ to: x, work: true })
+    }
+    // ----- storage and materials table -----
+    // where things sit, as fractions of a prop's 512px cell: storage slots [x, the shelf / top they stand on]
+    const STORE_SLOTS = {
+      storage_wood: [[0.45, 0.4], [0.72, 0.4], [0.45, 0.625], [0.72, 0.625]],
+      storage_crates: [[0.51, 0.37], [0.3, 0.62], [0.86, 0.49], [0.65, 0.7]],
+      storage_arcane: [[0.4, 0.45], [0.66, 0.45], [0.4, 0.66], [0.66, 0.66]],
+    }
+    const PROP_TOP = 0.43 // the side tables' top
+    function buildStage(kind, target) {
+      const store = el.querySelector(".bfxl-store")
+      const table = el.querySelector(".bfxl-table")
+      store.innerHTML = ""
+      table.innerHTML = ""
+      const storeId = kind === "gather" ? "storage_crates" : kind === "make" ? "storage_wood" : "storage_arcane"
+      staged = art("prop", storeId) && !cur.trial
+      store.style.display = staged ? "" : "none"
+      table.style.display = staged && kind !== "gather" ? "" : "none"
+      if (!staged) return
+      store.dataset.prop = storeId
+      store.appendChild(img("prop/" + storeId, "cell"))
+      STORE_SLOTS[storeId].forEach(([x, y], i) => {
+        const slot = document.createElement("div")
+        slot.className = "bfxl-slot"
+        Object.assign(slot.style, { left: x * 100 + "%", top: y * 100 + "%" })
+        slot.dataset.i = i
+        store.appendChild(slot)
+      })
+      fillStore()
+      if (kind === "gather") return
+      table.appendChild(img("prop/" + (kind === "make" ? "table_wood" : "table_stone"), "cell"))
+      // the materials move from the station onto the table
+      const row = target.querySelector(".bfxl-mats")
+      if (row) {
+        Object.assign(row.style, { top: PROP_TOP * 100 + "%", left: "6%", right: "6%" })
+        table.appendChild(row)
+      }
+    }
+    // the items this action is about, with the inventory's counts: what comes out and what goes in
+    function storeItems() {
+      const skill = skillOf(cur.actionHrid)
+      const kind = SKILL[skill][2]
+      const g = gameData()
+      const work = hashItem(cur.primaryItemHash)?.id
+      let ids = []
+      if (kind === "gather") ids = [...(g?.actions[cur.actionHrid]?.drops || []).map(([d]) => d), skill + "_essence"]
+      else if (kind === "make") ids = [shortId(cur.actionHrid), ...materials().map(([d]) => d)]
+      else if (kind === "alchemy") ids = [alchemyOutputs()[0], ...materials().map(([d]) => d)]
+      else ids = [work, ...materials().map(([d]) => d)]
+      return [...new Set(ids.filter(Boolean))].slice(0, 4)
+    }
+    // counts on the shelves: as few characters as possible (999, 12.3K, 123K, 1.2M)
+    const short = n => (n >= 1e6 ? +(n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : n >= 1e3 ? +(n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + "K" : String(n))
+    const invCount = id => Object.entries(inv).reduce((t, [k, c]) => (k.startsWith(`/item_locations/inventory::/items/${id}::`) ? t + c : t), 0)
+    function fillStore() {
+      const slots = el?.querySelectorAll(".bfxl-slot")
+      if (!slots?.length || !cur) return
+      const items = storeItems()
+      slots.forEach((slot, i) => {
+        const id = items[i]
+        if (slot.dataset.id !== (id || "")) {
+          slot.dataset.id = id || ""
+          slot.innerHTML = ""
+          if (id) {
+            slot.appendChild(svgUse("items", id))
+            slot.appendChild(document.createElement("b"))
+          }
+        }
+        const b = slot.querySelector("b")
+        if (b) b.textContent = short(invCount(id))
+      })
+    }
+    // a slot takes something in (or gives it out): a little bounce
+    function bumpStore(id) {
+      fillStore()
+      const slot = [...(el.querySelectorAll(".bfxl-slot") || [])].find(s => s.dataset.id === id) || el.querySelector(".bfxl-slot")
+      slot?.animate([{ transform: "translate(-50%,-100%) scale(1)" }, { transform: "translate(-50%,-100%) scale(1.35)" }, { transform: "translate(-50%,-100%) scale(1)" }], { duration: 350 })
+    }
+    // the table's materials shown / hidden; laid down with a little drop
+    function setMats(on) {
+      const row = el.querySelector(".bfxl-mats")
+      if (!row) return
+      row.style.visibility = on ? "visible" : "hidden"
+      // drop what is left of the fly-into-the-station animations
+      for (const m of row.children) m.getAnimations().forEach(a => a.cancel())
+      if (on) {
+        ;[...row.children].forEach((m, i) => m.animate([{ transform: "translateY(-10px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: i * 70, easing: "ease-out", fill: "backwards" }))
+        markShort()
+      }
+    }
+    const storeX = () => 26
+    // to the storage (leaving the product there), to the table with the next materials, back to the station
+    function fetchMoves(product) {
+      const first = materials()[0]?.[0] || null
+      const table = el.querySelector(".bfxl-table")
+      return [
+        { to: storeX(), carry: product, speed: 190, then: () => (product && bumpStore(product), first && bumpStore(first)) },
+        { to: () => table.offsetLeft + table.offsetWidth / 2 - HAND[0] + 6, carry: first, speed: 190, then: () => setMats(true) },
+        { to: workX(), work: true, speed: 160 },
+      ]
+    }
+    // where the hero stands to work: the tool's reach short of the target's front
+    function workX() {
+      const target = el?.querySelector(".bfxl-target")
+      if (!target || !cur) return 62
+      const kind = SKILL[skillOf(cur.actionHrid)][2]
+      const reach = held ? TOOL_REACH[held.kind] || 44 : 30
+      const front = target.offsetLeft + target.offsetWidth * (kind === "gather" ? 0.2 : 0.1)
+      return Math.max(4, Math.min(150, front - HAND[0] - reach * 0.45))
+    }
+    // carries the product (icon over the head) to the left edge, drops it, walks back
+    function carryOut(item) {
+      const back = workX()
+      walk.moves.push({ to: staged ? storeX() : 6, carry: item, speed: 190, then: () => staged && bumpStore(item) }, { to: back, work: true, speed: 190 })
+    }
+    function img(path, cls) {
+      const im = document.createElement("img")
+      im.src = artUrl(path)
+      im.draggable = false
+      if (cls) im.className = cls
+      return im
+    }
+    // shows a pose of the drawn cow / tree for ms, then its idle again
+    function setPose(p, ms) {
+      if (!posed?.imgs[p]) return
+      for (const [k, im] of Object.entries(posed.imgs)) im.style.visibility = k === p ? "visible" : "hidden"
+      posed.until = performance.now() + ms
+    }
+    // idle life between hits: the cow grazes now and then, the tree sways
+    function idlePose(t) {
+      if (!posed) return
+      if (t < posed.until) return
+      if (t > posed.next) {
+        posed.next = t + 3000 + Math.random() * 3000
+        if (posed.kind === "cow") return setPose(Math.random() < 0.7 ? "graze" : "moo", 1400)
+        setPose("swayl", 500)
+        return later(500, () => setPose("swayr", 500))
+      }
+      setPose("idle", 0)
+    }
+  // LZString.decompressFromUTF16 (lz-string 1.5, MIT): the game keeps its static data in localStorage this way
+  function lzUTF16(input) {
+    if (!input) return null
+    const reset = 16384
+    const next = i => input.charCodeAt(i) - 32
+    const dict = [0, 1, 2]
+    const out = []
+    let enlargeIn = 4
+    let dictSize = 4
+    let numBits = 3
+    let val = next(0)
+    let pos = reset
+    let index = 1
+    const read = n => {
+      let bits = 0
+      for (let power = 1, max = 1 << n; power !== max; power <<= 1) {
+        const b = val & pos
+        pos >>= 1
+        if (pos === 0) {
+          pos = reset
+          val = next(index++)
+        }
+        if (b > 0) bits |= power
+      }
+      return bits
+    }
+    const first = read(2)
+    if (first === 2) return ""
+    let w = String.fromCharCode(read(first === 0 ? 8 : 16))
+    dict[3] = w
+    out.push(w)
+    for (;;) {
+      if (index > input.length) return ""
+      let c = read(numBits)
+      if (c === 2) return out.join("")
+      if (c < 2) {
+        dict[dictSize++] = String.fromCharCode(read(c === 0 ? 8 : 16))
+        c = dictSize - 1
+        if (--enlargeIn === 0) enlargeIn = 1 << numBits++
+      }
+      const entry = dict[c] !== undefined ? dict[c] : c === dictSize ? w + w.charAt(0) : null
+      if (entry === null) return null
+      out.push(entry)
+      dict[dictSize++] = w + entry.charAt(0)
+      w = entry
+      if (--enlargeIn === 0) enlargeIn = 1 << numBits++
+    }
+  }
+    // ----- the game's static data (localStorage initClientData) and the character's buffs, for the info lines -----
+    let gd = null
+    let gdTried = 0
+    function gameData() {
+      if (gd || Date.now() - gdTried < 10000) return gd
+      gdTried = Date.now()
+      try {
+        const all = JSON.parse(lzUTF16(W.localStorage.getItem("initClientData")) || "null")
+        const h = all?.clientData || all?.data || all
+        if (!h?.actionDetailMap) return null
+        // only what the info lines need
+        const actions = {}
+        const pairs = list => (list || []).map(x => [shortId(x.itemHrid), x.count])
+        for (const [k, a] of Object.entries(h.actionDetailMap)) actions[k] = { level: a.levelRequirement?.level || 0, time: (a.baseTimeCost || 0) / 1e9, inputs: pairs(a.inputItems), upgrade: shortId(a.upgradeItemHrid) || null, drops: pairs(a.dropTable) }
+        const items = {}
+        for (const [k, it] of Object.entries(h.itemDetailMap || {})) items[shortId(k)] = { level: it.itemLevel || 0, transmute: it.alchemyDetail?.transmuteSuccessRate, bulk: it.alchemyDetail?.bulkMultiplier || 1, costs: pairs(it.enhancementCosts), decompose: pairs(it.alchemyDetail?.decomposeItems), drops: pairs(it.alchemyDetail?.transmuteDropTable) }
+        gd = { actions, items, enhance: h.enhancementLevelSuccessRateTable || [] }
+      } catch (e) {
+      }
+      return gd
+    }
+    const buffMaps = {} // "<source>ActionTypeBuffsMap" -> action type -> buffs (equipment, teas, house, community, ...)
+    function setBuffMaps(obj) {
+      for (const k of Object.keys(obj)) if (/ActionTypeBuffsMap$/.test(k)) buffMaps[k] = obj[k] || {}
+    }
+    // summed buffs of one action type: buff type (short) -> value
+    function buffsFor(skill) {
+      const out = {}
+      for (const m of Object.values(buffMaps))
+        for (const b of m?.["/action_types/" + skill] || []) {
+          const t = shortId(b.typeHrid)
+          out[t] = (out[t] || 0) + (b.flatBoost || 0) + (b.ratioBoost || 0)
+        }
+      return out
+    }
+    const pctS = v => (v >= 0 ? "+" : "") + (Math.round(v * 1000) / 10).toString() + "%"
+    // the game's action panel in two lines: time and speed, efficiency, actions per hour; experience, drops and
+    // finds, or the success rate for enhancing and alchemy
+    function infoLines() {
+      if (trial) return trialLines()
+      if (!cur) return []
+      const skill = skillOf(cur.actionHrid)
+      const kind = SKILL[skill][2]
+      const b = buffsFor(skill)
+      const g = gameData()
+      const a = g?.actions[cur.actionHrid]
+      const level = (skills["/skills/" + skill]?.level || 0) + (b[skill + "_level"] || 0)
+      const speed = b.action_speed || 0
+      const time = a?.time ? a.time / (1 + speed) : dur()
+      const work = hashItem(cur.primaryItemHash)
+      const item = work && g?.items[work.id]
+      // enhancing has no efficiency; alchemy is levelled against the item, the rest against the action
+      const req = kind === "alchemy" ? item?.level || 0 : a?.level || 0
+      const eff = kind === "enhancing" ? 0 : Math.max(0, level - req) * 0.01 + (b.efficiency || 0)
+      const line1 = [`⏱ ${time.toFixed(2)}s`, `${L("行动速度", "Speed")} ${pctS(speed)}`]
+      if (kind !== "enhancing") line1.push(`${L("效率", "Efficiency")} ${pctS(eff)}`)
+      line1.push(`≈${Math.round((3600 / time) * (1 + eff))}${L("次/时", "/h")}`)
+      const line2 = [`${L("经验", "XP")} ${pctS(b.wisdom || 0)}`]
+      if (kind === "gather") {
+        line2.push(`${L("采集数量", "Gathering")} ${pctS(b.gathering || 0)}`)
+        if (b.processing) line2.push(`${L("加工", "Processing")} ${pctS(b.processing)}`)
+      }
+      if (kind === "make") {
+        if (b.artisan) line2.push(`${L("工匠", "Artisan")} ${pctS(b.artisan)}`)
+        if (b.gourmet) line2.push(`${L("美食", "Gourmet")} ${pctS(b.gourmet)}`)
+      }
+      if (kind === "enhancing" && item && g) {
+        const lv = work.level
+        const base = g.enhance[lv] ?? 0
+        const ratio = (level >= item.level ? (level - item.level) * 0.0005 : -0.5 * (1 - level / item.level)) + (b.enhancing_success || 0)
+        line2.unshift(`${L("成功率", "Success")} ${(Math.min(1, base * (1 + ratio)) * 100).toFixed(1)}% (+${lv}→+${lv + 1})`)
+        if (b.blessed) line2.push(`${L("福气", "Blessed")} ${pctS(b.blessed)}`)
+        if (cur.enhancingMaxLevel) line2.push(`${L("目标", "Target")} +${cur.enhancingMaxLevel}`)
+      }
+      if (kind === "alchemy" && g) {
+        const how = shortId(cur.actionHrid)
+        const base = how === "coinify" ? 0.7 : how === "decompose" ? 0.6 : item?.transmute || 0
+        const cat = hashItem(cur.secondaryItemHash)?.id || ""
+        const catalyst = cat === "prime_catalyst" ? 0.25 : /catalyst/.test(cat) ? 0.15 : 0
+        const lvRatio = item && level < item.level ? -0.9 * (1 - level / item.level) : 0
+        if (base) line2.unshift(`${L("成功率", "Success")} ${(Math.min(1, base * (1 + lvRatio + (b.alchemy_success || 0) + catalyst)) * 100).toFixed(1)}%`)
+      }
+      line2.push(`${L("精华发现", "Essence")} ${pctS(b.essence_find || 0)}`, `${L("稀有发现", "Rare")} ${pctS(b.rare_find || 0)}`)
+      return [line1, line2]
+    }
+    function showInfo() {
+      const box = el?.querySelector(".bfxl-info")
+      if (!box) return
+      box.style.display = cfg.lifeInfo ? "" : "none"
+      if (!cfg.lifeInfo) return
+      const html = infoLines()
+        .map(l => `<div>${l.map(x => `<span>${x}</span>`).join("")}</div>`)
+        .join("")
+      if (box.innerHTML !== html) box.innerHTML = html
+    }
+    // the item's level over it; the altar's runes and sparks in the colour of the level it is going for, more
+    // sparks for higher levels, turning hues from +15
+    // where the table top is on each drawn station (fraction of its height from the top)
+    const TABLE_TOP = { cheesesmithing: 0.44, crafting: 0.4, tailoring: 0.4, cooking: 0.28, brewing: 0.36, alchemy: 0.42, enhancing: 0.5 }
+    // and its left / right ends where that is not the whole width (the anvil stands left of the furnace)
+    const TABLE_X = { cheesesmithing: [0, 0.55] }
+    // [item, count] going in per action: the recipe (and the item it upgrades); for enhancing the item's costs and the
+    // protection; for alchemy the item in its batch size and the catalyst
+    function alchemyOutputs() {
+      const work = hashItem(cur?.primaryItemHash)
+      const it = gameData()?.items[work?.id]
+      const how = shortId(cur?.actionHrid)
+      if (how === "coinify") return ["coin"]
+      if (how === "decompose") return it?.decompose?.length ? it.decompose.map(([d]) => d) : [work?.id]
+      if (how === "transmute") return it?.drops?.length ? it.drops.map(([d]) => d) : [work?.id]
+      return [work?.id]
+    }
+    function materials() {
+      const g = gameData()
+      if (!g || !cur) return []
+      const skill = skillOf(cur.actionHrid)
+      const kind = SKILL[skill][2]
+      const work = hashItem(cur.primaryItemHash)
+      const extra = hashItem(cur.secondaryItemHash)
+      let out = []
+      if (kind === "make") {
+        const a = g.actions[cur.actionHrid]
+        out = [...(a?.inputs || [])]
+        if (a?.upgrade) out.unshift([a.upgrade, 1])
+      } else if (kind === "enhancing") {
+        out = [...(g.items[work?.id]?.costs || [])]
+        if (extra) out.push([extra.id, 1])
+      } else if (kind === "alchemy" && work) {
+        out = [[work.id, g.items[work.id]?.bulk || 1]]
+        if (extra) out.push([extra.id, 1])
+      }
+      return out.filter(([id]) => id).slice(0, 5)
+    }
+    // the inventory runs short of one: shown faded
+    function markShort() {
+      for (const m of el?.querySelectorAll(".bfxl-mat") || []) {
+        const prefix = `/item_locations/inventory::/items/${m.dataset.id}::`
+        const have = Object.entries(inv).reduce((t, [k, c]) => (k.startsWith(prefix) ? t + c : t), 0)
+        m.classList.toggle("short", m.dataset.id !== "coin" && have < +m.dataset.n)
+      }
+    }
+    // the table's materials go into the station; with a storage the hero takes the product there and brings the next
+    // materials (on short actions every third time; otherwise the table is laid again at once)
+    function useMaterials(delay, kind, gains, key) {
+      if (staged) {
+        const table = el.querySelector(".bfxl-table")
+        const target = el.querySelector(".bfxl-target")
+        const dx = target.offsetLeft + target.offsetWidth / 2 - (table.offsetLeft + table.offsetWidth / 2)
+        const mats = [...el.querySelectorAll(".bfxl-mat")]
+        mats.forEach((m, i) => m.animate([{ transform: "none", opacity: 1 }, { transform: `translate(${dx}px,-30px) scale(.3)`, opacity: 0 }], { duration: 450, delay: delay + i * 60, easing: "ease-in", fill: "forwards" }))
+        later(delay + 450 + mats.length * 60, () => key === sceneKey && setMats(false))
+        const fetch = dur() >= 2.5 || ++walk.carried % 3 === 0
+        if (fetch) {
+          const main = gains.find(g => !MINOR.test(g.id) && !RARE.test(g.id)) || gains[0]
+          later(delay + 700, () => key === sceneKey && walk.moves.push(...fetchMoves(main?.id || null)))
+        } else later(delay + 900, () => key === sceneKey && setMats(true))
+        return
+      }
+      const mats = [...el.querySelectorAll(".bfxl-mat")]
+      mats.forEach((m, i) =>
+        m.animate(
+          [
+            { transform: "none", opacity: 1 },
+            { transform: `translate(${(mats.length / 2 - i - 0.5) * 12}px,-6px) scale(.2)`, opacity: 0, offset: 0.35 },
+            { transform: "translateY(-8px) scale(.6)", opacity: 0, offset: 0.7 },
+            { transform: "none", opacity: 1 },
+          ],
+          { duration: 1100, delay: delay + i * 40, easing: "ease-in-out" },
+        ),
+      )
+      later(delay + 1100, markShort)
+    }
+    function showEnh() {
+      const t = el?.querySelector(".bfxl-enh")
+      if (!t) return
+      t.textContent = "+" + enhLevel
+      t.style.color = enhColor(enhLevel)
+      const target = el.querySelector(".bfxl-target")
+      const next = enhLevel + 1
+      const st = enhStage(next)
+      target.style.setProperty("--enh", next >= 15 ? "#ff4d4d" : enhColor(next))
+      for (let i = 0; i <= 5; i++) target.classList.toggle("st" + i, i === st)
+      const orbit = el.querySelector(".bfxl-orbit")
+      const n = 3 + st
+      if (orbit && orbit.childElementCount !== n) {
+        orbit.innerHTML = ""
+        for (let i = 0; i < n; i++) {
+          const d = document.createElement("i")
+          const a = (i / n) * Math.PI * 2
+          d.style.transform = `translate(${28 * Math.cos(a)}px,${28 * Math.sin(a)}px)`
+          orbit.appendChild(d)
+        }
+      }
+    }
+
+    function setCarry(item) {
+      const hero = el.querySelector(".bfxl-hero")
+      hero?.querySelector(".bfxl-carry")?.remove()
+      if (!item || !hero) return
+      const c = document.createElement("div")
+      c.className = "bfxl-carry"
+      c.appendChild(svgUse("items", item))
+      hero.appendChild(c)
+    }
+    function dropCarry() {
+      const c = el.querySelector(".bfxl-carry")
+      if (!c) return
+      c.animate([{ transform: "translateY(0) scale(1)", opacity: 1 }, { transform: "translateY(40px) scale(.6)", opacity: 0 }], { duration: 350, easing: "ease-in" }).onfinish = () => c.remove()
+    }
+    // ----- motion: the tool swings N times per action, the target reacts on each hit -----
+    function pose(style, f) {
+      const ease = x => x * x * (3 - 2 * x)
+      if (style === "chop") {
+        if (f < 0.6) return [-55 * ease(f / 0.6), 0, 0]
+        if (f < 0.72) return [-55 + 85 * ((f - 0.6) / 0.12), 0, 0]
+        return [30 * (1 - ease((f - 0.72) / 0.28)), 0, 0]
+      }
+      if (style === "stir") return [14 * Math.sin(2 * Math.PI * f), 7 * Math.cos(2 * Math.PI * f), 0]
+      if (style === "stitch") return [-8, 0, -12 * Math.abs(Math.sin(Math.PI * f))]
+      if (style === "pour") return [f < 0.5 ? 50 * ease(f / 0.5) : 50 * (1 - ease((f - 0.5) / 0.5)), 0, -4 * Math.sin(Math.PI * f)]
+      return [12 * Math.sin(2 * Math.PI * f), 3 * Math.sin(2 * Math.PI * f), 0] // squeeze
+    }
+    const HIT = { chop: 0.72, stir: 0.5, stitch: 0.5, pour: 0.5, squeeze: 0.5 }
+    // drawn tools: the front hand on the 96px hero box (as the battle stage's held weapons), how far each kind
+    // reaches from the grip (px), the frame's height / width (432x560 cells), and one motion per kind
+    const HAND = [76, 63]
+    const TOOL_REACH = { pot: 34, alembic: 36, needle: 34, chisel: 38, brush: 40 }
+    const TOOL_FRAME = 560 / 432
+    let POUR = [14, -26] // how far the teapot / chisel is brought to the table top (set per scene)
+    // seconds per stroke, the moment it lands, and the target's reaction (a style of the icon motions)
+    const TOOL_MOVE = {
+      hatchet: [1.7, 0.68, "chop"],
+      hammer: [1.5, 0.68, "chop"],
+      brush: [0.9, 0.5, "squeeze"],
+      shears: [0.9, 0.5, "squeeze"],
+      chisel: [0.7, 0.85, "chop"],
+      needle: [0.9, 0.75, "stitch"],
+      spatula: [1.4, 0.45, "stir"],
+      pot: [2.6, 0.55, "pour"],
+      alembic: [1.6, 0.5, "pour"],
+      enhancer: [1.6, 0.62, "pour"],
+    }
+    // -> [direction the tool points (deg, 0 = toward the target, -90 = up) or null, dx, dy, extra turn (deg)]
+    function toolPose(kind, f) {
+      const ease = x => x * x * (3 - 2 * x)
+      const seg = (a, b) => Math.max(0, Math.min(1, (f - a) / (b - a)))
+      const wave = Math.sin(2 * Math.PI * f)
+      switch (kind) {
+        case "hatchet":
+        case "hammer": {
+          // raised back over the shoulder, then swung down onto the tree / anvil
+          const hitAt = kind === "hammer" ? 30 : 15
+          if (f < 0.55) return [-70 - 70 * ease(seg(0, 0.55)), 0, -3 * ease(seg(0, 0.55)), 0]
+          if (f < 0.68) return [-140 + (140 + hitAt) * seg(0.55, 0.68), 4 * seg(0.55, 0.68), 0, 0]
+          return [hitAt - (hitAt + 70) * ease(seg(0.68, 1)), 4 * (1 - seg(0.68, 1)), 0, 0]
+        }
+        case "brush": // long strokes along the cow's side
+          return [-10 + 6 * wave, 12 * (0.5 - 0.5 * Math.cos(2 * Math.PI * f)) - 6, 0, 0]
+        case "shears": {
+          const b = Math.sin(Math.PI * f) ** 3
+          return [-20 - 10 * b, 9 * b, -2 * b, 0]
+        }
+        case "chisel": {
+          // held on the workbench's top: pulled back slowly, then a quick tap
+          const [ax, ay] = POUR
+          if (f < 0.75) return [0, ax - 4 * ease(seg(0, 0.75)), ay, 0]
+          if (f < 0.85) return [0, ax - 4 + 10 * seg(0.75, 0.85), ay, 0]
+          return [0, ax + 6 * (1 - ease(seg(0.85, 1))), ay, 0]
+        }
+        case "needle": // loops through the cloth
+          return [-30 + 40 * wave, 6 * Math.cos(2 * Math.PI * f), -9 * wave, 0]
+        case "spatula": // slides under, flips, comes back
+          if (f < 0.35) return [10, 6 * ease(seg(0, 0.35)), 0, 0]
+          if (f < 0.5) return [10 - 70 * seg(0.35, 0.5), 6, -6 * seg(0.35, 0.5), 0]
+          return [-60 + 70 * ease(seg(0.5, 1)), 6 * (1 - ease(seg(0.5, 1))), -6 * (1 - ease(seg(0.5, 1))), 0]
+        case "pot": {
+          // lifted over the table, tilted to pour, set back upright, lowered
+          const lift = f < 0.25 ? ease(seg(0, 0.25)) : f < 0.9 ? 1 : 1 - ease(seg(0.9, 1))
+          const tilt = f < 0.25 ? 0 : f < 0.45 ? ease(seg(0.25, 0.45)) : f < 0.75 ? 1 : f < 0.9 ? 1 - ease(seg(0.75, 0.9)) : 0
+          return [null, POUR[0] * lift, POUR[1] * lift, 55 * tilt]
+        }
+        case "alembic": // swirled
+          return [null, 0, -3 * Math.abs(wave), 18 * wave]
+        case "enhancer": {
+          // a horn: aimed at the item on the altar, drawing breath, then a pulse with a small recoil
+          const p = f < 0.6 ? ease(seg(0, 0.6)) : 1 - ease(seg(0.6, 1))
+          return [-28 - 6 * p, -3 * p + (f > 0.6 && f < 0.7 ? -2 : 0), -2 * p, 0]
+        }
+      }
+      return [null, 0, 0, 0]
+    }
+    function frame() {
+      raf = 0
+      if (!visible() || cfg.lifeMin || !isLife(cur)) return
+      raf = requestAnimationFrame(frame)
+      const skill = skillOf(cur.actionHrid)
+      const style = SKILL[skill][3]
+      const d = dur()
+      let t = (performance.now() - cycleAt) / (d * 1000)
+      // well past the end without a completion: the guessed start or length was off, start another cycle
+      if (t > 1.6) {
+        cycleAt = performance.now()
+        t = 0
+      }
+      if (layoutDirty && !cfg.lifeIcon) relayout()
+      if (cfg.lifeIcon) {
+        el.querySelector(".bfxl-ico").style.background = `conic-gradient(#7fd0ff ${Math.min(1, t) * 360}deg,#2b3350 0)`
+        return
+      }
+      const move = held && TOOL_MOVE[held.kind]
+      const n = Math.max(1, Math.min(8, Math.round(d / (move ? move[0] : style === "stitch" ? 0.8 : 1.7))))
+      // past the end the action is waiting for the server: hold the rest pose
+      const sub = Math.min(t, 1) * n
+      const f = t >= 1 ? 0.999 : sub % 1
+      const now = performance.now()
+      const hero = el.querySelector(".bfxl-hero")
+      const m = walk.moves[0]
+      let facing = 1
+      let walking = false
+      if (m) {
+        if (m.t0 === undefined) {
+          m.t0 = now
+          m.from = walk.x
+          if (typeof m.to === "function") m.to = m.to()
+          m.ms = Math.max(120, (Math.abs(m.to - m.from) / (m.speed || 150)) * 1000)
+          setCarry(m.carry)
+        }
+        const k = Math.min(1, (now - m.t0) / m.ms)
+        walk.x = m.from + (m.to - m.from) * k
+        walking = true
+        if (m.to < m.from) facing = -1
+        if (k >= 1) {
+          walk.moves.shift()
+          if (m.carry) dropCarry()
+          m.then?.()
+        }
+      }
+      if (hero) {
+        hero.style.left = walk.x + "px"
+        const bob = walking ? -3 * Math.abs(Math.sin((now / 1000) * Math.PI * 4)) : -2 * Math.abs(Math.sin(Math.PI * f))
+        hero.style.transform = `translateY(${bob}px) scaleX(${facing})`
+      }
+      const tool = el.querySelector(".bfxl-hero > .bfxl-tool")
+      if (walking) {
+        // tool at rest while walking; no strokes land
+        if (tool) tool.style.transform = move ? `rotate(${(toolPose(held.kind, 0)[0] ?? held.geo[2]) - held.geo[2]}deg)` : ""
+        lastF = f
+      } else if (tool && move) {
+        const [dir, x, y, turn] = toolPose(held.kind, f)
+        const rot = (dir === null ? 0 : dir - held.geo[2]) + turn
+        tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+
+      } else if (tool) {
+        const [rot, x, y] = pose(style, f)
+        tool.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg)`
+      }
+      idlePose(now)
+      const work = el.querySelector(".bfxl-work")
+      if (work) work.style.transform = `translateY(${3 * Math.sin(performance.now() / 500)}px)`
+      // a transmute's possible results take turns, like a slot machine
+      if (work && work.childElementCount > 1) {
+        const k = Math.floor(performance.now() / 180) % work.childElementCount
+        ;[...work.children].forEach((c, i) => (c.style.visibility = i === k ? "visible" : "hidden"))
+      }
+      // the product to come firms up over the action
+      if (work && (SKILL[skill][2] === "make" || SKILL[skill][2] === "alchemy")) work.style.opacity = 0.3 + 0.6 * Math.min(1, t)
+      // enhancing: the item charges up in the colour of the level it is going for
+      if (work && skill === "enhancing") {
+        const c = enhTint(enhLevel + 1)
+        const k = Math.min(1, t)
+        work.style.filter = `drop-shadow(0 0 ${3 + 9 * k}px ${c}) drop-shadow(0 0 ${2 + 4 * k}px #fff) brightness(${1 + 0.35 * k})`
+        const orbit = el.querySelector(".bfxl-orbit")
+        if (orbit) orbit.style.animationDuration = 2.4 - 1.6 * k + "s"
+      }
+      const bar = el.querySelector(".bfxl-bar i")
+      bar.style.width = Math.min(100, t * 100) + "%"
+      el.querySelector(".bfxl-bar span").textContent = d.toFixed(2) + "s"
+      animateMembers(now)
+      const hitAt = move ? move[1] : HIT[style]
+      // in a guild trial the strokes are the members' (one per attempt), not the hidden hero's
+      if (!members.length && !walking && t < 1 && f >= hitAt && lastF < hitAt) hit(skill, move ? move[2] : style)
+      lastF = t >= 1 ? 1 : f
+    }
+    // where the target's middle is, in scene pixels
+    function targetAt() {
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const r = el.querySelector(".bfxl-target").getBoundingClientRect()
+      const k = curScale
+      return [(r.left - s.left + r.width / 2) / k, (r.top - s.top + r.height / 2) / k]
+    }
+    // rings of power from the horn's bell to the item on the altar
+    function hornWave() {
+      const hero = el.querySelector(".bfxl-hero")
+      // the item on the altar, or in a trial the relic / seal stone
+      const work = el.querySelector(".bfxl-work") || tstage?.project
+      if (!hero || !work) return
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const k = curScale
+      const a = ((-32 * Math.PI) / 180)
+      const r = (TOOL_REACH.enhancer || 44) * 0.85
+      const bx = hero.offsetLeft + HAND[0] + Math.cos(a) * r
+      const by = hero.offsetTop + HAND[1] + Math.sin(a) * r
+      const w = work.getBoundingClientRect()
+      const tx = (w.left - s.left + w.width / 2) / k
+      const ty = (w.top - s.top + w.height / 2) / k
+      for (let i = 0; i < 3; i++) {
+        const ring = fxEl("bfxl-wave", `border-color:${enhTint(enhLevel + 1)};box-shadow:0 0 6px ${enhTint(enhLevel + 1)}`)
+        ring.animate(
+          [
+            { transform: `translate(${bx - 8}px,${by - 8}px) scale(.4)`, opacity: 0 },
+            { transform: `translate(${bx - 8}px,${by - 8}px) scale(.8)`, opacity: 1, offset: 0.15 },
+            { transform: `translate(${tx - 8}px,${ty - 8}px) scale(1.8)`, opacity: 0 },
+          ],
+          { duration: 620, delay: i * 120, easing: "ease-out", fill: "backwards" },
+        ).onfinish = gone(ring)
+      }
+      // and a beam of light from the bell to the item
+      const len = Math.hypot(tx - bx, ty - by)
+      const bc = enhTint(enhLevel + 1)
+      const beam = fxEl("bfxl-beam", `width:${len}px;transform:translate(${bx}px,${by - 3}px) rotate(${Math.atan2(ty - by, tx - bx)}rad);background:linear-gradient(90deg,transparent,${bc} 20%,#fff 60%,${bc});box-shadow:0 0 ${6 + 2 * enhStage(enhLevel + 1)}px ${bc}`)
+      beam.animate([{ opacity: 0, clipPath: "inset(0 100% 0 0)" }, { opacity: 1, clipPath: "inset(0 0 0 0)", offset: 0.35 }, { opacity: 0, clipPath: "inset(0 0 0 60%)" }], { duration: 520, easing: "ease-out" }).onfinish = gone(beam)
+      later(450, () => burst("enhancing", tx, ty, 4))
+    }
+    // the enhanced item's middle in scene pixels
+    function itemAt() {
+      const work = el.querySelector(".bfxl-work")
+      if (!work) return targetAt()
+      const s = el.querySelector(".bfxl-scene").getBoundingClientRect()
+      const w = work.getBoundingClientRect()
+      const k = curScale
+      // kept low enough that what pops up over it stays in the window
+      return [(w.left - s.left + w.width / 2) / k, Math.max(44, (w.top - s.top + w.height / 2) / k)]
+    }
+    // the show grows with the level reached: flash, ring and sparks always; rays from +5; the window dims with a
+    // light pillar and shakes from +10; turning colours and fireworks from +15
+    function enhSuccess(b, a) {
+      const [x, y] = itemAt()
+      const st = enhStage(a)
+      const c = enhColor(a)
+      const work = el.querySelector(".bfxl-work")
+      const f = fxEl("bfxl-flash")
+      f.animate([{ transform: `translate(${x - 60}px,${y - 60}px) scale(.2)`, opacity: 1 }, { transform: `translate(${x - 60}px,${y - 60}px) scale(${1 + 0.15 * st})`, opacity: 0 }], { duration: 450, easing: "ease-out" }).onfinish = gone(f)
+      if (st >= 1) {
+        const rays = fxEl("bfxl-rays", `left:${x - 60}px;top:${y - 60}px;background:repeating-conic-gradient(${c}aa 0 10deg,transparent 10deg 30deg)`)
+        if (st >= 5) rays.style.animation = "bfxl-hue 1s linear infinite"
+        rays.animate([{ transform: "rotate(0) scale(.2)", opacity: 0 }, { transform: `rotate(40deg) scale(${0.8 + 0.1 * st})`, opacity: 1, offset: 0.2 }, { transform: "rotate(150deg) scale(1.1)", opacity: 0 }], { duration: 1200 + 150 * st }).onfinish = gone(rays)
+      }
+      const r = fxEl("bfxl-ring", `border-color:${c};box-shadow:0 0 10px ${c}`)
+      r.animate([{ transform: `translate(${x - 40}px,${y - 12}px) scale(.2)`, opacity: 1 }, { transform: `translate(${x - 40}px,${y - 12}px) scale(2.4,1.6)`, opacity: 0 }], { duration: 700, easing: "ease-out" }).onfinish = gone(r)
+      work?.animate([{ transform: "scale(1)" }, { transform: "scale(1.35) rotate(-8deg)" }, { transform: "scale(1)" }], { duration: 500, easing: "ease-out" })
+      const num = fxEl("bfxl-num", `color:${c};text-shadow:0 0 10px ${c},0 0 4px #fff,0 2px 3px #000`)
+      num.textContent = "+" + a
+      if (st >= 5) num.style.animation = "bfxl-hue 1s linear infinite"
+      num.animate([{ transform: `translate(${x - 70}px,${y - 20}px) scale(.3)`, opacity: 0 }, { transform: `translate(${x - 70}px,${y - 34}px) scale(${1.2 + 0.1 * st})`, opacity: 1, offset: 0.25 }, { transform: `translate(${x - 70}px,${y - 36}px) scale(1)`, opacity: 1, offset: 0.75 }, { transform: `translate(${x - 70}px,${y - 44}px) scale(1)`, opacity: 0 }], { duration: 1600, easing: "ease-out" }).onfinish = gone(num)
+      burst("enhancing", x, y, 10 + 4 * st, st >= 1)
+      if (st >= 2) later(250, () => burst("enhancing", x, y - 10, 6 + 2 * st, true))
+      if (st >= 5) {
+        // fireworks in every colour
+        FX.fireworks ||= [["#ff4d4d", "#ffb84d", "#fff04d", "#4dff88", "#4dc3ff", "#b84dff"], "spark"]
+        for (let i = 0; i < 5; i++) later(300 + i * 280, () => burst("fireworks", x + (Math.random() - 0.5) * 150, y - 10 + (Math.random() - 0.5) * 50, 12, true))
+      }
+      if (a >= 10) {
+        // high levels: the whole window joins in
+        const dim = fxEl("bfxl-dim")
+        dim.animate([{ opacity: 0 }, { opacity: 0.5, offset: 0.15 }, { opacity: 0.5, offset: 0.7 }, { opacity: 0 }], { duration: 2200 }).onfinish = gone(dim)
+        const pillar = fxEl("bfxl-pillar", `left:${x - 22}px;background:linear-gradient(90deg,transparent,${c}cc 30%,#fff 50%,${c}cc 70%,transparent)`)
+        pillar.animate([{ transform: "scaleY(0)", opacity: 0 }, { transform: "scaleY(1)", opacity: 1, offset: 0.15 }, { transform: "scaleY(1)", opacity: 0 }], { duration: 1800 }).onfinish = gone(pillar)
+        shake(3, 350)
+      }
+      if (a - b >= 2) return blessShow(b, a, x, y)
+      const b2 = banner(L(`强化成功 +${a}`, `Success +${a}`), c)
+      if (a >= 15) b2?.classList.add("rainbow")
+    }
+    // 福气 (blessed: two levels at once): a 福 paper diamond spins down onto the item and bursts into coins,
+    // the level ticks up twice, firecrackers go off around it
+    function blessShow(b, a, x, y) {
+      const fu = fxEl("bfxl-fu")
+      fu.innerHTML = "<span>福</span>"
+      fu.animate(
+        [
+          { transform: `translate(${x - 22}px,${y - 70}px) rotate(45deg) scale(.3) rotateY(0)`, opacity: 0 },
+          { transform: `translate(${x - 22}px,${y - 24}px) rotate(45deg) scale(1.2) rotateY(360deg)`, opacity: 1, offset: 0.35 },
+          { transform: `translate(${x - 22}px,${y - 22}px) rotate(45deg) scale(1) rotateY(360deg)`, opacity: 1, offset: 0.7 },
+          { transform: `translate(${x - 22}px,${y - 22}px) rotate(45deg) scale(1.7) rotateY(360deg)`, opacity: 0 },
+        ],
+        { duration: 1500, easing: "ease-out" },
+      ).onfinish = gone(fu)
+      // the coins
+      later(1050, () => {
+        const fx = el.querySelector(".bfxl-fx")
+        for (let i = 0; i < 18; i++) {
+          const coin = document.createElement("i")
+          coin.style.cssText = "width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff6b0,#ffd23a 45%,#c98a00);box-shadow:0 0 4px #ffcf40"
+          fx.appendChild(coin)
+          const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.8
+          const v = 40 + Math.random() * 45
+          const ex = x + Math.cos(ang) * v
+          coin.animate(
+            [
+              { transform: `translate(${x}px,${y - 30}px) scaleX(1)`, opacity: 1 },
+              { transform: `translate(${(x + ex) / 2}px,${y - 30 + Math.sin(ang) * v}px) scaleX(.2)`, opacity: 1, offset: 0.4 },
+              { transform: `translate(${ex}px,${y + 40}px) scaleX(1)`, opacity: 0 },
+            ],
+            { duration: 900 + Math.random() * 400, easing: "ease-in" },
+          ).onfinish = gone(coin)
+        }
+      })
+      // the level ticks up twice
+      ;[b + 1, a].forEach((n, i) =>
+        later(300 + i * 450, () => {
+          const num = fxEl("bfxl-num", `color:${enhColor(n)};text-shadow:0 0 8px #ff3b30,0 0 4px #ffd75a,0 2px 3px #000`)
+          num.textContent = "+" + n + (i ? "!!" : "!")
+          num.animate([{ transform: `translate(${x - 80 + i * 14}px,${y - 14}px) scale(.3)`, opacity: 0 }, { transform: `translate(${x - 80 + i * 14}px,${y - 30 - i * 6}px) scale(1.3)`, opacity: 1, offset: 0.3 }, { transform: `translate(${x - 80 + i * 14}px,${y - 38 - i * 6}px) scale(1)`, opacity: 0 }], { duration: 1100, easing: "ease-out" }).onfinish = gone(num)
+        }),
+      )
+      // firecrackers
+      FX.firecracker ||= [["#ff3b30", "#ffd75a", "#ff8a1a", "#fff"], "spark"]
+      for (let i = 0; i < 4; i++) later(200 + i * 260, () => burst("firecracker", x + (Math.random() - 0.5) * 120, y - 20 + (Math.random() - 0.5) * 40, 9, true))
+      const bn = banner(L(`福气！+${b} → +${a}`, `Blessed! +${b} → +${a}`), "#ffd75a")
+      bn?.classList.add("bless")
+    }
+    // the fall is as heavy as the level lost
+    function enhFail(b, a, prot) {
+      const [x, y] = itemAt()
+      const st = enhStage(b)
+      const work = el.querySelector(".bfxl-work")
+      if (prot) {
+        // the protection catches it: a shield flickers up around the item
+        const sh = fxEl("bfxl-shield")
+        sh.animate([{ transform: `translate(${x - 26}px,${y - 26}px) scale(.5)`, opacity: 0 }, { transform: `translate(${x - 26}px,${y - 26}px) scale(1.1)`, opacity: 1, offset: 0.2 }, { transform: `translate(${x - 26}px,${y - 26}px) scale(1)`, opacity: 0.8, offset: 0.7 }, { transform: `translate(${x - 26}px,${y - 26}px) scale(1.3)`, opacity: 0 }], { duration: 1000 }).onfinish = gone(sh)
+      }
+      const f = fxEl("bfxl-flash", "background:radial-gradient(circle,#ff6a5a 0%,#ff2a2a66 40%,transparent 70%)")
+      f.animate([{ transform: `translate(${x - 60}px,${y - 60}px) scale(.3)`, opacity: 1 }, { transform: `translate(${x - 60}px,${y - 60}px) scale(1.2)`, opacity: 0 }], { duration: 450 }).onfinish = gone(f)
+      work?.animate([0, 1, 2, 3, 4, 5, 6].map(i => ({ transform: i === 6 ? "none" : `translateX(${(i % 2 ? -1 : 1) * 7 * (1 - i / 6)}px) rotate(${(i % 2 ? 1 : -1) * 10 * (1 - i / 6)}deg)` })), { duration: 480 })
+      FX.smoke ||= [["#555a", "#777a", "#333a"], "puff"]
+      burst("smoke", x, y, 6 + 3 * st, true)
+      if (a < b) {
+        const num = fxEl("bfxl-num", "color:#ff6a5a;text-shadow:0 0 6px #f00,0 2px 3px #000")
+        num.textContent = "+" + b
+        num.animate([{ transform: `translate(${x - 30}px,${y - 46}px) scale(1.2)`, opacity: 1 }, { transform: `translate(${x - 30}px,${y + 10}px) scale(.7) rotate(18deg)`, opacity: 0 }], { duration: 900, easing: "ease-in" }).onfinish = gone(num)
+      }
+      shake(1 + st, 250 + 50 * st)
+      banner(a < b ? L(`失败 +${b} → +${a}`, `Failed +${b} → +${a}`) + (prot ? L("（保护）", " (protected)") : "") : L("强化失败", "Failed"), "#ff7a6a")
+    }
+    function hit(skill, style) {
+      if (held?.kind === "enhancer") hornWave()
+      if (skill === "foraging" && !walk.moves.length && Math.random() < 0.6) {
+        const base = workX()
+        walk.moves.push({ to: base - 4 - Math.random() * 18, speed: 110 }, { to: base, work: true, speed: 110 })
+      }
+      const target = el.querySelector(".bfxl-target")
+      const kind = SKILL[skill][2]
+      if ((style === "chop" || style === "squeeze") && !posed)
+        target.animate(
+          skill === "woodcutting" ? [{ transform: "rotate(0)" }, { transform: "rotate(-4deg)" }, { transform: "rotate(2deg)" }, { transform: "rotate(0)" }] : [{ transform: "translateX(0)" }, { transform: "translateX(3px)" }, { transform: "translateX(-2px)" }, { transform: "translateX(0)" }],
+          { duration: 260 },
+        )
+      if (posed) setPose(posed.kind === "cow" ? "milked" : "hit", posed.kind === "cow" ? 500 : 260)
+      const [cx, cy] = targetAt()
+      burst(skill, cx - (kind === "gather" ? 30 : 10), cy + (kind === "gather" ? 0 : -20), style === "stir" || style === "pour" ? 3 : 5)
+    }
+    function burst(skill, x, y, count, big) {
+      const fx = el.querySelector(".bfxl-fx")
+      if (!fx || fx.childElementCount > 70) return
+      const [colors, shape] = FX[skill] || FX.enhancing
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement("i")
+        const c = colors[(Math.random() * colors.length) | 0]
+        const s = (big ? 5 : 3) + Math.random() * 4
+        const round = shape === "chip" ? "1px" : shape === "leaf" ? "60% 0" : "50%"
+        p.style.cssText = `width:${s}px;height:${shape === "drop" ? s * 1.4 : s}px;background:${shape === "bubble" ? "transparent" : c};border:${shape === "bubble" ? "1.5px solid " + c : "0"};border-radius:${round};box-shadow:${shape === "spark" ? "0 0 6px " + c : "none"}`
+        fx.appendChild(p)
+        const up = shape === "puff" || shape === "bubble"
+        const a = up ? -Math.PI / 2 + (Math.random() - 0.5) * 0.9 : -Math.PI / 2 + (Math.random() - 0.5) * 2.6
+        const v = (big ? 70 : 34) + Math.random() * 30
+        const ex = x + Math.cos(a) * v
+        const ey = y + Math.sin(a) * v + (up ? 0 : 40)
+        p.animate(
+          [
+            { transform: `translate(${x}px,${y}px) scale(1)`, opacity: 1 },
+            { transform: `translate(${(x + ex) / 2}px,${y + Math.sin(a) * v * 0.8}px) scale(${up ? 1.6 : 1}) rotate(${Math.random() * 360}deg)`, opacity: 0.9, offset: 0.45 },
+            { transform: `translate(${ex}px,${ey}px) scale(${up ? 2.2 : 0.6})`, opacity: 0 },
+          ],
+          { duration: (up ? 1100 : 650) + Math.random() * 250, easing: "ease-out" },
+        ).onfinish = () => p.remove()
+      }
+    }
+    // a floating label (item icon + text) from (x, y) drifting by (dx, dy)
+    function pop(html, x, y, dx, dy, ms, opts = {}) {
+      const fx = el.querySelector(".bfxl-fx")
+      if (!fx) return
+      const p = document.createElement("div")
+      p.className = "bfxl-pop"
+      if (opts.icon) p.appendChild(svgUse("items", opts.icon))
+      const t = document.createElement("span")
+      t.textContent = html
+      t.style.color = opts.color || "#fff"
+      t.style.fontSize = (opts.size || 13) + "px"
+      p.appendChild(t)
+      if (opts.glow) p.style.filter = `drop-shadow(0 0 6px ${opts.glow})`
+      fx.appendChild(p)
+      p.animate(
+        [
+          { transform: `translate(${x}px,${y}px) scale(${opts.from ?? 0.6})`, opacity: 0 },
+          { transform: `translate(${x}px,${y - 8}px) scale(1)`, opacity: 1, offset: 0.15 },
+          { transform: `translate(${x + dx * 0.6}px,${y + dy * 0.6}px) scale(1)`, opacity: 1, offset: 0.7 },
+          { transform: `translate(${x + dx}px,${y + dy}px) scale(0.85)`, opacity: 0 },
+        ],
+        { duration: ms, delay: opts.delay || 0, easing: "ease-out", fill: "backwards" },
+      ).onfinish = () => p.remove()
+    }
+    function banner(text, color) {
+      const fx = el.querySelector(".bfxl-fx")
+      const b = document.createElement("div")
+      b.className = "bfxl-banner"
+      b.textContent = text
+      if (color) b.style.color = color
+      fx.appendChild(b)
+      b.animate(
+        [
+          { transform: "scale(.4)", opacity: 0 },
+          { transform: "scale(1.15)", opacity: 1, offset: 0.12 },
+          { transform: "scale(1)", opacity: 1, offset: 0.25 },
+          { transform: "scale(1)", opacity: 1, offset: 0.8 },
+          { transform: "translateY(-14px)", opacity: 0 },
+        ],
+        { duration: 2200, easing: "ease-out" },
+      ).onfinish = () => b.remove()
+      return b
+    }
+    // ----- rare drops: crate < meteorite < relic; philosopher's stones from transmuting -----
+    function fxEl(cls, css) {
+      const e = document.createElement("div")
+      e.className = cls
+      if (css) e.style.cssText = css
+      el.querySelector(".bfxl-fx").appendChild(e)
+      return e
+    }
+    const gone = e => () => e.remove()
+    function bigItem(id, x, y, size, glow, ms, rise = 40) {
+      const b = fxEl("bfxl-big", `width:${size}px;height:${size}px;filter:drop-shadow(0 0 8px ${glow}) drop-shadow(0 0 3px ${glow})`)
+      b.appendChild(svgUse("items", id))
+      b.animate(
+        [
+          { transform: `translate(${x - size / 2}px,${y - size / 2}px) scale(.2)`, opacity: 0 },
+          { transform: `translate(${x - size / 2}px,${y - size / 2 - rise * 0.8}px) scale(1.15)`, opacity: 1, offset: 0.2 },
+          { transform: `translate(${x - size / 2}px,${y - size / 2 - rise}px) scale(1)`, opacity: 1, offset: 0.8 },
+          { transform: `translate(${x - size / 2}px,${y - size / 2 - rise - 10}px) scale(.9)`, opacity: 0 },
+        ],
+        { duration: ms, easing: "ease-out" },
+      ).onfinish = gone(b)
+      return b
+    }
+    function shake(px, ms) {
+      el.querySelector(".bfxl-view").animate(
+        [0, 1, 2, 3, 4, 5].map(i => ({ transform: i === 5 ? "none" : `translate(${(i % 2 ? -1 : 1) * px * (1 - i / 5)}px,${(i % 3 - 1) * px * 0.6}px)` })),
+        { duration: ms },
+      )
+    }
+    function rareShow(g, skill, cx, cy) {
+      const kind = rarity(g.id)
+      const label = `${rareName(g.id)}${g.n > 1 ? " ×" + g.n : ""}`
+      if (posed) setPose(posed.kind === "cow" ? "startled" : "leaves", 1400)
+      if (kind === "crate") {
+        // bigger crate, bigger show
+        const k = /large/.test(g.id) ? 1.3 : /medium/.test(g.id) ? 1.15 : 1
+        bigItem(g.id, cx, cy - 20, 34 * k, "#ffb300", 2200)
+        burst(skill, cx, cy - 30, Math.round(14 * k), true)
+        banner(L("稀有掉落！", "Rare drop!") + " " + label)
+      } else if (kind === "meteor") {
+        // a burning rock falls out of the sky, hits the ground, and the cache is in the crater
+        const gx = cx - 18
+        const gy = cy + 34
+        const m = fxEl("bfxl-meteor")
+        m.animate([{ transform: "translate(330px,-40px) rotate(-35deg)" }, { transform: `translate(${gx}px,${gy - 8}px) rotate(-35deg)` }], { duration: 650, easing: "cubic-bezier(.5,0,1,1)" }).onfinish = () => {
+          m.remove()
+          const f = fxEl("bfxl-flash")
+          f.animate([{ transform: `translate(${gx - 60}px,${gy - 60}px) scale(.2)`, opacity: 1 }, { transform: `translate(${gx - 60}px,${gy - 60}px) scale(1.6)`, opacity: 0 }], { duration: 500, easing: "ease-out" }).onfinish = gone(f)
+          const r = fxEl("bfxl-ring")
+          r.animate([{ transform: `translate(${gx - 40}px,${gy - 12}px) scale(.2,.2)`, opacity: 1 }, { transform: `translate(${gx - 40}px,${gy - 12}px) scale(2.2,1.2)`, opacity: 0 }], { duration: 700, easing: "ease-out" }).onfinish = gone(r)
+          shake(5, 420)
+          FX.dust ||= [["#c9a77a", "#8b6b4a", "#e8d3b0"], "chip"]
+          burst("dust", gx, gy, 18, true)
+          burst("cheesesmithing", gx, gy - 6, 10, true)
+          bigItem(g.id, gx, gy - 20, 40, "#ff8a3c", 2400, 30)
+          banner(L("天降陨石！", "Meteorite!") + " " + label, "#ffb070")
+        }
+      } else if (kind === "legend") {
+        // the window dims, a light pillar comes down, the relic rises turning in its rays
+        const dim = fxEl("bfxl-dim")
+        dim.animate([{ opacity: 0 }, { opacity: 0.6, offset: 0.15 }, { opacity: 0.6, offset: 0.8 }, { opacity: 0 }], { duration: 4200 }).onfinish = gone(dim)
+        const pillar = fxEl("bfxl-pillar", `left:${cx - 22}px`)
+        pillar.animate([{ transform: "scaleY(0)", opacity: 0 }, { transform: "scaleY(1)", opacity: 1, offset: 0.12 }, { transform: "scaleY(1)", opacity: 0.9, offset: 0.75 }, { transform: "scaleY(1)", opacity: 0 }], { duration: 4000 }).onfinish = gone(pillar)
+        later(350, () => {
+          const rays = fxEl("bfxl-rays", `left:${cx - 60}px;top:${cy - 100}px`)
+          rays.animate([{ transform: "rotate(0) scale(.3)", opacity: 0 }, { transform: "rotate(60deg) scale(1)", opacity: 1, offset: 0.2 }, { transform: "rotate(240deg) scale(1)", opacity: 1, offset: 0.85 }, { transform: "rotate(280deg) scale(1.2)", opacity: 0 }], { duration: 3600 }).onfinish = gone(rays)
+          bigItem(g.id, cx, cy - 10, 48, "#fff3a0", 3600, 30)
+          for (let i = 0; i < 6; i++) later(i * 450, () => burst("enhancing", cx + (Math.random() - 0.5) * 80, cy - 50 - Math.random() * 20, 6, true))
+          const b = banner(L("传说掉落！", "Legendary!") + " " + label, "#fff")
+          b?.classList.add("rainbow")
+        })
+      } else if (kind === "sage") {
+        // a magic circle under the station, power spirals in, a white flash, the stone rises glowing crimson
+        const full = true
+        const ms = full ? 4200 : 2600
+        const ccx = cx
+        const ccy = cy + 30
+        for (const [cls, sz, turn] of [["bfxl-circle", 150, 1], ["bfxl-circle inner", 100, -1]]) {
+          const c = fxEl(cls, `width:${sz}px;height:${sz}px;left:${ccx - sz / 2}px;top:${ccy - sz / 2}px`)
+          c.animate([{ transform: "scaleY(.35) rotate(0) scale(.2)", opacity: 0 }, { transform: `scaleY(.35) rotate(${turn * 90}deg) scale(1)`, opacity: 1, offset: 0.2 }, { transform: `scaleY(.35) rotate(${turn * 400}deg) scale(1)`, opacity: 1, offset: 0.85 }, { transform: `scaleY(.35) rotate(${turn * 460}deg) scale(1.3)`, opacity: 0 }], { duration: ms }).onfinish = gone(c)
+        }
+        const dim = fxEl("bfxl-dim", "background:#2a0018")
+        dim.animate([{ opacity: 0 }, { opacity: 0.55, offset: 0.2 }, { opacity: 0.55, offset: 0.8 }, { opacity: 0 }], { duration: ms }).onfinish = gone(dim)
+        // sparks spiralling into the middle
+        const fx = el.querySelector(".bfxl-fx")
+        for (let i = 0; i < (full ? 26 : 14); i++) {
+          const p = document.createElement("i")
+          const c = i % 3 ? "#ff3d6e" : "#ffd75a"
+          p.style.cssText = `width:5px;height:5px;border-radius:50%;background:${c};box-shadow:0 0 6px ${c}`
+          fx.appendChild(p)
+          const a0 = Math.random() * Math.PI * 2
+          const frames = []
+          for (let k = 0; k <= 8; k++) {
+            const r = 90 * (1 - k / 8)
+            const a = a0 + k * 0.7
+            frames.push({ transform: `translate(${ccx + Math.cos(a) * r}px,${cy - 10 + Math.sin(a) * r * 0.6}px)`, opacity: k === 8 ? 0 : 1 })
+          }
+          p.animate(frames, { duration: 900 + Math.random() * 500, delay: Math.random() * (full ? 900 : 500), easing: "ease-in", fill: "backwards" }).onfinish = gone(p)
+        }
+        later(full ? 1500 : 1000, () => {
+          const f = fxEl("bfxl-flash", "background:radial-gradient(circle,#fff 0%,#ffd0dc 35%,transparent 70%)")
+          f.animate([{ transform: `translate(${ccx - 60}px,${cy - 70}px) scale(.3)`, opacity: 1 }, { transform: `translate(${ccx - 60}px,${cy - 70}px) scale(2.2)`, opacity: 0 }], { duration: 600, easing: "ease-out" }).onfinish = gone(f)
+          shake(full ? 4 : 2, 350)
+          const st = bigItem(g.id, ccx, cy - 10, full ? 52 : 38, "#ff2d55", ms - (full ? 1500 : 1000), 26)
+          st.animate([{ filter: "drop-shadow(0 0 4px #ff2d55) drop-shadow(0 0 2px #ffd75a)" }, { filter: "drop-shadow(0 0 14px #ff2d55) drop-shadow(0 0 6px #ffd75a)" }], { duration: 500, iterations: 8, direction: "alternate" })
+          burst("alchemy", ccx, cy - 20, full ? 20 : 10, true)
+          const b = banner(full ? L("贤者之石！", "Philosopher's Stone!") : label, "#ff6b8b")
+          b?.classList.add("sage")
+        })
+      }
+    }
+    // one finished action: costs go into the station, gains come out, then experience / level-ups / results
+    function play({ skill, gains, costs, exp, ups, enh, action }) {
+      lastPlayAt = performance.now()
+      setScene()
+      const key = sceneKey
+      const kind = SKILL[skill][2]
+      const [cx, cy] = targetAt()
+      const target = el.querySelector(".bfxl-target")
+      let delay = 0
+      if (kind === "make") {
+        // the table's materials go in (or, without game data, the costs fly in from the hero)
+        if (el.querySelector(".bfxl-mat")) useMaterials(0, kind, gains, key)
+        else costs.forEach((c, i) => pop("-" + fmt(c.n), 100, 60 + i * 6, cx - 120, cy - 70, 650, { icon: c.id, color: "#ffb0a0", size: 11, delay: i * 90, from: 1 }))
+        delay = 420
+        target.animate([{ transform: "scale(1)" }, { transform: "scale(1.08,0.94)" }, { transform: "scale(1)" }], { duration: 300, delay })
+      }
+      if (kind === "enhancing" || kind === "alchemy") useMaterials(150, kind, gains, key)
+      if (kind === "enhancing") {
+        const [b, a] = enh
+        showEnh()
+        if (a > b) enhSuccess(b, a)
+        else enhFail(b, a, a === b - 1 && b >= (action.enhancingProtectionMinLevel || Infinity))
+      }
+      if (kind === "alchemy") {
+        const ok = gains.length > 0
+        // a philosopher's stone has its own show
+        if (!gains.some(g => rarity(g.id) === "sage")) banner(ok ? L("炼金成功", "Success") : L("炼金失败", "Failed"), ok ? "#ffe27a" : "#ff7a6a")
+        if (ok) burst("alchemy", cx, cy - 20, 14, true)
+        delay = 300
+      }
+      // gains (the enhanced item itself is shown by the +N above it, not as a gain)
+      const shown = kind === "enhancing" ? gains.filter(g => g.id !== hashItem(action.primaryItemHash)?.id) : gains
+      // the biggest find gets its own show; the rest pop up as usual
+      const order = ["sage", "legend", "meteor", "crate"]
+      const star = shown.filter(g => order.includes(rarity(g.id))).sort((a, b) => order.indexOf(rarity(a.id)) - order.indexOf(rarity(b.id)))[0]
+      shown
+        .filter(g => g !== star)
+        .slice(0, 5)
+        .forEach((g, i) => {
+          const minor = rarity(g.id) === "minor"
+          pop("+" + fmt(g.n), cx - 16 + i * 10, cy - 30, 60 - i * 6, -70, 1500, {
+            icon: g.id,
+            delay: delay + i * 160,
+            color: minor ? "#8ff0e0" : "#fff",
+            glow: minor ? "#3fe0c8" : null,
+          })
+        })
+      if (star) later(delay + 250, () => key === sceneKey && rareShow(star, skill, cx, cy))
+      // gatherers and crafters take the product away (on short actions only every third time; a crafter with a
+      // storage does that on the way to the next materials)
+      if ((kind === "gather" || (kind === "make" && !staged)) && gains.length && (dur() >= 2.5 || ++walk.carried % 3 === 0)) {
+        const main = gains.find(g => !MINOR.test(g.id) && !RARE.test(g.id)) || gains[0]
+        later(delay + 300, () => key === sceneKey && carryOut(main.id))
+      }
+      if (posed && !star) setPose(posed.kind === "cow" ? "happy" : "rustle", 900)
+      if (exp > 0) pop(`+${exp >= 100 ? fmt(exp) : +exp.toFixed(1)} ${L("经验", "XP")}`, 46, 26, 0, -24, 1300, { color: "#9fd3ff", size: 11, delay: delay + 200 })
+      // a switch to another action in between clears the scene: late banners are dropped
+      for (const [s, lv] of ups) later(delay + 500, () => key === sceneKey && banner(`${SKILL[s] ? L(SKILL[s][0], SKILL[s][1]) : s} Lv.${lv}`))
+    }
+    setInterval(() => {
+      trialTick()
+      ensure()
+      if (el && !cfg.lifePos) place()
+      if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
+    }, 1000)
+    return { onMessage, ensure }
+  })()
+
   const Lab = { units: { p: [], m: [] }, render() {}, stop() {}, redraw() {}, loc: () => null, tier: () => 0 }
 
 
@@ -2680,6 +5040,7 @@
     menuIds = [
       GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
       toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
+      toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
         const v = parseFloat(prompt(L("动画大小倍率（0.5 ~ 2）", "Animation size (0.5 – 2)"), cfg.scale))
         if (v >= 0.3 && v <= 3) {
@@ -2699,9 +5060,12 @@
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
-  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated)$|party/
+  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed|new_guild_skilling|guild_skilling_updated|labyrinth_room_progress|guild_updated|guild_characters_updated)$|party|buff|house/
   function onCharacterMessage(obj) {
-    Looks.onMessage(obj)
+    // completions only carry inventory counts (and the tools' slots), never the visible gear
+    if (obj.type !== "action_completed") Looks.onMessage(obj)
+    Life.onMessage(obj)
+    if (obj.type === "action_completed") return
     const act = combatActionIn(obj)
     if (act) {
       where.zone = shortId(act.actionHrid)
@@ -2723,7 +5087,9 @@
           else if (obj.type === "labyrinth_updated") {
             // labyrinth fights are ordinary battles; only the backdrop changes
             where.labyrinth = !!obj.labyrinth?.isActive
+            where.floor = obj.labyrinth?.currentFloor || 0
             Stage.setBackground()
+            Life.onMessage(obj) // the skilling rooms are the window's
           }
           else onCharacterMessage(obj)
         } catch (e) {

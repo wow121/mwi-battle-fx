@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI 战斗动画
 // @namespace    mwi-battle-fx
-// @version      0.15.2
+// @version      0.16.0
 // @license      MIT
 // @description  银河奶牛放置：在战斗页"交战"旁加一个"舞台"标签，用杀戮尖塔式的侧视画面播放战斗（AI 生成的角色/怪物立绘与地点背景，攻击、弹道、受击、阵亡）。只在打开该标签时运行；不改游戏原有界面，只读游戏消息；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2972,7 +2972,7 @@
     // the trial to show: the one whose panel is on screen (the test panel's in the window)
     function pickTrial() {
       for (const from of ["lab", "guild"]) if (trials[from] && trialHost(trials[from])) return trials[from]
-      if (DEV && labState) return trials.lab || trials.guild || null
+      if (labState) return trials.lab || trials.guild || null // #dev
       return null
     }
     // one attempt: progress gained (doubled), failed, or for enhancing the level gone up / down
@@ -3616,7 +3616,8 @@
       }
       const host = trial ? trialHost(trial) : null
       // the test panel's trials show in the floating window
-      const shown = trial ? !!host || (DEV && !!labState) : true
+      let shown = trial ? !!host : true
+      if (trial && labState) shown = true // #dev
       const want = cfg.life && isLife(cur) && document.body && shown
       if (el && !want && docked) dock(null)
       if (!want) {
@@ -5282,17 +5283,18 @@
       play({ skill, gains: [{ id: shortId(hrid), n: 2 }, { id: skill + "_essence", n: 1 }], costs: [{ id: "cheese", n: 3 }], exp: 12.5, ups: [[skill, 10]], enh: [3, 4], action: cur })
     }
     // #dev-end
-    // #release-start
-    // const demo = null
-    // const lab = null
-    // #release-end
     setInterval(() => {
       trialTick()
       ensure()
       if (el && !cfg.lifePos) place()
       if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
     }, 1000)
+    // #dev-start
     return { onMessage, ensure, demo, lab, state: () => ({ cur, queue, tools, measured, dur: dur(), inv }) }
+    // #dev-end
+    // #release-start
+    // return { onMessage, ensure }
+    // #release-end
   })()
 
   // #dev-start
