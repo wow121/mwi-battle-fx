@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "08d2603836"
+  const ASSET_REV = "9791b0c91b"
   const MANIFEST_URLS = [
     "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json",
     DEFAULT_ASSET_BASE.replace(/@main$/, "@" + ASSET_REV) + "/assets/manifest.json",
