@@ -62,10 +62,10 @@ def build(src: str) -> str:
         sys.exit("no `const DEV = true` line")
 
     head, sep, body = text.partition("// ==/UserScript==")
-    head = re.sub(r"^// @name .*$", "// @name         MWI 战斗动画", head, flags=re.M)
+    head = re.sub(r"^// @name .*$", "// @name         牛牛动起来", head, flags=re.M)
     head = re.sub(r"^// @namespace .*$", "// @namespace    mwi-battle-fx-release", head, flags=re.M)
     head = re.sub(r"^// @description .*$", "// @description  " + DESC + "\n// @description:en  " + DESC_EN, head, flags=re.M)
-    head = re.sub(r"^(// @name +.*)$", r"\1\n// @name:en      MWI Battle FX", head, count=1, flags=re.M)
+    head = re.sub(r"^(// @name +.*)$", r"\1\n// @name:en      MWI Alive", head, count=1, flags=re.M)
     # no update URLs: Greasy Fork (which syncs this file) serves its own and forbids pointing users elsewhere;
     # a copy installed from GitHub keeps updating from the address it was installed from
     head = re.sub(r"^// @(updateURL|downloadURL)\s.*\n", "", head, flags=re.M)
