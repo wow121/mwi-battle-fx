@@ -24,7 +24,10 @@ const logs = []
 ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m); pend.delete(m.id) } else if (m.method === "Runtime.consoleAPICalled" || m.method === "Runtime.exceptionThrown") logs.push(JSON.stringify(m.params).slice(0, 400)) }
 const send = (method, params = {}) => new Promise(r => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })) })
 await send("Runtime.enable")
-await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false })
+// PHONE=1 emulates a phone (390x844, touch screen) to check the narrow-screen layout
+const phone = process.env.PHONE === "1"
+await send("Emulation.setDeviceMetricsOverride", phone ? { width: 390, height: +process.env.PHONE_H || 844, deviceScaleFactor: 1, mobile: true } : { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false })
+if (phone) await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 })
 await send("Page.navigate", { url: "http://127.0.0.1:8799/mock.html" })
 await sleep(1500)
 await send("Runtime.evaluate", { expression: "start()" })
