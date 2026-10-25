@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.16.2
+// @version      0.16.3
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -1561,14 +1561,21 @@
       a.mpI.style.width = pct(u.mp, u.maxMp)
       a.hpT.textContent = `${fmt(u.hp)}/${fmt(u.maxHp)}`
     }
+    // a hit landing shows the unit's latest HP, not the one of the update it came from: in a guild trial
+    // dozens of hits fly at once and an older, slower one would put the bar back up
     function setHp(a, t) {
-      a.hpI.style.width = pct(t.hp, t.maxHp)
-      a.hpT.textContent = `${fmt(t.hp)}/${fmt(t.maxHp)}`
+      const u = shown[a.side]?.[a.i]
+      const hp = u && typeof u.hp === "number" ? u.hp : t.hp
+      const max = u?.maxHp || t.maxHp
+      a.hpI.style.width = pct(hp, max)
+      a.hpT.textContent = `${fmt(hp)}/${fmt(max)}`
     }
     // bars and dead/alive state catch up with the real numbers after the animations
+    // (at most 900 ms late: not pushed back by every update, or a guild trial's steady stream never lets it run)
     function syncSoon() {
-      clearTimeout(syncTimer)
+      if (syncTimer) return
       syncTimer = setTimeout(() => {
+        syncTimer = 0
         for (const side of ["p", "m"])
           for (const a of actors[side]) {
             const u = shown[side][a.i]
