@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.16.6
+// @version      0.17.0
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
@@ -3216,6 +3216,7 @@
     // ----- messages -----
     function onMessage(obj) {
       if (obj.guildSharableCharacterMap) Object.assign(guildChars, obj.guildSharableCharacterMap)
+      setHouses(obj)
       if (obj.type === "init_character_data") {
         myId = obj.character?.id ?? myId
         for (const k of Object.keys(inv)) delete inv[k]
@@ -3300,7 +3301,7 @@
       cycleAt = performance.now()
       const before = enhLevel
       enhLevel = hashItem(a.primaryItemHash)?.level ?? enhLevel
-      if (!visible()) return
+      if (!visible() || inTown()) return
       if (cfg.lifeIcon) {
         const big = gains.some(g => ["sage", "legend", "meteor", "crate"].includes(rarity(g.id)))
         el.querySelector(".bfxl-ico").animate([{ transform: "scale(1)" }, { transform: `scale(${big ? 1.5 : 1.15})`, filter: big ? "drop-shadow(0 0 10px #ffd75a)" : "none" }, { transform: "scale(1)" }], { duration: big ? 1200 : 350 })
@@ -3464,6 +3465,31 @@
 .bfxl-lab button{background:#33406a;color:#eef;border:0;border-radius:3px;padding:2px 6px;font-size:11px;cursor:pointer}
 .bfxl-lab button:hover{background:#4a5c96}
 .bfxl-lab b{width:100%;font-size:11px;opacity:.7}
+.bfxl-town{position:absolute;left:0;top:0;width:340px;height:150px;overflow:hidden;transform-origin:0 0;z-index:6;opacity:0;visibility:hidden;
+  transition:opacity .35s,visibility 0s .35s;pointer-events:none;background:linear-gradient(#8fd0ff 0%,#d8f0ff 66%,#9ccf7a 66%)}
+.bfxl.intown .bfxl-town{opacity:1;visibility:visible;transition:opacity .35s}
+.bfxl.docked .bfxl-town{display:none}
+.bfxl-strip{position:absolute;left:0;top:0;height:150px;will-change:transform}
+.bfxl-street{position:absolute;left:0;right:0;bottom:0;height:50px;background:linear-gradient(#7fb35e 0 5px,#b8a383 5px,#a48d6c)}
+.bfxl-bld{position:absolute;bottom:34px;width:70px;height:72px;transform:translateX(-50%);transform-origin:50% 100%}
+.bfxl-bld.drawn{width:80px;height:104px;bottom:22px}
+.bfxl-bld.drawn.deco{width:62px;height:80px;bottom:24px}
+.bfxl-bld>img{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.bfxl-bld:not(.drawn)::before{content:"";position:absolute;left:4px;right:4px;bottom:0;height:62%;background:#d9c3a0;border-radius:2px;box-shadow:inset 0 -6px 0 #0002}
+.bfxl-bld:not(.drawn)::after{content:"";position:absolute;left:-2px;right:-2px;top:0;height:42%;background:var(--roof,#b5523b);clip-path:polygon(50% 0,100% 100%,0 100%)}
+.bfxl-bld:not(.drawn)>svg{position:absolute;left:30%;bottom:16%;width:40%;height:40%;z-index:1}
+.bfxl-sign{position:absolute;left:58%;bottom:30%;width:26%;aspect-ratio:1;background:#f4e6c4;border:2px solid #7a5530;border-radius:3px;z-index:1}
+.bfxl-sign svg{position:absolute;left:8%;top:8%;width:84%;height:84%}
+.bfxl-lv{position:absolute;left:50%;top:6%;transform:translateX(-50%);padding:0 4px;border-radius:6px;background:#2b2140d0;font:700 8.5px sans-serif;color:#ffe9a0;white-space:nowrap;z-index:1}
+.bfxl-bld.lv4 .bfxl-lv{background:#5a3a10e0;box-shadow:0 0 4px #ffd75a}
+.bfxl-bld.lv7>img{filter:drop-shadow(0 0 2px #ffd75a) drop-shadow(0 0 5px #ffb74a88)}
+.bfxl-bld.here>img{filter:brightness(1.12) drop-shadow(0 0 4px #fffa)}
+.bfxl-thero{position:absolute;bottom:2px;width:96px;height:96px;margin-left:-48px;z-index:3}
+.bfxl-thero>div{position:absolute;inset:0;transform-origin:50% 100%}
+.bfxl-thero svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-tfx{position:absolute;inset:0;pointer-events:none;z-index:4}
+.bfxl-tfx>*{position:absolute;left:0;top:0;font:700 12px sans-serif;color:#fff;text-shadow:0 1px 2px #000;white-space:nowrap}
+.bfxl-tfx svg{width:20px;height:20px}
 .bfxl-bar{position:relative;height:14px;background:#11141f}
 .bfxl-tbar{position:relative;height:13px;background:#1c1710}
 .bfxl-tbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#c98a00,#ffd75a)}
@@ -3482,7 +3508,7 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-tbar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-town"><div class="bfxl-strip"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-tbar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
       // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
@@ -3670,7 +3696,7 @@
       const s = (curScale = winScale())
       el.style.width = cfg.lifeIcon ? "" : 340 * s + "px"
       el.querySelector(".bfxl-view").style.height = 150 * s + "px"
-      scene.style.transform = `scale(${s})`
+      scene.style.transform = el.querySelector(".bfxl-town").style.transform = `scale(${s})`
       const w = cfg.lifeIcon ? 46 : 340 * s
       const h = el.offsetHeight
       const [x, y] = cfg.lifePos || defaultPos(w, h)
@@ -3739,7 +3765,8 @@
       // the test panel's trials show in the floating window
       let shown = trial ? !!host : true
       if (trial && labState) shown = true // #dev
-      const want = cfg.life && isLife(cur) && document.body && shown
+      // no skilling action (nothing queued, or a fight): the town, unless it is switched off
+      const want = cfg.life && document.body && shown && (isLife(cur) || (!trial && cfg.lifeTown))
       if (el && !want && docked) dock(null)
       if (!want) {
         if (el) el.style.display = "none"
@@ -3753,7 +3780,10 @@
       el.classList.toggle("min", !!cfg.lifeMin && !docked)
       el.classList.toggle("icon", !!cfg.lifeIcon && !docked)
       if (cfg.lifeMin || cfg.lifeIcon) layoutDirty = true
-      setScene()
+      townSync()
+      // the next job's scene is built when the hero gets to its door
+      if (isLife(cur) && !town.trip) setScene()
+      else setTownHead()
       showInfo()
       fillStore()
       showTrialBar()
@@ -4083,15 +4113,7 @@
       const hero = el.querySelector(".bfxl-hero")
       hero.innerHTML = ""
       hero.getAnimations().forEach(a => a.cancel()) // e.g. faded out through a labyrinth gate
-      const body = document.createElementNS(SVGNS, "svg")
-      body.setAttribute("viewBox", "0 0 100 100")
-      for (const [sh, sid] of [["avatars", me.avatar], ["avatar_outfits", me.outfit]]) {
-        if (!sid || !sheet(sh)) continue
-        const u = document.createElementNS(SVGNS, "use")
-        u.setAttribute("href", sheet(sh) + "#" + sid)
-        body.appendChild(u)
-      }
-      hero.appendChild(body)
+      hero.appendChild(heroBody(me))
       const made = makeTool(tools[skill], toolEnh[skill] || 0)
       const tool = made.node
       held = made.held
@@ -4440,7 +4462,7 @@
     // finds, or the success rate for enhancing and alchemy
     function infoLines() {
       if (trial) return trialLines()
-      if (!cur) return []
+      if (!isLife(cur)) return townLines()
       const skill = skillOf(cur.actionHrid)
       const kind = SKILL[skill][2]
       const b = buffsFor(skill)
@@ -4694,9 +4716,208 @@
       }
       return [null, 0, 0, 0]
     }
+    // ----- the town -----
+    // The window's idle view and the walk between two jobs: the hero lives in a little town whose skilling buildings
+    // are the game's house rooms (an unbuilt room is an empty lot with its sign, a built one carries its level and
+    // gets a gold trim from level 7). When the action changes the town fades in over the old scene, the hero walks
+    // from the old building's door to the new one and goes in, and the new scene fades in. With nothing to do the
+    // hero rests at home; in a fight they are out through the town gate.
+    // [id, skill, width]: along the street from the gate (left) on
+    const TOWN = [["gate", null, 80], ["home", null, 80], ["fountain", null, 62], ["dairy_barn", "milking", 80], ["garden", "foraging", 80], ["log_shed", "woodcutting", 80], ["market", null, 62], ["forge", "cheesesmithing", 80], ["workshop", "crafting", 80], ["sewing_parlor", "tailoring", 80], ["lamp", null, 62], ["kitchen", "cooking", 80], ["brewery", "brewing", 80], ["laboratory", "alchemy", 80], ["observatory", "enhancing", 80]]
+    const TOWN_X = {} // a building's middle
+    let townW = 12
+    for (const [id, , w] of TOWN) {
+      TOWN_X[id] = townW + w / 2
+      townW += w + 6
+    }
+    townW += 6
+    const ROOM_OF = Object.fromEntries(TOWN.filter(b => b[1]).map(([id, sk]) => [sk, id]))
+    // the backdrop (lb_town) is drawn 400 px wide: its far hills stand still behind the street and drift a little
+    // (parallax); its cobbles (from row 195 down) are laid along the whole street and move with the buildings
+    const TOWN_BG_W = 400
+    const TOWN_BG_Y = 95
+    const houses = {} // house room id -> level (from the messages; empty until the character data came)
+    function setHouses(obj) {
+      const map = obj.characterHouseRoomMap || (obj.characterHouseRoom ? { x: obj.characterHouseRoom } : null)
+      for (const r of Object.values(map || {})) if (r?.houseRoomHrid) houses[shortId(r.houseRoomHrid)] = r.level || 0
+      for (const r of obj.endCharacterHouseRooms || []) if (r?.houseRoomHrid) houses[shortId(r.houseRoomHrid)] = r.level || 0
+    }
+    const town = { at: null, trip: null, x: 0, cam: 0, snap: true, key: "", zAt: 0, lastT: 0 }
+    const placeOf = a => (!a ? "home" : isLife(a) ? ROOM_OF[skillOf(a.actionHrid)] : "gate")
+    // where the hero stands at a place: beside the home's door, at a building's door, out through the gate
+    const restX = p => TOWN_X[p] + (p === "home" ? 30 : p === "gate" ? -14 : 0)
+    const inTown = () => !!el && !docked && el.classList.contains("intown")
+    function heroBody(me) {
+      const body = document.createElementNS(SVGNS, "svg")
+      body.setAttribute("viewBox", "0 0 100 100")
+      for (const [sh, sid] of [["avatars", me.avatar], ["avatar_outfits", me.outfit]]) {
+        if (!sid || !sheet(sh)) continue
+        const u = document.createElementNS(SVGNS, "use")
+        u.setAttribute("href", sheet(sh) + "#" + sid)
+        body.appendChild(u)
+      }
+      return body
+    }
+    // the place follows the running action: a walk there while the window is open, a jump otherwise
+    function townSync() {
+      if (!cfg.lifeTown || trial || docked) {
+        el.classList.remove("intown")
+        town.trip = null
+        return
+      }
+      const to = placeOf(cur)
+      if (town.at === null || !visible() || cfg.lifeMin || cfg.lifeIcon) {
+        town.at = to
+        town.trip = null
+        town.x = restX(to)
+        town.snap = true
+      } else if (to !== (town.trip ? town.trip.to : town.at)) {
+        // from a job or back through the gate the hero comes out of the door first; a new goal mid-walk turns them
+        const from = town.trip || town.at === "home" ? town.x : TOWN_X[town.at]
+        town.trip = { to, from, t0: performance.now(), appear: !town.trip && town.at !== "home" }
+        if (!inTown()) town.snap = true
+      }
+      el.classList.toggle("intown", !!town.trip || !isLife(cur))
+      buildTown()
+    }
+    function buildTown() {
+      const me = Looks.me
+      const key = [JSON.stringify(houses), me.avatar, me.outfit, sheet("avatars"), sheet("skills"), Assets.get("rev")].join("|")
+      if (key === town.key) return
+      town.key = key
+      const bg = art("bg", "town") ? `url("${artUrl("bg/town")}")` : ""
+      el.querySelector(".bfxl-town").style.background = bg ? `${bg} 0 ${-TOWN_BG_Y}px / ${TOWN_BG_W}px auto no-repeat` : ""
+      const strip = el.querySelector(".bfxl-strip")
+      strip.innerHTML = ""
+      strip.style.width = townW + "px"
+      const street = document.createElement("div")
+      street.className = "bfxl-street"
+      if (bg) street.style.background = `${bg} 0 ${-(100 + TOWN_BG_Y)}px / ${TOWN_BG_W}px auto repeat-x`
+      strip.appendChild(street)
+      for (const [id, skill] of TOWN) {
+        const b = document.createElement("div")
+        const lv = skill ? houses[id] : undefined
+        const lot = lv === 0
+        const pic = lot ? "lot" : id
+        b.className = "bfxl-bld" + (skill || id === "gate" || id === "home" ? "" : " deco") + (lv >= 7 ? " lv7 lv4" : lv >= 4 ? " lv4" : "")
+        b.dataset.id = id
+        b.style.left = TOWN_X[id] + "px"
+        if (art("town", pic)) {
+          b.classList.add("drawn")
+          b.appendChild(img("town/" + pic))
+        } else {
+          if (skill && !lot) b.appendChild(svgUse("skills", skill))
+          b.style.setProperty("--roof", { gate: "#8a8f9a", fountain: "#7aa6c8", market: "#d65a5a", lamp: "#556" }[id] || "#b5523b")
+        }
+        // a lot's sign shows what will be built there; a built room its level
+        if (lot) {
+          const sign = document.createElement("div")
+          sign.className = "bfxl-sign"
+          sign.appendChild(svgUse("skills", skill))
+          b.appendChild(sign)
+        } else if (lv > 0) b.insertAdjacentHTML("beforeend", `<span class="bfxl-lv">Lv${lv}</span>`)
+        strip.appendChild(b)
+      }
+      const hero = document.createElement("div")
+      hero.className = "bfxl-thero"
+      hero.appendChild(document.createElement("div")).appendChild(heroBody(me))
+      strip.appendChild(hero)
+      strip.insertAdjacentHTML("beforeend", '<div class="bfxl-tfx"></div>')
+    }
+    // the title bar and the bar under the picture while the town is shown
+    function setTownHead() {
+      const name = cur ? actionName() : L("小镇 · 休息中", "Town · resting")
+      el.querySelector(".bfxl-name").textContent = name
+      el.querySelector(".bfxl-count").textContent = isLife(cur) && cur.hasMaxCount ? `${cur.currentCount} / ${cur.maxCount}` : ""
+      const ico = el.querySelector(".bfxl-ico")
+      ico.title = name
+      const k = isLife(cur) ? skillOf(cur.actionHrid) : cur ? "combat" : "house"
+      if (ico.dataset.k !== k) {
+        ico.dataset.k = k
+        ico.innerHTML = ""
+        ico.appendChild(svgUse(isLife(cur) ? "skills" : "misc", k))
+      }
+      el.querySelector(".bfxl-bar i").style.width = "0"
+      el.querySelector(".bfxl-bar span").textContent = isLife(cur) ? L("前往中…", "On the way…") : cur ? L("出征中", "Out fighting") : L("空闲", "Idle")
+    }
+    function townLines() {
+      const rooms = TOWN.filter(b => b[1]).map(b => houses[b[0]])
+      if (!rooms.some(v => v !== undefined)) return []
+      const built = rooms.filter(v => v > 0)
+      return [[`${L("小镇", "Town")}: ${L("已建", "built")} ${built.length} / ${rooms.length}`, `${L("房屋总等级", "House levels")} ${built.reduce((a, b) => a + b, 0)}`]]
+    }
+    function townPop(node, x, y, ms) {
+      const box = el.querySelector(".bfxl-tfx")
+      if (!box) return
+      const e = document.createElement("div")
+      e.append(node)
+      box.appendChild(e)
+      e.animate([{ transform: `translate(${x}px,${y}px)`, opacity: 0 }, { opacity: 1, offset: 0.2 }, { transform: `translate(${x + 10}px,${y - 24}px)`, opacity: 0 }], { duration: ms, easing: "ease-out" }).onfinish = () => e.remove()
+    }
+    function townFrame(now) {
+      const hero = el.querySelector(".bfxl-thero")
+      if (!hero || cfg.lifeIcon) return
+      const dt = Math.min(0.1, (now - (town.lastT || now)) / 1000)
+      town.lastT = now
+      const tr = town.trip
+      let opacity = town.at === "gate" ? 0 : 1
+      let walking = false
+      let facing = town.at === "home" ? -1 : 1
+      if (tr) {
+        if (tr.ms === undefined) {
+          tr.x1 = restX(tr.to)
+          tr.wait = tr.appear ? 450 : 0
+          // brisk: at most about two and a half seconds whatever the distance
+          tr.ms = Math.max(600, Math.min(2600, (Math.abs(tr.x1 - tr.from) / 170) * 1000))
+          tr.end = tr.to === "home" ? 0 : 380
+        }
+        const e = now - tr.t0
+        const k = Math.max(0, Math.min(1, (e - tr.wait) / tr.ms))
+        town.x = tr.from + (tr.x1 - tr.from) * k
+        facing = tr.x1 < tr.from ? -1 : 1
+        walking = e >= tr.wait && k < 1
+        // out of the door, along the street, in at the other door
+        opacity = e < tr.wait ? e / tr.wait : k < 1 ? 1 : 1 - (e - tr.wait - tr.ms) / (tr.end || 1)
+        if (k >= 1 && e - tr.wait - tr.ms >= tr.end) {
+          town.at = tr.to
+          town.trip = null
+          ensure()
+          // the job's scene: the hero walks in from the left as on any new action
+          if (isLife(cur) && !inTown()) {
+            walk.x = -60
+            walk.moves.forEach(m => delete m.t0)
+            if (!walk.moves.length) walk.moves.push({ to: workX(), work: true })
+          }
+          return
+        }
+      } else if (town.at !== "gate") town.x = restX(town.at)
+      const target = Math.max(0, Math.min(townW - 340, town.x - 170))
+      town.cam = town.snap ? target : town.cam + (target - town.cam) * (1 - Math.exp(-dt * 7))
+      town.snap = false
+      el.querySelector(".bfxl-strip").style.transform = `translateX(${-town.cam}px)`
+      el.querySelector(".bfxl-town").style.backgroundPositionX = -(town.cam / Math.max(1, townW - 340)) * (TOWN_BG_W - 340) + "px"
+      hero.style.left = town.x + "px"
+      hero.style.opacity = Math.max(0, Math.min(1, opacity))
+      const bob = walking ? -3 * Math.abs(Math.sin((now / 1000) * Math.PI * 4)) : 0
+      hero.firstChild.style.transform = `translateY(${bob}px) scale(.62) scaleX(${facing})`
+      // the building the hero is heading for lights up
+      const goal = tr?.to
+      for (const b of el.querySelectorAll(".bfxl-bld")) b.classList.toggle("here", b.dataset.id === goal)
+      // resting at home: z-z-z; out fighting: crossed swords over the gate
+      if (!tr && now - town.zAt > 1700) {
+        town.zAt = now
+        if (town.at === "home") townPop("z", town.x + 4, 72, 1800)
+        else if (town.at === "gate") townPop(sheet("misc") ? svgUse("misc", "combat") : "⚔", TOWN_X.gate - 10, 40, 2200)
+      }
+    }
     function frame() {
       raf = 0
-      if (!visible() || cfg.lifeMin || !isLife(cur)) return
+      if (!visible() || cfg.lifeMin) return
+      if (inTown()) {
+        raf = requestAnimationFrame(frame)
+        return townFrame(performance.now())
+      }
+      if (!isLife(cur)) return
       raf = requestAnimationFrame(frame)
       const skill = skillOf(cur.actionHrid)
       const style = SKILL[skill][3]
@@ -5413,7 +5634,7 @@
       trialTick()
       ensure()
       if (el && !cfg.lifePos) place()
-      if (raf === 0 && visible() && !cfg.lifeMin && isLife(cur)) raf = requestAnimationFrame(frame)
+      if (raf === 0 && visible() && !cfg.lifeMin && (isLife(cur) || inTown())) raf = requestAnimationFrame(frame)
     }, 1000)
     // #dev-start
     return { onMessage, ensure, demo, lab, state: () => ({ cur, queue, tools, measured, dur: dur(), inv }) }
@@ -5856,6 +6077,7 @@
       // #release-end
       toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
+      toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
       // #dev-start
       GM_registerMenuCommand(`角色形象：${cfg.lookMode === "outfit" ? "按服装" : "按装备"}（点击切换）`, () => {
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"

@@ -5,7 +5,8 @@ usage: make-life-jobs.py <raw_dir>
   lb_<scene>   backgrounds: milking, woodcutting, the 7 foraging areas, the 7 production / enhancing / alchemy rooms
   lt_<id>      3x2 pose sheets of the 7 cows and the 7 trees (cut like monsters, see LIFE_POSES in build-assets.py)
   lg_<group>   packed sheets of different things, one per cell: foraging plants by area (3x2), the stations (4x2),
-               the tools of one kind in their 8 tiers (4x2); the cell -> id lists go to <raw_dir>/life-groups.json
+               the tools of one kind in their 8 tiers (4x2), the town's buildings (lg_town_a/b, 4x2); the cell -> id
+               lists go to <raw_dir>/life-groups.json
 
 Jobs go to <raw_dir>/jobs-life.tsv (name \t prompt file \t references \t key color), run with gen.sh.
 References: the game's own sprites, rendered first with
@@ -255,6 +256,40 @@ Location: inside an ancient magical labyrinth, {desc}.
 Composition: landscape 1536x1024, camera at eye level looking from the side. A flat walkable floor runs across the bottom ~28% of the image where characters will stand. Keep the middle area uncluttered and a bit softer; put landmarks toward the back and the left and right edges. No characters, no creatures, no text, no UI.
 """
     job(f"bg_labyrinth_d{k + 1}", prompt, [os.path.join(SHEETS, "bg_labyrinth.png")], "none")
+
+# ---- the town: where the hero lives and walks between jobs (the window's idle view and its transitions). The
+# skilling buildings are the game's house rooms; a room not built yet is shown as an empty lot with its sign
+TOWN = [
+    ("home", None, "the hero's own small cozy cottage with a round wooden door, a little chimney with a curl of smoke, flower boxes under the windows"),
+    ("dairy_barn", "s_milking", "a red dairy barn with a big wooden door, a hay loft, milk cans by the door"),
+    ("garden", "act_farmland", "a greenhouse garden shed with glass panes, vines and fruit plants inside, flower pots by the door"),
+    ("log_shed", "s_woodcutting", "a log shed: an open-fronted timber shed stacked with logs, an axe in a stump by the door"),
+    ("forge", "s_cheesesmithing", "a stone cheese forge with a glowing furnace window and a tall chimney, an anvil by the door, cheese-yellow trim"),
+    ("workshop", "s_crafting", "a carpenter's workshop of planks with a big door, a saw and planks leaning by it"),
+    ("sewing_parlor", "s_tailoring", "a tailor's sewing parlor: a neat shop with a display window showing a dress on a mannequin, fabric bolts, an awning"),
+    ("kitchen", "s_cooking", "a cozy restaurant kitchen: brick building with a smoking chimney, a window with pies cooling on the sill"),
+    ("brewery", "s_brewing", "a tea and coffee house: a wooden shop with a steaming teapot sign, an awning and a small bench"),
+    ("laboratory", "s_alchemy", "an alchemist's laboratory: a narrow purple stone tower with glowing bottles in the windows and a crooked chimney puffing coloured smoke"),
+    ("observatory", "s_enhancing", "an enchanter's observatory: a round stone tower with a domed roof and a telescope, faint glowing blue runes on the walls"),
+    ("gate", None, "the town gate: a stone archway with an open wooden gate, small banners on top; the road continues through it out of town"),
+    ("lot", None, "an empty building lot: a patch of bare earth with a low wooden fence, a pile of planks and a few stones, a blank wooden sign post (nothing written on it)"),
+    ("fountain", None, "a round stone town fountain with water sprinkling, a few doves on its rim"),
+    ("market", None, "a small market stall with a striped awning and baskets of fruit and cheese"),
+    ("lamp", None, "a wrought-iron street lamp next to a small leafy tree and a wooden bench"),
+]
+for k in range(2):
+    part = TOWN[k * 8 : k * 8 + 8]
+    refs = [r for _, r, _ in part if r]
+    cells = [d + (f" (theme and colours from attached icon {refs.index(r) + 1})" if r else "") for _, r, d in part]
+    prompt = f"Image: BUILDINGS of a cosy little village for a cute 2D side-view idle game, in {STYLE} (match the attached background picture's style; the attached icons, numbered in order after it, give some buildings their theme and colours). They stand side by side along one street, so every building is drawn seen straight from the FRONT at eye level (a street elevation, no perspective), its door at the bottom middle, all at the same scale (a door about as tall as a person), each filling most of its cell's height.\n" + grid(4, 2, cells, "magenta", "")
+    name = "lg_town_" + "ab"[k]
+    job(name, prompt, [os.path.join(SHEETS, "lb_milking.png")] + [os.path.join(REF, r + ".png") for r in refs], "magenta")
+    groups[name] = {"grid": [4, 2], "dir": "town", "ids": [i for i, _, _ in part], "out": 320}
+prompt = f"""Image: a wide BACKGROUND for a small side-view idle-game window, in {STYLE}; match the attached background's art style and level of detail exactly but not its content.
+Scene: the sky and far distance over a cosy little village: soft clouds, rolling green hills, a few far-away roofs, a windmill and trees on the hills. A cobblestone street runs across the whole bottom ~22% of the image with a grass verge behind it.
+Composition: landscape 1536x1024, camera at eye level from the side. Buildings will be laid along the street in front of this picture, so keep the middle band plain and soft (only far-away scenery, small and pale); nothing tall in the foreground. No characters, no animals, no people, no text, no UI.
+"""
+job("lb_town", prompt, [os.path.join(SHEETS, "lb_milking.png")], "none")
 
 # how each tool is drawn, so the userscript can find the grip (see tool_geo in build-assets.py)
 HELD = "drawn as held in a hand, seen from the side: the handle toward the BOTTOM-LEFT of its cell and the working end toward the TOP-RIGHT, tilted 45 degrees, all eight at the same size and the same angle, the end of the handle at the same spot in every cell"

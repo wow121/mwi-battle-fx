@@ -1,0 +1,52 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
+.ProgressBar_bar{position:relative;width:200px;overflow:hidden;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+</style></head><body>
+<!-- the game's header: action name + seconds per action (run-mock serves this page as mock.html) -->
+<div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm">挤奶 - 奶牛</div></div>
+ <div class="ProgressBar_bar"><div class="ProgressBar_innerBar__q" style="width:0"></div><div class="ProgressBar_text__102Yn" id="pt">2.50s</div></div></div></div>
+<div style="padding:20px">生活技能小窗测试（技能页面）</div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799'}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const inv=(item,count,enh=0)=>({itemLocationHrid:'/item_locations/inventory',itemHrid:'/items/'+item,enhancementLevel:enh,count});
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+const sk=(s,level,experience)=>({skillHrid:'/skills/'+s,level,experience});
+const act=(id,hrid,count,extra={})=>({id,actionHrid:hrid,currentCount:count,hasMaxCount:false,maxCount:0,ordinal:0,isDone:false,primaryItemHash:'',enhancingProtectionMinLevel:0,updatedAt:new Date(T0+(extra.at||0)).toISOString(),...extra});
+let T0=Date.now();
+const done=(a,items,skills)=>feed({type:'action_completed',endCharacterAction:a,endCharacterItems:items,endCharacterSkills:skills});
+const header=(name,s)=>{document.getElementById('nm').textContent=name;document.getElementById('pt').textContent=s};
+async function start(){
+ T0=Date.now(); const D=1600; let at=0;
+ const step=async(id,hrid,count,items,skills,extra={})=>{await sleep(D);at+=D;done(act(id,hrid,count,{...extra,at}),items,skills)};
+ const sw=async(name,acts,wait=300)=>{await sleep(wait);at+=wait;document.querySelector('.ProgressBar_innerBar__q').style.width='100%';header(name,(D/1000).toFixed(2)+'s');feed({type:'actions_updated',endCharacterActions:acts})};
+ const room=(r,level)=>['/house_rooms/'+r,{houseRoomHrid:'/house_rooms/'+r,level}];
+ header('挤奶 - 奶牛',(D/1000).toFixed(2)+'s');
+ feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},
+  characterHouseRoomMap:Object.fromEntries([room('dairy_barn',3),room('garden',0),room('log_shed',5),room('forge',8),room('workshop',1),room('sewing_parlor',0),room('kitchen',2),room('brewery',4),room('laboratory',7),room('observatory',6),room('dojo',2)]),
+  characterActions:[act(1,'/actions/milking/cow',0)],
+  characterSkills:[sk('milking',9,900),sk('woodcutting',20,5000),sk('cheesesmithing',15,3000),sk('enhancing',30,9000),sk('foraging',5,100)],
+  characterItems:[inv('milk',10),inv('cheese',30),inv('coin',100000),
+   slot('milking_tool','verdant_brush'),slot('woodcutting_tool','azure_hatchet'),slot('cheesesmithing_tool','verdant_hammer'),slot('enhancing_tool','cheese_enhancer'),slot('foraging_tool','azure_shears')]});
+ await step(1,'/actions/milking/cow',1,[inv('milk',12)],[sk('milking',9,912)]);
+ // milking -> cheesesmithing: a walk from the barn to the forge
+ await sw('奶酪锻造 - 奶酪剑',[act(1,'/actions/milking/cow',1,{isDone:true}),act(2,'/actions/cheesesmithing/cheese_sword',0,{hasMaxCount:true,maxCount:5})],3500);
+ await sleep(5000);
+ // the queue runs out: home
+ await sw('',[act(2,'/actions/cheesesmithing/cheese_sword',0,{isDone:true})]);
+ await sleep(5000);
+ // a fight: out through the gate
+ await sw('战斗 - 魔像洞穴',[act(3,'/actions/combat/golem_cave',0)]);
+ await sleep(5000);
+ // back to woodcutting
+ await sw('伐木 - 桦树',[act(3,'/actions/combat/golem_cave',0,{isDone:true}),act(4,'/actions/woodcutting/birch_tree',0)]);
+ await step(4,'/actions/woodcutting/birch_tree',1,[inv('birch_log',2)],[sk('woodcutting',20,5010)]);
+}
+function back(){}
+</script></body></html>
