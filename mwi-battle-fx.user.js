@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.17.0
+// @version      0.17.1
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -489,6 +489,9 @@
     const d = "labyrinth_d" + Math.min(5, Math.max(1, Math.ceil((floor || 1) / 4)))
     return Assets.has("bg", d) ? d : "labyrinth"
   }
+  // a fighter's size on a stage SW x SH with n on its side: a row of three (a planet fight of a full party) sets it,
+  // so a lone fighter (the labyrinth) is no bigger than one in a party; only a longer row shrinks it to fit
+  const unitSize = (SW, SH, n) => Math.min(SH * 0.5, (SW * 0.44) / (1 + 0.72 * (Math.max(n, 3) - 1)))
   function stageLocation() {
     if (where.labyrinth) return labyrinthBg(where.floor)
     const loc = ZONE_LOC[where.zone]
@@ -1598,7 +1601,7 @@
         const n = list.length
         // shrink with the head count so neighbours overlap by at most ~30%
         // players are drawn edge to edge (no frame margin): smaller than the monsters
-        const s = Math.min(SH * 0.5, SW * 0.21, (SW * 0.44) / (1 + 0.72 * Math.max(0, n - 1))) * cfg.scale * (side === "p" ? PLAYER_SCALE : 1)
+        const s = unitSize(SW, SH, n) * cfg.scale * (side === "p" ? PLAYER_SCALE : 1)
         const room = SW * 0.44 - s
         const step = n > 1 ? Math.min(s * 0.78, room / (n - 1)) : 0
         list.forEach((a, k) => {
@@ -3684,7 +3687,7 @@
         const bars = el.offsetHeight - view.offsetHeight
         const W = docked.clientWidth
         const H = trial?.from === "guild" ? cfg.guildH : cfg.liveH
-        const s = (curScale = Math.max(0.5, (Math.min(H * 0.5, W * 0.21) * 0.75 * cfg.scale) / 96))
+        const s = (curScale = Math.max(0.5, (unitSize(W, H, 1) * 0.75 * cfg.scale) / 96))
         view.style.height = H + "px"
         docked.style.minHeight = Math.ceil(H + bars) + "px"
         scene.style.transform = `scale(${s})`

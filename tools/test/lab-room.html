@@ -1,0 +1,25 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.LabyrinthPanel_roomTab__x{margin:20px;width:700px;min-height:200px;background:#262c48;padding:10px}
+</style></head><body>
+<!-- a labyrinth skilling room: the 房间 tab without a battle in it (run-mock serves this page as mock.html) -->
+<div class="LabyrinthPanel_roomTab__x">迷宫房间（原版）：挤奶 Lv.80</div>
+<div id="gp0" style="display:none"></div><div class="bfx-panel" style="display:none"></div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799'}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+async function start(){
+ feed({type:'init_character_data',character:{id:7,name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},characterActions:[],characterSkills:[{skillHrid:'/skills/milking',level:90,experience:1}],characterItems:[slot('milking_tool','holy_brush')]});
+ await sleep(1500);
+ feed({type:'labyrinth_updated',labyrinth:{isActive:true,currentFloor:6,pathData:JSON.stringify([{x:1,y:0}]),roomData:[[{roomType:'/labyrinth_room_types/combat'},{roomType:'/labyrinth_room_types/skilling',skillHrid:'/skills/milking',recommendedLevel:80}]]}});
+ const m={successRate:0.75,doubleProgressChance:0.1,progressPerAction:160,targetLevel:null,actionTimeMs:2000,timeoutAt:new Date(Date.now()+600e3).toISOString(),targetWorkValue:1600,currentWorkValue:0,currentEnhLevel:0,actionCounter:0};
+ for(let i=0;i<8;i++){feed({type:'labyrinth_room_progress',...m});m.actionCounter++;m.currentWorkValue+=160;await sleep(2000)}
+}
+function back(){console.log('STATE',JSON.stringify({el:!!document.querySelector('.bfxl'),docked:!!document.querySelector('.bfxl.docked'),disp:document.querySelector('.bfxl')?.style.display,cls:document.querySelector('.bfxl')?.className,parent:document.querySelector('.bfxl')?.parentElement?.className}))}
+</script></body></html>
