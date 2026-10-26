@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.16.4
+// @version      0.16.5
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -796,7 +796,7 @@
       const grip = rects.weapon ? [fist[0] / 2 - dx, fist[1] / 2 - dy] : [w / 2, h * 0.6]
       const W = Math.max(...Object.values(rects).map(x => x[0] + x[2])) + 2
       const H = Math.max(...Object.values(rects).map(x => x[1] + x[3]))
-      return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1] }
+      return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1], dir: index.dirs?.[k]?.[0] }
     }
     const list = prefix => (index ? Object.keys(index.layers).filter(k => (prefix ? k.startsWith(prefix) : !/^[ao]_/.test(k))) : [])
     return { ready, held, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
@@ -1380,7 +1380,15 @@
           const img = document.createElementNS(SVGNS, "image")
           attrs(img, { href: pc.url, width: pc.W, height: pc.H })
           box.appendChild(img)
-          g.appendChild(box)
+          if (/crossbow/.test(id) && pc.dir != null) {
+            // crossbows were drawn upright like the bows: laid level, bolt toward the enemy, the hand on the stock
+            // a third of the way from its butt (the drawn grip sits off the stock, at the bottom corner)
+            const lay = document.createElementNS(SVGNS, "g")
+            const [cx, cy] = [x + w / 2, y + h / 2]
+            lay.setAttribute("transform", `translate(${hx + h * 0.17 - cx} ${hy - 1 - cy}) rotate(${pc.dir - 90} ${cx} ${cy})`)
+            lay.appendChild(box)
+            g.appendChild(lay)
+          } else g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
           if (isBulwark(id)) g.dataset.big = 1
