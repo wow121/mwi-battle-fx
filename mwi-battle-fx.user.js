@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.16.5
+// @version      0.16.6
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3349,7 +3349,9 @@
 }
 .bfxl.min .bfxl-view,.bfxl.min .bfxl-bar{display:none}
 .bfxl-view{position:relative;overflow:hidden;height:150px}
-.bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0}
+.bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0;background:var(--bfxl-bg)}
+.bfxl.docked .bfxl-view{background:var(--bfxl-bg)}
+.bfxl.docked .bfxl-scene{background:none;overflow:visible}
 .bfxl-scene svg{position:absolute;overflow:visible}
 .bfxl-hero{position:absolute;left:62px;bottom:10px;width:96px;height:96px}
 .bfxl-hero>svg{left:0;top:0;width:100%;height:100%}
@@ -3647,23 +3649,28 @@
     let lastTap = 0 // last still tap on the title bar (double tap = back to the default spot)
     function place() {
       if (!el) return
+      const scene = el.querySelector(".bfxl-scene")
       if (docked) {
-        // laid over the game's panel: as wide as it (at most 2.2x), the panel grown to hold it
+        // laid over the game's panel like the battle stage it takes turns with: as tall as that stage, the hero
+        // as big as a player on it (same sizing, PLAYER_SCALE 0.75) and standing on its ground line, the backdrop
+        // across the whole panel; scaled to the panel's width the figures came out about twice the fighters' size
         const view = el.querySelector(".bfxl-view")
         const bars = el.offsetHeight - view.offsetHeight
-        const s = (curScale = Math.max(0.5, Math.min(docked.clientWidth / 340, 2.2)))
-        view.style.height = 150 * s + "px"
-        docked.style.minHeight = Math.ceil(150 * s + bars) + "px"
-        const scene = el.querySelector(".bfxl-scene")
+        const W = docked.clientWidth
+        const H = trial?.from === "guild" ? cfg.guildH : cfg.liveH
+        const s = (curScale = Math.max(0.5, (Math.min(H * 0.5, W * 0.21) * 0.75 * cfg.scale) / 96))
+        view.style.height = H + "px"
+        docked.style.minHeight = Math.ceil(H + bars) + "px"
         scene.style.transform = `scale(${s})`
-        scene.style.marginLeft = Math.max(0, (docked.clientWidth - 340 * s) / 2) + "px"
+        scene.style.marginLeft = Math.max(0, (W - 340 * s) / 2) + "px"
+        scene.style.marginTop = Math.max(0, Math.min(H * 0.84, H - 34) - 140 * s) + "px"
         return
       }
-      el.querySelector(".bfxl-scene").style.marginLeft = ""
+      scene.style.marginLeft = scene.style.marginTop = ""
       const s = (curScale = winScale())
       el.style.width = cfg.lifeIcon ? "" : 340 * s + "px"
       el.querySelector(".bfxl-view").style.height = 150 * s + "px"
-      el.querySelector(".bfxl-scene").style.transform = `scale(${s})`
+      scene.style.transform = `scale(${s})`
       const w = cfg.lifeIcon ? 46 : 340 * s
       const h = el.offsetHeight
       const [x, y] = cfg.lifePos || defaultPos(w, h)
@@ -4065,8 +4072,13 @@
       const bg = guildBg || (kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill)
       // a labyrinth room is in the labyrinth's depth backdrop
       const trialBg = trial?.from === "lab" ? labyrinthBg(labyrinth?.currentFloor) : null
-      if (trialBg && Assets.has("bg", trialBg)) scene.style.background = `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
-      else scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
+      // on the window's root: docked, the backdrop fills the whole view around the (smaller) scene
+      el.style.setProperty(
+        "--bfxl-bg",
+        trialBg && Assets.has("bg", trialBg)
+          ? `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
+          : (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind]),
+      )
       // hero: avatar + outfit, the skill's tool in the front hand
       const hero = el.querySelector(".bfxl-hero")
       hero.innerHTML = ""
