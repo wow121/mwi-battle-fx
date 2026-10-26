@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.17.1
+// @version      0.17.2
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -3068,14 +3068,16 @@
         enhLevel = a
         cur = trial.cur = { ...cur, primaryItemHash: `0::/item_locations/inventory::/items/${skill}_essence::${a}` }
         showEnh()
+        if (trial.from === "lab") roomEvent(a > b, false)
         trialStage(true)
         if (a > b) enhSuccess(b, a)
         else enhFail(b, a, false)
         return
       }
       const gain = (obj.currentWorkValue || 0) - (prev.currentWorkValue || 0)
-      trialStage(true)
       const double = gain > 0 && obj.progressPerAction && gain >= obj.progressPerAction * 1.9
+      if (trial.from === "lab") roomEvent(gain > 0, double)
+      trialStage(true)
       const who = trial.from === "guild" ? memberAct(gain > 0) : null
       if (who) {
         // one of the guild: the strike lands on the project, the progress rises from them
@@ -3413,6 +3415,56 @@
 .bfxl-seal.broken{background:conic-gradient(#ff4a3a var(--p,0deg),#3a0f0f88 0);box-shadow:0 0 12px #ff3a2a}
 @keyframes bfxl-seal{to{rotate:360deg}}
 .bfxl-seal b{animation:bfxl-seal 9s linear infinite reverse}
+.bfxl.labroom .bfxl-seal,.bfxl.labroom .bfxl-info{display:none!important}
+.bfxl-room{position:absolute;left:0;top:0;height:150px;transform-origin:0 0;pointer-events:none}
+.bfxl-room svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
+.bfxl-door{position:absolute;bottom:8px;width:130px;height:190px}
+.bfxl-door.entry{left:0}
+.bfxl-door.exit{right:0}
+.bfxl-leaf{transform-box:fill-box;transition:transform 1.4s cubic-bezier(.5,0,.3,1)}
+.bfxl-leaf.l{transform-origin:0 50%}
+.bfxl-leaf.r{transform-origin:100% 50%}
+.bfxl-door.open .bfxl-leaf{transform:scaleX(.12)}
+.bfxl-dglow{opacity:0;transition:opacity 1.2s}
+.bfxl-door.open .bfxl-dglow{opacity:1}
+.bfxl-dseal{transition:opacity .6s}
+.bfxl-door.open .bfxl-dseal{opacity:0}
+.bfxl-dseal .ring{fill:#1a1430;stroke:#8a6cff;stroke-width:2;transition:stroke .2s;animation:bfxl-sealpulse 2.4s ease-in-out infinite}
+.bfxl-dseal .r{fill:#3a2d66;transition:fill .4s}
+.bfxl-dseal .r.lit{fill:#ffd75a;filter:drop-shadow(0 0 2px #ffd75a)}
+.bfxl-dseal text{font:700 8.5px sans-serif;fill:#ffe9a0;text-anchor:middle}
+.bfxl-dseal.red .ring{stroke:#ff4a3a;filter:drop-shadow(0 0 5px #ff3a2a)}
+.bfxl-dseal.red .r.lit{fill:#ff6a4a}
+@keyframes bfxl-sealpulse{50%{filter:drop-shadow(0 0 4px #8a6cff)}}
+.bfxl-torch{position:absolute;top:62px;width:6px;height:16px;background:linear-gradient(#5a4a3a,#2a2018);border-radius:1px}
+.bfxl-door.entry .bfxl-torch{left:-8px}
+.bfxl-door.exit .bfxl-torch{right:-8px}
+.bfxl-torch::before{content:"";position:absolute;left:-4px;top:-15px;width:14px;height:18px;border-radius:50% 50% 45% 45%/60% 60% 40% 40%;transform-origin:50% 100%;
+  background:radial-gradient(ellipse at 50% 75%,#fff6c0,#ffb030 40%,#ff5a1a 68%,transparent 72%);animation:bfxl-flame .18s ease-in-out infinite alternate}
+.bfxl-torch::after{content:"";position:absolute;left:-52px;top:-62px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,#ffb04a50,transparent 65%);animation:bfxl-tglow 2.2s ease-in-out infinite alternate}
+@keyframes bfxl-flame{from{transform:scale(1,1) skewX(-3deg)}to{transform:scale(.9,1.12) skewX(4deg)}}
+@keyframes bfxl-tglow{from{opacity:.6}to{opacity:1}}
+.bfxl-floor{position:absolute;left:calc(var(--sx) + 40px);top:100px;width:300px;height:80px}
+.bfxl-runes text{font:700 15px serif;fill:#5e4fa8;text-anchor:middle;transition:fill .4s}
+.bfxl-runes text.lit{fill:#ffe27a;filter:drop-shadow(0 0 3px #ffb300)}
+.bfxl-ci{animation:bfxl-dash 8s linear infinite}
+@keyframes bfxl-dash{to{stroke-dashoffset:-110}}
+.bfxl-pile{position:absolute;left:calc(var(--sx) - 52px);bottom:10px;width:110px;height:80px}
+.bfxl-pi{position:absolute;width:22px;height:22px;filter:drop-shadow(0 1px 1px #000a)}
+.bfxl-peek{position:absolute;bottom:-17px;width:144px;height:144px;filter:brightness(.55) saturate(.8)}
+.bfxl-amb{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:hidden}
+.bfxl-amb i{position:absolute;width:4px;height:4px;border-radius:50%;background:#bfffe9;box-shadow:0 0 6px 2px #5fffd0aa;animation:bfxl-fly 9s ease-in-out infinite alternate,bfxl-blink 2.6s ease-in-out infinite}
+@keyframes bfxl-fly{to{transform:translate(var(--dx),var(--dy))}}
+@keyframes bfxl-blink{0%,100%{opacity:.15}50%{opacity:.9}}
+.bfxl-amb::after{content:"";position:absolute;left:-20%;right:-20%;bottom:0;height:30%;animation:bfxl-mist 14s ease-in-out infinite alternate;
+  background:radial-gradient(ellipse at 30% 100%,#8fa8ff26,transparent 60%),radial-gradient(ellipse at 75% 100%,#b08fff20,transparent 55%)}
+@keyframes bfxl-mist{to{transform:translateX(8%)}}
+.bfxl-amb b{position:absolute;top:0;background:linear-gradient(#8a8898,#4a4858);clip-path:polygon(20% 0,85% 12%,100% 60%,70% 100%,10% 85%,0 35%)}
+.bfxl-tablet{position:absolute;left:10px;top:8px;z-index:7;padding:5px 10px 6px;font:11px/1.55 sans-serif;color:#e8e2cc;pointer-events:none;
+  background:linear-gradient(#4a4e62ee,#2c2f40ee);border:1px solid #7a7d94;border-radius:3px;box-shadow:inset 0 0 0 2px #1d2030,0 3px 10px #0008;text-shadow:0 1px 1px #000}
+.bfxl-tablet .t{font-weight:700;color:#ffd98a;border-bottom:1px solid #ffffff22;margin-bottom:2px;padding-bottom:1px}
+.bfxl-tablet span{margin-right:10px}
+.bfxl-tablet span:last-child{margin-right:0}
 .bfxl-target.obst{width:150px;height:100px;right:62px;bottom:4px}
 .bfxl-target.source{right:150px}
 .bfxl-project{position:absolute;width:150px;height:100px;right:6px;bottom:2px;pointer-events:none}
@@ -3684,15 +3736,30 @@
         // as big as a player on it (same sizing, PLAYER_SCALE 0.75) and standing on its ground line, the backdrop
         // across the whole panel; scaled to the panel's width the figures came out about twice the fighters' size
         const view = el.querySelector(".bfxl-view")
-        const bars = el.offsetHeight - view.offsetHeight
+        // the title bar and the bars under the picture, measured one by one: docked, the window stretches over the
+        // whole panel, and its height less the picture's grew the panel by the panel's padding every second
+        const bars = [...el.children].reduce((h, c) => h + (c === view ? 0 : c.offsetHeight), 0)
         const W = docked.clientWidth
         const H = trial?.from === "guild" ? cfg.guildH : cfg.liveH
         const s = (curScale = Math.max(0.5, (unitSize(W, H, 1) * 0.75 * cfg.scale) / 96))
-        view.style.height = H + "px"
         docked.style.minHeight = Math.ceil(H + bars) + "px"
+        // the game's own content under it may be taller: the picture fills the panel rather than leave a gap
+        const Hv = Math.max(H, docked.clientHeight - bars)
+        view.style.height = Hv + "px"
+        const sceneL = Math.max(0, (W - 340 * s) / 2)
+        const ground = Math.min(Hv * 0.84, Hv - 34)
         scene.style.transform = `scale(${s})`
-        scene.style.marginLeft = Math.max(0, (W - 340 * s) / 2) + "px"
-        scene.style.marginTop = Math.max(0, Math.min(H * 0.84, H - 34) - 140 * s) + "px"
+        scene.style.marginLeft = sceneL + "px"
+        scene.style.marginTop = Math.max(0, ground - 140 * s) + "px"
+        roomGeo = { W, ground, s, sceneL }
+        // the labyrinth room's hall: 140 scene units each side of the scene, narrower when the panel is
+        const room = roomEl()
+        if (room) {
+          const rw = Math.min(620, W / s)
+          const rl = Math.max(0, Math.min(W - rw * s, sceneL - 140 * s))
+          Object.assign(room.style, { left: rl + "px", top: Math.max(0, ground - 140 * s) + "px", width: rw + "px", transform: `scale(${s})` })
+          room.style.setProperty("--sx", (sceneL - rl) / s + "px")
+        }
         return
       }
       scene.style.marginLeft = scene.style.marginTop = ""
@@ -3880,8 +3947,214 @@
         ).onfinish = gone(p)
       }
     }
+    // ----- the labyrinth room, docked over the 房间 tab: a hall around the skilling scene -----
+    // The scene is laid out for the 340 px window: over the wide room tab it was a small group in an empty backdrop.
+    // Around it now: the way in (an open archway) on the left and the sealed way on (a closed door with the room's
+    // seal) on the right, torches on both; a rune circle on the floor under the hero and the work, a rune lit per
+    // twelfth of the progress; what the attempts brought piled at the hero's feet; fireflies, floor mist and now and
+    // then a monster peeking round a door; a failure shakes stones loose. The room's numbers are on a stone tablet in
+    // the corner instead of the lines under the picture. Laid out in scene units (scaled like the scene) by place().
+    const RUNES = "ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃ"
+    const PEEKERS = ["rat", "myconid", "slimy", "zombie", "abyssal_imp", "dusk_revenant", "eye", "mimic", "jungle_sprite", "vampire", "skunk", "snake"]
+    // the pile's places, bottom row first: [x, height] in the pile's box
+    const PILE = [7, 6, 5, 4, 3, 2, 1].flatMap((n, row) => Array.from({ length: n }, (_, j) => [55 + (j - (n - 1) / 2) * 15 + (((row * 7 + j * 5) % 5) - 2), row * 10]))
+    let roomGeo = null // { W, ground, s, sceneL }: the view as last placed, in view pixels
+    let nextPeek = 0
+    const roomEl = () => el?.querySelector(".bfxl-room")
+    function doorSvg(exit) {
+      const leaf = l =>
+        `<g class="bfxl-leaf ${l ? "l" : "r"}"><path d="${l ? "M25 190V70A40 40 0 0 1 65 30V190Z" : "M105 190V70A40 40 0 0 0 65 30V190Z"}" fill="url(#bfxl-wood)" stroke="#24160c" stroke-width="1.2"/>` +
+        `<path d="${l ? "M38 46V190M51 34V190" : "M79 34V190M92 46V190"}" stroke="#2a1a0e" stroke-width="1"/>` +
+        `<rect x="${l ? 25 : 65}" y="96" width="40" height="5" fill="#2c2c34"/><rect x="${l ? 25 : 65}" y="152" width="40" height="5" fill="#2c2c34"/>` +
+        `<circle cx="${l ? 31 : 99}" cy="98.5" r="1.6" fill="#8a8a90"/><circle cx="${l ? 31 : 99}" cy="154.5" r="1.6" fill="#8a8a90"/>` +
+        `<circle cx="${l ? 58 : 72}" cy="134" r="3.5" fill="none" stroke="#8a8a90" stroke-width="1.4"/></g>`
+      const seal = exit
+        ? `<g class="bfxl-dseal"><circle class="ring" cx="65" cy="118" r="15"/>` +
+          Array.from({ length: 8 }, (_, k) => `<circle class="r" cx="${(65 + 21 * Math.cos(((k * 45 - 90) * Math.PI) / 180)).toFixed(1)}" cy="${(118 + 21 * Math.sin(((k * 45 - 90) * Math.PI) / 180)).toFixed(1)}" r="2.6"/>`).join("") +
+          `<text x="65" y="121.5"></text></g>`
+        : ""
+      return (
+        `<svg viewBox="0 0 130 190"><defs><linearGradient id="bfxl-stone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#666c88"/><stop offset="1" stop-color="#30344a"/></linearGradient>` +
+        `<linearGradient id="bfxl-wood" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5b3b22"/><stop offset=".5" stop-color="#6e4a2c"/><stop offset="1" stop-color="#4a2f1a"/></linearGradient>` +
+        `<radialGradient id="bfxl-gold" cx=".5" cy=".7" r=".7"><stop offset="0" stop-color="#fff6c8"/><stop offset=".45" stop-color="#ffd75a"/><stop offset="1" stop-color="#b8741a"/></radialGradient>` +
+        `<radialGradient id="bfxl-mist" cx=".5" cy="1" r=".9"><stop offset="0" stop-color="#3a4a8a"/><stop offset=".6" stop-color="#121633"/><stop offset="1" stop-color="#05060c"/></radialGradient></defs>` +
+        `<path d="M25 190V70A40 40 0 0 1 105 70V190Z" fill="${exit ? "#120d08" : "url(#bfxl-mist)"}"/>` +
+        (exit ? `<path class="bfxl-dglow" d="M25 190V70A40 40 0 0 1 105 70V190Z" fill="url(#bfxl-gold)"/>` : "") +
+        leaf(true) +
+        leaf(false) +
+        seal +
+        `<path d="M4 190V70A61 61 0 0 1 126 70V190H105V70A40 40 0 0 0 25 70V190Z" fill="url(#bfxl-stone)" stroke="#171a26" stroke-width="1.5"/>` +
+        `<path d="M4 100H25M4 130H25M4 160H25M105 100H126M105 130H126M105 160H126M10 40L29 52M120 40L101 52M40 13L48 33M90 13L82 33" stroke="#1c2030" stroke-width="1.2"/>` +
+        `<path d="M57 7H73L70 31H60Z" fill="#6a7090" stroke="#171a26"/><rect x="-4" y="184" width="138" height="6" rx="1" fill="#3a3e52"/></svg>`
+      )
+    }
+    function floorSvg() {
+      const runes = [...RUNES].map((r, i) => {
+        const a = ((90 + i * 30) * Math.PI) / 180
+        return `<text x="${(150 + 132 * Math.cos(a)).toFixed(1)}" y="${(45.5 + 31 * Math.sin(a)).toFixed(1)}">${r}</text>`
+      })
+      return (
+        `<svg viewBox="0 0 300 80"><defs><radialGradient id="bfxl-cglow"><stop offset="0" stop-color="#ffd75a" stop-opacity=".5"/><stop offset="1" stop-color="#ffd75a" stop-opacity="0"/></radialGradient></defs>` +
+        `<ellipse class="bfxl-cg" cx="150" cy="40" rx="150" ry="40" fill="url(#bfxl-cglow)"/>` +
+        `<ellipse cx="150" cy="40" rx="144" ry="36" fill="none" stroke="#6d5fb0" stroke-opacity=".7" stroke-width="2"/>` +
+        `<path class="bfxl-cp" d="M150 76A144 36 0 1 1 150 4A144 36 0 1 1 150 76" fill="none" stroke="#ffd75a" stroke-width="3" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow(0 0 3px #ffb300)"/>` +
+        `<ellipse class="bfxl-ci" cx="150" cy="40" rx="118" ry="27" fill="none" stroke="#9f8cff" stroke-opacity=".8" stroke-width="1.2" stroke-dasharray="6 5"/>` +
+        `<ellipse cx="150" cy="40" rx="70" ry="16" fill="none" stroke="#9f8cff" stroke-opacity=".45"/><g class="bfxl-runes">${runes.join("")}</g></svg>`
+      )
+    }
+    // what an attempt brings: the room's milk / logs / fruit, else the skill's essence
+    function roomItem() {
+      const sk = trial.skill
+      if (SKILL[sk][2] !== "gather") return sk + "_essence"
+      return sk === "milking" ? "milk" : gameData()?.actions[cur.actionHrid]?.drops?.[0]?.[0] || sk + "_essence"
+    }
+    const roomPileN = d => (d.targetLevel !== null && d.targetLevel !== undefined ? 0 : Math.round((d.currentWorkValue || 0) / (d.progressPerAction || 1)))
+    function showRoom() {
+      const want = !!el && trial?.from === "lab" && !!docked
+      let room = roomEl()
+      if (!want || room?.dataset.key !== trial.key) {
+        room?.remove()
+        el?.querySelectorAll(".bfxl-amb,.bfxl-tablet").forEach(e => e.remove())
+        room = null
+      }
+      el?.classList.toggle("labroom", want)
+      if (!want) return
+      const view = el.querySelector(".bfxl-view")
+      if (!room) {
+        room = document.createElement("div")
+        room.className = "bfxl-room"
+        room.dataset.key = trial.key
+        room.innerHTML = `<div class="bfxl-door entry open">${doorSvg(false)}<i class="bfxl-torch"></i></div><div class="bfxl-door exit">${doorSvg(true)}<i class="bfxl-torch"></i></div><div class="bfxl-floor">${floorSvg()}</div><div class="bfxl-pile"></div>`
+        view.insertBefore(room, view.firstChild)
+        const r = (a, b) => a + Math.random() * (b - a)
+        const amb = document.createElement("div")
+        amb.className = "bfxl-amb"
+        amb.innerHTML = Array.from({ length: 16 }, () => `<i style="left:${r(3, 95)}%;top:${r(12, 80)}%;--dx:${r(-60, 60)}px;--dy:${r(-40, 30)}px;animation-duration:${r(6, 13)}s,${r(1.8, 3.6)}s;animation-delay:-${r(0, 12)}s,-${r(0, 3)}s"></i>`).join("")
+        view.appendChild(amb)
+        const tab = document.createElement("div")
+        tab.className = "bfxl-tablet"
+        view.appendChild(tab)
+        nextPeek = performance.now() + r(5000, 12000)
+        layoutDirty = true
+      }
+      const d = trial.data
+      const enh = d.targetLevel !== null && d.targetLevel !== undefined
+      const p = Math.max(0, Math.min(1, trialProgress(d)))
+      const lit = Math.floor(p * 12 + 1e-6)
+      room.querySelectorAll(".bfxl-runes text").forEach((t, i) => t.classList.toggle("lit", i < lit))
+      room.querySelector(".bfxl-cp").setAttribute("stroke-dasharray", `${p * 100} 100`)
+      room.querySelector(".bfxl-cg").style.opacity = 0.2 + p * 0.8
+      const seal = room.querySelector(".bfxl-dseal")
+      seal.querySelectorAll(".r").forEach((c, i) => c.classList.toggle("lit", i < Math.floor(p * 8 + 1e-6)))
+      seal.querySelector("text").textContent = enh ? `+${d.currentEnhLevel || 0}/${d.targetLevel}` : Math.floor(p * 100) + "%"
+      // a new room, or attempts that were not played (the page out of sight): the pile catches up at once
+      pileSet(roomPileN(d), false)
+      const floor = labyrinth?.currentFloor
+      const rm = labRoom()
+      const head = `${floor ? L(`迷宫 第 ${floor} 层`, `Labyrinth floor ${floor}`) : L("迷宫", "Labyrinth")} · ${L(...(SKILL[trial.skill] || [trial.skill, trial.skill]).slice(0, 2))}${rm?.recommendedLevel ? " Lv." + rm.recommendedLevel : ""}`
+      const html = `<div class="t">${head}</div>` + trialLines().map(l => `<div>${l.map(x => `<span>${x}</span>`).join("")}</div>`).join("")
+      const tab = view.querySelector(".bfxl-tablet")
+      if (tab.innerHTML !== html) tab.innerHTML = html
+    }
+    function pileSet(n, fly) {
+      const pile = roomEl()?.querySelector(".bfxl-pile")
+      if (!pile) return
+      const item = roomItem()
+      if (pile.dataset.item !== item) {
+        pile.innerHTML = ""
+        pile.dataset.item = item
+      }
+      n = Math.min(n, PILE.length)
+      while (pile.children.length > n) pile.lastChild.remove()
+      for (let k = pile.children.length, i = 0; k < n; k++, i++) {
+        const [x, y] = PILE[k]
+        const it = document.createElement("div")
+        it.className = "bfxl-pi"
+        Object.assign(it.style, { left: x - 11 + "px", bottom: y + "px" })
+        it.appendChild(svgUse("items", item))
+        pile.appendChild(it)
+        // thrown back from the hero's hands (the hero stands right of the pile)
+        if (fly) it.animate([{ transform: `translate(${182 - x}px,${y - 60}px) scale(.6)`, opacity: 0 }, { transform: `translate(${(182 - x) / 2}px,${y - 105}px)`, opacity: 1, offset: 0.5 }, { transform: "none", opacity: 1 }], { duration: 650, delay: 300 + i * 120, easing: "ease-in", fill: "backwards" })
+      }
+    }
+    // one attempt in the room: the circle flares (twice for double progress) and the work lands on the pile; a
+    // failure flashes the door's seal red and shakes stones loose
+    function roomEvent(ok, double) {
+      const room = roomEl()
+      if (!room) return
+      if (ok) {
+        pileSet(roomPileN(trial.data), true)
+        showRoom()
+        room.querySelector(".bfxl-floor").animate([{ filter: "brightness(1)" }, { filter: "brightness(2.2)" }, { filter: "brightness(1)" }], { duration: 600, iterations: double ? 2 : 1 })
+        const lit = room.querySelectorAll(".bfxl-runes text.lit")
+        lit[lit.length - 1]?.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, iterations: 3 })
+      } else {
+        const seal = room.querySelector(".bfxl-dseal")
+        seal.classList.add("red")
+        later(700, () => seal.classList.remove("red"))
+        room.animate([{ translate: "0 0" }, { translate: "-3px 0" }, { translate: "3px 1px" }, { translate: "0 0" }], { duration: 300 })
+        rocks(4)
+      }
+    }
+    // stones dropping from the ceiling onto the floor round the scene
+    function rocks(n) {
+      const amb = el.querySelector(".bfxl-amb")
+      if (!amb || !roomGeo) return
+      const { W, ground, s } = roomGeo
+      for (let i = 0; i < n; i++) {
+        const b = document.createElement("b")
+        const sz = (5 + Math.random() * 7) * s
+        Object.assign(b.style, { left: W / 2 + (Math.random() - 0.5) * 380 * s + "px", width: sz + "px", height: sz + "px" })
+        amb.appendChild(b)
+        const rot = (Math.random() - 0.5) * 540
+        b.animate([{ transform: "translateY(-20px)", opacity: 1 }, { transform: `translateY(${ground - sz}px) rotate(${rot}deg)`, opacity: 1, offset: 0.8 }, { transform: `translateY(${ground - sz - 5}px) rotate(${rot * 1.1}deg)`, opacity: 0 }], { duration: 700 + Math.random() * 300, delay: i * 90, easing: "ease-in", fill: "backwards" }).onfinish = gone(b)
+      }
+    }
+    // now and then one of the labyrinth's monsters peeks round a door frame, looks at the hero and slips back
+    function roomTick() {
+      const room = roomEl()
+      if (!room || !visible() || performance.now() < nextPeek) return
+      nextPeek = performance.now() + 14000 + Math.random() * 16000
+      const ids = PEEKERS.filter(id => Assets.has("m", id))
+      if (!ids.length) return
+      const id = ids[(Math.random() * ids.length) | 0]
+      const left = Math.random() < 0.5
+      const pk = document.createElement("img")
+      pk.className = "bfxl-peek"
+      pk.src = Assets.url(`m/${id}/idle.webp`)
+      pk.draggable = false
+      pk.style[left ? "left" : "right"] = "-7px"
+      // behind the door: it comes out past the frame toward the middle (the drawings face left)
+      room.insertBefore(pk, room.querySelector(left ? ".entry" : ".exit"))
+      const f = left ? "scaleX(-1)" : ""
+      const out = left ? 80 : -80
+      pk.animate([{ transform: `translateX(0) ${f}` }, { transform: `translateX(${out}px) ${f}`, offset: 0.2 }, { transform: `translateX(${out}px) translateY(-3px) ${f}`, offset: 0.45 }, { transform: `translateX(${out}px) ${f}`, offset: 0.75 }, { transform: `translateX(0) ${f}` }], { duration: 4200, easing: "ease-in-out" }).onfinish = gone(pk)
+    }
+    // the room through: the circle blazes, the sealed door swings open on a golden light; or its seal cracks red
+    function roomFinale(ok) {
+      const room = roomEl()
+      const exit = room.querySelector(".exit")
+      const [x, y] = boxAt(exit)
+      if (ok) {
+        showRoom()
+        room.querySelector(".bfxl-floor").animate([{ filter: "brightness(1)" }, { filter: "brightness(3)" }, { filter: "brightness(1.5)" }], { duration: 1200, fill: "forwards" })
+        later(400, () => exit.classList.add("open"))
+        later(1000, () => {
+          FX.shards ||= [["#ffd75a", "#9fe0ff", "#ffffff"], "chip"]
+          burst("shards", x, y, 24, true)
+          bigItem("labyrinth_token", x, y + 20, 34, "#ffd75a", 2000, 30)
+        })
+      } else {
+        room.querySelector(".bfxl-dseal").classList.add("red")
+        rocks(9)
+        const f = fxEl("bfxl-dim", "background:#600")
+        f.animate([{ opacity: 0 }, { opacity: 0.45 }, { opacity: 0 }], { duration: 900 }).onfinish = gone(f)
+      }
+      return true
+    }
     // ----- the labyrinth room's seal: a ring of runes over the scene, lit by the progress -----
     function showSeal() {
+      showRoom()
       const room = trial?.from === "lab"
       let seal = el?.querySelector(".bfxl-seal")
       if (!room || seal?.dataset.key !== trial.key) seal?.remove()
@@ -3901,6 +4174,7 @@
     }
     // the end of a trial: the project's last stage with its own flourish; the room's seal breaking (or cracking red)
     function trialFinale(ok) {
+      if (roomEl()) return roomFinale(ok)
       const seal = el.querySelector(".bfxl-seal")
       if (seal) {
         const [x, y] = boxAt(seal)
@@ -5636,6 +5910,7 @@
     setInterval(() => {
       trialTick()
       ensure()
+      roomTick()
       if (el && !cfg.lifePos) place()
       if (raf === 0 && visible() && !cfg.lifeMin && (isLife(cur) || inTown())) raf = requestAnimationFrame(frame)
     }, 1000)

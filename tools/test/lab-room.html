@@ -19,7 +19,9 @@ async function start(){
  await sleep(1500);
  feed({type:'labyrinth_updated',labyrinth:{isActive:true,currentFloor:6,pathData:JSON.stringify([{x:1,y:0}]),roomData:[[{roomType:'/labyrinth_room_types/combat'},{roomType:'/labyrinth_room_types/skilling',skillHrid:'/skills/milking',recommendedLevel:80}]]}});
  const m={successRate:0.75,doubleProgressChance:0.1,progressPerAction:160,targetLevel:null,actionTimeMs:2000,timeoutAt:new Date(Date.now()+600e3).toISOString(),targetWorkValue:1600,currentWorkValue:0,currentEnhLevel:0,actionCounter:0};
- for(let i=0;i<8;i++){feed({type:'labyrinth_room_progress',...m});m.actionCounter++;m.currentWorkValue+=160;await sleep(2000)}
+ feed({type:'labyrinth_room_progress',...m});await sleep(2000);
+ // success, failure, double progress ... until the room is through
+ for(const g of [1,0,2,1,1,0,1,2,1,1]){m.actionCounter++;m.currentWorkValue+=160*g;feed({type:'labyrinth_room_progress',...m});await sleep(2000)}
 }
-function back(){console.log('STATE',JSON.stringify({el:!!document.querySelector('.bfxl'),docked:!!document.querySelector('.bfxl.docked'),disp:document.querySelector('.bfxl')?.style.display,cls:document.querySelector('.bfxl')?.className,parent:document.querySelector('.bfxl')?.parentElement?.className}))}
+function back(){console.log('STATE',JSON.stringify({tabH:document.querySelector('[class*=LabyrinthPanel_roomTab]').offsetHeight,el:!!document.querySelector('.bfxl'),docked:!!document.querySelector('.bfxl.docked'),disp:document.querySelector('.bfxl')?.style.display,cls:document.querySelector('.bfxl')?.className,parent:document.querySelector('.bfxl')?.parentElement?.className}))}
 </script></body></html>
