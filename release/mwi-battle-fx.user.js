@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.16.3
+// @version      0.16.4
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -37,10 +37,13 @@
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
   const ASSET_REV = "9791b0c91b"
+  // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
+  const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
     "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json",
     DEFAULT_ASSET_BASE.replace(/@main$/, "@" + ASSET_REV) + "/assets/manifest.json",
     DEFAULT_ASSET_BASE + "/assets/manifest.json",
+    MIRROR + "main/assets/manifest.json",
   ]
   const cfg = { ...DEFAULTS, ...GM_getValue("battle_fx_cfg_v1", {}) }
   const saveCfg = () => GM_setValue("battle_fx_cfg_v1", cfg)
@@ -537,9 +540,51 @@
       next(0)
     }
     const has = (kind, id) => !!id && !!manifest?.[kind]?.includes(id)
+    // the mirror is taken while jsDelivr can't be reached: checked on page load, and again when an image from it fails
+    const JSD = DEFAULT_ASSET_BASE.replace(/@main$/, "@")
+    let mirror = GM_getValue("battle_fx_mirror_v1", false)
+    let probing = false
+    let probedAt = 0
+    function probe() {
+      if (custom() || probing || Date.now() - probedAt < 60e3) return
+      probing = true
+      probedAt = Date.now()
+      const done = ok => {
+        probing = false
+        if (mirror === !ok) return
+        mirror = !ok
+        GM_setValue("battle_fx_mirror_v1", mirror)
+        // what is already on screen switches over too (pinned urls only differ in their prefix)
+        const [from, to] = mirror ? [JSD, MIRROR] : [MIRROR, JSD]
+        for (const el of document.querySelectorAll("img, image"))
+          for (const a of ["src", "href"]) {
+            const v = el.getAttribute(a)
+            if (v?.includes(from)) el.setAttribute(a, v.split(from).join(to))
+          }
+        for (const el of document.querySelectorAll(`[style*="${from}"]`)) el.style.cssText = el.style.cssText.split(from).join(to)
+        listeners.forEach(f => f())
+      }
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: JSD + (manifest?.rev || ASSET_REV) + "/assets/manifest.json",
+        timeout: 8000,
+        onload: r => {
+          try {
+            done(!!JSON.parse(r.responseText))
+          } catch (e) {
+            done(false)
+          }
+        },
+        onerror: () => done(false),
+        ontimeout: () => done(false),
+      })
+    }
+    const failed = src => !mirror && String(src).startsWith(JSD) && probe()
+    document.addEventListener("error", e => e.target instanceof Element && failed(e.target.getAttribute("src") || e.target.getAttribute("href")), true)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
-    const url = path => (manifest?.rev && !custom() ? DEFAULT_ASSET_BASE.replace(/@main$/, "@" + manifest.rev) : base()) + "/assets/" + path
-    return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "" }), refresh, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
+    const root = () => (custom() ? base() : mirror ? MIRROR + (manifest?.rev || "main") : manifest?.rev ? JSD + manifest.rev : base())
+    const url = path => root() + "/assets/" + path
+    return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "", mirror }), refresh, probe, failed, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -1160,6 +1205,7 @@
       }
       const url = Assets.url("bg/" + name + ".webp")
       const img = new Image()
+      img.onerror = () => Assets.failed(url)
       img.onload = () => {
         bgEl.style.backgroundImage = `url("${url}")`
         bgEl.style.filter = `brightness(${1 - t * 0.035}) saturate(${1 + t * 0.06}) contrast(${1 + t * 0.03})`
@@ -1396,7 +1442,11 @@
         a.img = document.createElement("img")
         a.img.decoding = "async"
         showFrame(a, a.dead ? "dead" : "idle")
-        for (const p of ["windup", "strike", "hurt", "cast", "dead"]) new Image().src = frameUrl(a, p)
+        for (const p of ["windup", "strike", "hurt", "cast", "dead"]) {
+          const im = new Image()
+          im.onerror = () => Assets.failed(im.src)
+          im.src = frameUrl(a, p)
+        }
         a.spriteEl.replaceChildren(a.img)
         a.el.classList.add("bfx-art")
         a.real = true
@@ -1688,9 +1738,12 @@
     function fxImg(name) {
       if (!Assets.has("fx", name)) return null
       let im = fxImgs[name]
-      if (!im) {
+      const src = Assets.url("fx/" + name + ".webp")
+      // a sheet that didn't load is asked for again once its url changes (new manifest, mirror)
+      if (!im || (im.src !== src && !(im.complete && im.naturalWidth))) {
         im = fxImgs[name] = new Image()
-        im.src = Assets.url("fx/" + name + ".webp")
+        im.onerror = () => Assets.failed(src)
+        im.src = src
       }
       return im.complete && im.naturalWidth ? im : null
     }
@@ -5109,6 +5162,7 @@
   setInterval(() => (GuildLive.ensure(), Live.ensure()), 1000)
   // always fetch a fresh manifest on page load: a cached one from an older release lacks the new art
   Assets.refresh(true)
+  Assets.probe()
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
