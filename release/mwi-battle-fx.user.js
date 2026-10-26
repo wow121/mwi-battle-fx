@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.16.4
+// @version      0.16.6
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -772,7 +772,7 @@
       const grip = rects.weapon ? [fist[0] / 2 - dx, fist[1] / 2 - dy] : [w / 2, h * 0.6]
       const W = Math.max(...Object.values(rects).map(x => x[0] + x[2])) + 2
       const H = Math.max(...Object.values(rects).map(x => x[1] + x[3]))
-      return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1] }
+      return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1], dir: index.dirs?.[k]?.[0] }
     }
     const list = prefix => (index ? Object.keys(index.layers).filter(k => (prefix ? k.startsWith(prefix) : !/^[ao]_/.test(k))) : [])
     return { ready, held, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
@@ -1343,7 +1343,15 @@
           const img = document.createElementNS(SVGNS, "image")
           attrs(img, { href: pc.url, width: pc.W, height: pc.H })
           box.appendChild(img)
-          g.appendChild(box)
+          if (/crossbow/.test(id) && pc.dir != null) {
+            // crossbows were drawn upright like the bows: laid level, bolt toward the enemy, the hand on the stock
+            // a third of the way from its butt (the drawn grip sits off the stock, at the bottom corner)
+            const lay = document.createElementNS(SVGNS, "g")
+            const [cx, cy] = [x + w / 2, y + h / 2]
+            lay.setAttribute("transform", `translate(${hx + h * 0.17 - cx} ${hy - 1 - cy}) rotate(${pc.dir - 90} ${cx} ${cy})`)
+            lay.appendChild(box)
+            g.appendChild(lay)
+          } else g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
           if (isBulwark(id)) g.dataset.big = 1
@@ -3289,7 +3297,9 @@
 }
 .bfxl.min .bfxl-view,.bfxl.min .bfxl-bar{display:none}
 .bfxl-view{position:relative;overflow:hidden;height:150px}
-.bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0}
+.bfxl-scene{position:relative;width:340px;height:150px;overflow:hidden;transform-origin:0 0;background:var(--bfxl-bg)}
+.bfxl.docked .bfxl-view{background:var(--bfxl-bg)}
+.bfxl.docked .bfxl-scene{background:none;overflow:visible}
 .bfxl-scene svg{position:absolute;overflow:visible}
 .bfxl-hero{position:absolute;left:62px;bottom:10px;width:96px;height:96px}
 .bfxl-hero>svg{left:0;top:0;width:100%;height:100%}
@@ -3580,23 +3590,28 @@
     let lastTap = 0 // last still tap on the title bar (double tap = back to the default spot)
     function place() {
       if (!el) return
+      const scene = el.querySelector(".bfxl-scene")
       if (docked) {
-        // laid over the game's panel: as wide as it (at most 2.2x), the panel grown to hold it
+        // laid over the game's panel like the battle stage it takes turns with: as tall as that stage, the hero
+        // as big as a player on it (same sizing, PLAYER_SCALE 0.75) and standing on its ground line, the backdrop
+        // across the whole panel; scaled to the panel's width the figures came out about twice the fighters' size
         const view = el.querySelector(".bfxl-view")
         const bars = el.offsetHeight - view.offsetHeight
-        const s = (curScale = Math.max(0.5, Math.min(docked.clientWidth / 340, 2.2)))
-        view.style.height = 150 * s + "px"
-        docked.style.minHeight = Math.ceil(150 * s + bars) + "px"
-        const scene = el.querySelector(".bfxl-scene")
+        const W = docked.clientWidth
+        const H = trial?.from === "guild" ? cfg.guildH : cfg.liveH
+        const s = (curScale = Math.max(0.5, (Math.min(H * 0.5, W * 0.21) * 0.75 * cfg.scale) / 96))
+        view.style.height = H + "px"
+        docked.style.minHeight = Math.ceil(H + bars) + "px"
         scene.style.transform = `scale(${s})`
-        scene.style.marginLeft = Math.max(0, (docked.clientWidth - 340 * s) / 2) + "px"
+        scene.style.marginLeft = Math.max(0, (W - 340 * s) / 2) + "px"
+        scene.style.marginTop = Math.max(0, Math.min(H * 0.84, H - 34) - 140 * s) + "px"
         return
       }
-      el.querySelector(".bfxl-scene").style.marginLeft = ""
+      scene.style.marginLeft = scene.style.marginTop = ""
       const s = (curScale = winScale())
       el.style.width = cfg.lifeIcon ? "" : 340 * s + "px"
       el.querySelector(".bfxl-view").style.height = 150 * s + "px"
-      el.querySelector(".bfxl-scene").style.transform = `scale(${s})`
+      scene.style.transform = `scale(${s})`
       const w = cfg.lifeIcon ? 46 : 340 * s
       const h = el.offsetHeight
       const [x, y] = cfg.lifePos || defaultPos(w, h)
@@ -3997,8 +4012,13 @@
       const bg = guildBg || (kind === "gather" && skill === "foraging" ? FORAGE_AREA[id] : skill)
       // a labyrinth room is in the labyrinth's depth backdrop
       const trialBg = trial?.from === "lab" ? labyrinthBg(labyrinth?.currentFloor) : null
-      if (trialBg && Assets.has("bg", trialBg)) scene.style.background = `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
-      else scene.style.background = (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind])
+      // on the window's root: docked, the backdrop fills the whole view around the (smaller) scene
+      el.style.setProperty(
+        "--bfxl-bg",
+        trialBg && Assets.has("bg", trialBg)
+          ? `url("${Assets.url("bg/" + trialBg + ".webp")}") center 70% / cover no-repeat, ${BG[kind]}`
+          : (art("bg", bg) ? `url("${artUrl("bg/" + bg)}") center 75% / cover no-repeat, ` : "") + (BG[skill] || BG[kind]),
+      )
       // hero: avatar + outfit, the skill's tool in the front hand
       const hero = el.querySelector(".bfxl-hero")
       hero.innerHTML = ""
