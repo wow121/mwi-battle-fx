@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.2
+// @version      0.18.3
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -1729,7 +1729,18 @@
     // #dev-start
     // frame meter (menu 调试：显示帧数): the browser's frame rate while the stage is on the page, the slowest frame,
     // what the canvas effects cost per frame, and how much is animating (canvas fx, CSS / web animations, nodes)
-    const meter = { el: null, raf: 0, n: 0, t0: 0, last: 0, worst: 0, fxMs: 0, fxN: 0 }
+    // long frames (Chrome's long-animation-frame entries) name who held the main thread: the game, this script,
+    // another userscript, or style / layout / paint when no script ran long
+    const meter = { el: null, raf: 0, n: 0, t0: 0, last: 0, worst: 0, fxMs: 0, fxN: 0, lo: [], obs: null }
+    function longFrameWho(e) {
+      const top = e.scripts?.slice().sort((a, b) => b.duration - a.duration)[0]
+      const js = (e.scripts || []).reduce((a, x) => a + x.duration, 0)
+      if (!top || js < e.duration / 3) return `排版绘制 ${Math.round(e.duration - js)}ms`
+      const u = top.sourceURL || ""
+      const us = /userscript\.html\?name=([^&]+)/.exec(u)
+      const who = /牛牛动起来|mwi-battle-fx/.test(decodeURIComponent(u)) ? "本脚本" : us ? decodeURIComponent(us[1]).replace(/\.user\.js$/, "").slice(0, 16) : /milkywayidle/.test(u) ? "游戏" : u.split("/").pop().slice(0, 16) || top.invoker?.slice(0, 16) || "?"
+      return `${who} ${Math.round(top.duration)}ms`
+    }
     function meterOn() {
       if (!cfg.fps || !stageEl?.isConnected || meter.raf) return
       if (!meter.el) {
@@ -1738,17 +1749,27 @@
       }
       meter.el.textContent = "… fps"
       stageEl.appendChild(meter.el)
+      if (!meter.obs && PerformanceObserver.supportedEntryTypes?.includes("long-animation-frame")) {
+        meter.obs = new PerformanceObserver(l => meter.lo.push(...l.getEntries()))
+        meter.obs.observe({ type: "long-animation-frame" })
+      }
+      meter.lo.length = 0
       Object.assign(meter, { n: 0, t0: now(), last: 0, worst: 0, fxMs: 0, fxN: 0 })
       meter.raf = requestAnimationFrame(meterTick)
     }
     function meterTick() {
       meter.raf = 0
-      if (!cfg.fps || !stageEl?.isConnected) return meter.el?.remove()
+      if (!cfg.fps || !stageEl?.isConnected) {
+        meter.obs?.disconnect()
+        meter.obs = null
+        meter.lo.length = 0
+        return meter.el?.remove()
+      }
       const t = now()
       if (meter.last) meter.worst = Math.max(meter.worst, t - meter.last)
       meter.last = t
       meter.n++
-      if (t - meter.t0 >= 500) {
+      if (t - meter.t0 >= 1000) {
         const fps = (meter.n * 1000) / (t - meter.t0)
         const anims = stageEl.getAnimations?.({ subtree: true }).length ?? "?"
         const nodes = stageEl.getElementsByTagName("*").length
@@ -1756,7 +1777,9 @@
         meter.el.textContent =
           `${fps.toFixed(0)} fps · 最慢 ${meter.worst.toFixed(0)}ms\n` +
           `画布 ${meter.fxN ? (meter.fxMs / meter.fxN).toFixed(1) : "0"}ms/帧 · 特效 ${fx.length}\n` +
-          `动画 ${anims} · 节点 ${nodes}`
+          `动画 ${anims} · 节点 ${nodes}` +
+          (!meter.obs ? "" : !meter.lo.length ? "\n长帧 0" : `\n长帧 ${meter.lo.length} · 最长 ${Math.round(Math.max(...meter.lo.map(e => e.duration)))}ms\n← ${longFrameWho(meter.lo.reduce((a, e) => (e.duration > a.duration ? e : a)))}`)
+        meter.lo.length = 0
         Object.assign(meter, { n: 0, t0: t, worst: 0, fxMs: 0, fxN: 0 })
       }
       meter.raf = requestAnimationFrame(meterTick)
