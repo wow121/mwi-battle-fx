@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.4
+// @version      0.18.5
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -971,10 +971,7 @@
 .bfx-lab .gal img{width:96px;height:96px}
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
 .bfx-fps{position:absolute;right:4px;top:26px;z-index:6000;padding:2px 6px;font:11px/15px monospace;white-space:pre;color:#dfe6ff;background:rgba(0,0,0,.6);border-radius:4px}
-.bfx-pixi{margin-top:6px}
-.bfx-pixi-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:4px;font:12px/1.4 sans-serif;color:#dfe6ff}
-.bfx-pixi-bar button{font:12px sans-serif;background:#1d2440;color:#dfe6ff;border:1px solid #3a4470;border-radius:4px;padding:2px 6px;cursor:pointer}
-.bfx-pixi-bar button.on{background:#2f6a3a;border-color:#4fa860}
+.bfx-lab-views.two{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:start}
 .bfx-pixi-view{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
 /* #dev-end */`
       document.head.appendChild(st)
@@ -6488,9 +6485,45 @@
       return [["", "—"], ...keys.map(k => [k, ABILITIES[k][0]])]
     }
 
+    function drawOps() {
+      const r3 = row("操作")
+      r3.append(
+        button("+ 我方", () => {
+          if (st.players.length < 5) st.players.push(structuredClone(DEF.players[st.players.length % 3]))
+          save()
+          draw()
+          reset()
+        }),
+        button("武器闪光", () => lab.p.forEach((u, i) => Stage.flashWeapon("p", i, PROCS[weaponOf(u)] || "#ffe27a"))),
+        button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
+        button("怪物放技能", () => {
+          const dmg = Object.keys(ABILITIES).filter(k => ABILITIES[k][1] === "damage")
+          if (alive("m").length) act("m", pick(alive("m")), pick(dmg))
+        }),
+        button("全部击杀", () => {
+          for (const side of ["m"]) alive(side).forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change(side, j, -99999)] }], "test"))
+          afterTurn()
+        }),
+        button("全员复活", () => {
+          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }], "test"))
+        }),
+        button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
+        button("重置", reset),
+        button("PixiJS 原型", () => (PixiLab.toggle(root.parentElement.querySelector(".bfx-lab-views")), draw()), PixiLab.isOpen() ? "on" : ""),
+      )
+    }
     function draw() {
       if (!root) return
       root.replaceChildren()
+      // PixiJS copy open: the two views side by side under a short control block (battle buttons only)
+      const two = PixiLab.isOpen()
+      root.parentElement?.querySelector(".bfx-lab-views")?.classList.toggle("two", two)
+      if (two) {
+        drawOps()
+        st.players.forEach((pl, i) => row(`${i + 1}号`).append(button("普攻", () => act("p", i, null)), ...pl.skills.filter(Boolean).map(k => button(zh(k), () => act("p", i, k), "skill"))))
+        row("引擎").append(...PixiLab.optButtons(), el("span", "lbl", "（关掉原型才能改阵容和看图鉴）"))
+        return
+      }
       const r1 = row("战场")
       r1.append(
         select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => {
@@ -6535,31 +6568,7 @@
         if (pl.look === "doll" && Doll.ready()) dollRow(pl, i)
       })
 
-      const r3 = row("操作")
-      r3.append(
-        button("+ 我方", () => {
-          if (st.players.length < 5) st.players.push(structuredClone(DEF.players[st.players.length % 3]))
-          save()
-          draw()
-          reset()
-        }),
-        button("武器闪光", () => lab.p.forEach((u, i) => Stage.flashWeapon("p", i, PROCS[weaponOf(u)] || "#ffe27a"))),
-        button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
-        button("怪物放技能", () => {
-          const dmg = Object.keys(ABILITIES).filter(k => ABILITIES[k][1] === "damage")
-          if (alive("m").length) act("m", pick(alive("m")), pick(dmg))
-        }),
-        button("全部击杀", () => {
-          for (const side of ["m"]) alive(side).forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change(side, j, -99999)] }], "test"))
-          afterTurn()
-        }),
-        button("全员复活", () => {
-          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }], "test"))
-        }),
-        button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
-        button("重置", reset),
-        button("PixiJS 原型", () => (PixiLab.toggle(root.parentElement), setTimeout(draw, 0)), PixiLab.isOpen() ? "on" : ""),
-      )
+      drawOps()
 
       // gallery: every pose of one monster
       const r4 = row("图鉴")
@@ -6639,10 +6648,15 @@
         root = el("div", "bfx-lab")
         panel.prepend(root)
       }
-      let slot = panel.querySelector(".bfx-lab-stage")
+      let views = panel.querySelector(".bfx-lab-views")
+      if (!views) {
+        views = el("div", "bfx-lab-views")
+        panel.appendChild(views)
+      }
+      let slot = views.querySelector(".bfx-lab-stage")
       if (!slot) {
         slot = el("div", "bfx-lab-stage")
-        panel.appendChild(slot)
+        views.appendChild(slot)
       }
       buildUnits()
       draw()
@@ -6691,7 +6705,7 @@ void main(){
   }
   finalColor=c;
 }`
-    let P, F, app, host, bar, world, bg, lights, unitsLayer, fxLayer, partLayer, textLayer, bloom
+    let P, F, app, host, world, bg, lights, unitsLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
     let dot, glow
@@ -6741,10 +6755,8 @@ void main(){
       if (host?.isConnected) return
       host = document.createElement("div")
       host.className = "bfx-pixi"
-      host.innerHTML = '<div class="bfx-pixi-bar"></div><div class="bfx-pixi-view">载入 PixiJS…</div>'
+      host.innerHTML = '<div class="bfx-pixi-view">载入 PixiJS…</div>'
       panel.appendChild(host)
-      bar = host.querySelector(".bfx-pixi-bar")
-      drawBar()
       const view = host.querySelector(".bfx-pixi-view")
       view.style.height = cfg.stageH + "px"
       try {
@@ -6790,21 +6802,19 @@ void main(){
     }
     const toggle = panel => (host?.isConnected ? close() : open(panel))
 
-    function drawBar() {
-      bar.replaceChildren()
-      bar.append("PixiJS 原型（和上面同一场战斗）：")
-      for (const [k, label] of OPTS) {
+    // one switch per effect, to see what each one adds
+    const optButtons = () =>
+      OPTS.map(([k, label]) => {
         const b = document.createElement("button")
         b.textContent = label
         b.className = opt[k] ? "on" : ""
         b.onclick = () => {
           opt[k] = !opt[k]
           applyOpts()
-          drawBar()
+          b.className = opt[k] ? "on" : ""
         }
-        bar.appendChild(b)
-      }
-    }
+        return b
+      })
     function applyOpts() {
       if (!fxLayer) return
       fxLayer.filters = opt.bloom ? [bloom] : null
@@ -7275,7 +7285,7 @@ void main(){
       bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
     }
 
-    return { toggle, play, sync: () => app && sync(), preload: () => app && preload(), isOpen: () => !!app }
+    return { toggle, play, optButtons, sync: () => app && sync(), isOpen: () => !!host?.isConnected }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
