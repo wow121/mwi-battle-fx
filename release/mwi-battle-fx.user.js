@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.17.4
+// @version      0.18.0
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -766,7 +766,7 @@
       u.lookId = null
       if (/shield|bulwark|aegis|buckler/.test(u.items.off_hand || u.items.two_hand || "")) u.tank = true
     }
-    return { onMessage, assign, assignGuild, me, toolOf: (name, skill) => profiles[name]?.tools?.[skill] || null }
+    return { onMessage, assign, assignGuild, me, toolOf: (name, skill) => profiles[name]?.tools?.[skill] || null, profileOf: name => profiles[name] || null }
   })()
 
   // ---------- paper-doll layers: drawn side-view weapons / off-hands for the held gear ----------
@@ -3219,6 +3219,8 @@
     // ----- messages -----
     function onMessage(obj) {
       if (obj.guildSharableCharacterMap) Object.assign(guildChars, obj.guildSharableCharacterMap)
+      if (obj.type === "chat_message_received") return townVisitor(obj.message)
+      if (visitors.length && (obj.type === "profile_shared" || obj.guildSharableCharacterMap)) restyleVisitors()
       setHouses(obj)
       if (obj.type === "init_character_data") {
         myId = obj.character?.id ?? myId
@@ -3293,7 +3295,8 @@
       cycleAt = performance.now()
       const before = enhLevel
       enhLevel = hashItem(a.primaryItemHash)?.level ?? enhLevel
-      if (!visible() || inTown()) return
+      if (!visible()) return
+      if (inTown()) return townDone(skillOf(a.actionHrid), gains)
       if (cfg.lifeIcon) {
         const big = gains.some(g => ["sage", "legend", "meteor", "crate"].includes(rarity(g.id)))
         el.querySelector(".bfxl-ico").animate([{ transform: "scale(1)" }, { transform: `scale(${big ? 1.5 : 1.15})`, filter: big ? "drop-shadow(0 0 10px #ffd75a)" : "none" }, { transform: "scale(1)" }], { duration: big ? 1200 : 350 })
@@ -3508,7 +3511,26 @@
 .bfxl-lab button:hover{background:#4a5c96}
 .bfxl-lab b{width:100%;font-size:11px;opacity:.7}
 .bfxl-town{position:absolute;left:0;top:0;width:340px;height:150px;overflow:hidden;transform-origin:0 0;z-index:6;opacity:0;visibility:hidden;
-  transition:opacity .35s,visibility 0s .35s;pointer-events:none;background:linear-gradient(#8fd0ff 0%,#d8f0ff 66%,#9ccf7a 66%)}
+  transition:opacity .35s,visibility 0s .35s;touch-action:pan-y;cursor:grab;user-select:none;background:linear-gradient(#8fd0ff 0%,#d8f0ff 66%,#9ccf7a 66%)}
+.bfxl-town.drag{cursor:grabbing}
+.bfxl-out{display:none}
+.bfxl.canout .bfxl-out{display:inline}
+.bfxl.min .bfxl-out,.bfxl.docked .bfxl-out{display:none!important}
+.bfxl-pan{position:absolute;top:0;bottom:0;width:26px;z-index:6;display:flex;align-items:center;justify-content:center;font:700 22px sans-serif;color:#fff;
+  text-shadow:0 1px 3px #000;opacity:0;pointer-events:none;transition:opacity .2s;touch-action:none}
+.bfxl-pan.l{left:0;background:linear-gradient(90deg,#0004,#0000)}
+.bfxl-pan.r{right:0;background:linear-gradient(270deg,#0004,#0000)}
+.bfxl-pan.on{opacity:.55;pointer-events:auto;cursor:pointer}
+.bfxl-pan.on:hover{opacity:.9}
+.bfxl-find{position:absolute;top:6px;z-index:7;display:none;align-items:center;gap:1px;padding:1px 4px;border-radius:9px;background:#262d47d8;color:#fff;
+  font:700 11px sans-serif;cursor:pointer;box-shadow:0 1px 3px #0008}
+.bfxl-find.on{display:flex}
+.bfxl-find svg{width:16px;height:16px}
+.bfxl-find.l{left:28px}
+.bfxl-find.r{right:28px}
+.bfxl-tring{position:absolute;bottom:26px;width:18px;height:18px;margin-left:-9px;border-radius:50%;z-index:2;display:none;
+  -webkit-mask:radial-gradient(circle,transparent 5px,#000 5.5px);mask:radial-gradient(circle,transparent 5px,#000 5.5px);box-shadow:0 0 0 1px #0006}
+.bfxl-tring.on{display:block}
 .bfxl.intown .bfxl-town{opacity:1;visibility:visible;transition:opacity .35s}
 .bfxl.docked .bfxl-town{display:none}
 .bfxl-strip{position:absolute;left:0;top:0;height:150px;will-change:transform}
@@ -3529,9 +3551,16 @@
 .bfxl-thero{position:absolute;bottom:2px;width:96px;height:96px;margin-left:-48px;z-index:3}
 .bfxl-thero>div{position:absolute;inset:0;transform-origin:50% 100%}
 .bfxl-thero svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-tvis{position:absolute;left:0;bottom:6px;width:96px;height:96px;margin-left:-48px;z-index:2;pointer-events:none}
+.bfxl-tvis>div{position:absolute;inset:0;transform-origin:50% 100%;transform:scale(.55)}
+.bfxl-tvis.l>div{transform:scale(-.55,.55)}
+.bfxl-tvis.go{will-change:transform}
+.bfxl-tvis svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.bfxl-tvis b{position:absolute;left:50%;top:30px;transform:translateX(-50%);padding:0 3px;border-radius:4px;background:#0007;font:600 8px sans-serif;color:#eef;white-space:nowrap}
 .bfxl-tfx{position:absolute;inset:0;pointer-events:none;z-index:4}
 .bfxl-tfx>*{position:absolute;left:0;top:0;font:700 12px sans-serif;color:#fff;text-shadow:0 1px 2px #000;white-space:nowrap}
 .bfxl-tfx svg{width:20px;height:20px}
+.bfxl-tfx span{display:flex;align-items:center;gap:1px}
 .bfxl-bar{position:relative;height:14px;background:#11141f}
 .bfxl-tbar{position:relative;height:13px;background:#1c1710}
 .bfxl-tbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#c98a00,#ffd75a)}
@@ -3550,7 +3579,7 @@
       injectCss()
       el = document.createElement("div")
       el.className = "bfxl"
-      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-town"><div class="bfxl-strip"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-tbar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
+      el.innerHTML = `<div class="bfxl-head"><span class="bfxl-name"></span><span class="bfxl-count"></span><button class="bfxl-out"></button><button class="bfxl-info-btn" title="${L("加成信息", "Bonuses")}">ⓘ</button><button class="bfxl-size" title="${L("大小", "Size")}">⤢</button><button class="bfxl-min" title="${L("折叠", "Collapse")}">–</button><button class="bfxl-x" title="${L("关闭（菜单里可重新打开）", "Close (reopen from the menu)")}">×</button></div><div class="bfxl-view"><div class="bfxl-scene"><div class="bfxl-store"></div><div class="bfxl-table"></div><div class="bfxl-target"></div><div class="bfxl-hero"></div><div class="bfxl-fx"></div></div><div class="bfxl-town"><div class="bfxl-strip"></div><div class="bfxl-pan l">‹</div><div class="bfxl-pan r">›</div><div class="bfxl-find"></div></div></div><div class="bfxl-bar"><i></i><span></span></div><div class="bfxl-tbar"><i></i><span></span></div><div class="bfxl-info"></div><div class="bfxl-ico"></div>`
       document.body.appendChild(el)
       const $ = s => el.querySelector(s)
       // × shrinks the window to a round icon (the skill + a progress ring); a click on it opens it again
@@ -3583,6 +3612,16 @@
         addEventListener("pointercancel", up)
         e.preventDefault()
       })
+      // out into the town while the job goes on (and back in): the hero stays at work
+      $(".bfxl-out").onclick = () => {
+        town.out = !town.out
+        town.free = false
+        town.snap = true
+        const was = inTown()
+        ensure()
+        if (was && !inTown()) walkIn()
+      }
+      townInput()
       $(".bfxl-info-btn").onclick = () => {
         cfg.lifeInfo = !cfg.lifeInfo
         saveCfg()
@@ -4984,6 +5023,7 @@
     }
     townW += 6
     const ROOM_OF = Object.fromEntries(TOWN.filter(b => b[1]).map(([id, sk]) => [sk, id]))
+    const SKILL_AT = Object.fromEntries(TOWN.filter(b => b[1]).map(([id, sk]) => [id, sk]))
     // the backdrop (lb_town) is drawn 400 px wide: its far hills stand still behind the street and drift a little
     // (parallax); its cobbles (from row 195 down) are laid along the whole street and move with the buildings
     const TOWN_BG_W = 400
@@ -4994,11 +5034,14 @@
       for (const r of Object.values(map || {})) if (r?.houseRoomHrid) houses[shortId(r.houseRoomHrid)] = r.level || 0
       for (const r of obj.endCharacterHouseRooms || []) if (r?.houseRoomHrid) houses[shortId(r.houseRoomHrid)] = r.level || 0
     }
-    const town = { at: null, trip: null, x: 0, cam: 0, snap: true, key: "", zAt: 0, lastT: 0 }
+    // out: shown by the title bar's button while the job goes on; free: the camera was moved by hand (drag, wheel,
+    // the edge arrows) and no longer follows the hero, until the badge to them is clicked or they set off on a walk
+    // more than five seconds after the last move
+    const town = { at: null, trip: null, x: 0, cam: 0, snap: true, key: "", zAt: 0, lastT: 0, out: false, free: false, dragging: false, dragAt: 0, vel: 0, hold: 0 }
     const placeOf = a => (!a ? "home" : isLife(a) ? ROOM_OF[skillOf(a.actionHrid)] : "gate")
     // where the hero stands at a place: beside the home's door, at a building's door, out through the gate
     const restX = p => TOWN_X[p] + (p === "home" ? 30 : p === "gate" ? -14 : 0)
-    const inTown = () => !!el && !docked && el.classList.contains("intown")
+    const inTown = () => !!el && !docked && !cfg.lifeIcon && el.classList.contains("intown")
     function heroBody(me) {
       const body = document.createElementNS(SVGNS, "svg")
       body.setAttribute("viewBox", "0 0 100 100")
@@ -5013,10 +5056,13 @@
     // the place follows the running action: a walk there while the window is open, a jump otherwise
     function townSync() {
       if (!cfg.lifeTown || trial || docked) {
-        el.classList.remove("intown")
+        el.classList.remove("intown", "canout")
         town.trip = null
+        town.out = false
         return
       }
+      // idle or fighting the town is shown anyway: the button is for a running job
+      if (!isLife(cur)) town.out = false
       const to = placeOf(cur)
       if (town.at === null || !visible() || cfg.lifeMin || cfg.lifeIcon) {
         town.at = to
@@ -5028,8 +5074,15 @@
         const from = town.trip || town.at === "home" ? town.x : TOWN_X[town.at]
         town.trip = { to, from, t0: performance.now(), appear: !town.trip && town.at !== "home" }
         if (!inTown()) town.snap = true
+        if (performance.now() - town.dragAt > 5000) town.free = false
       }
-      el.classList.toggle("intown", !!town.trip || !isLife(cur))
+      const show = town.out || !!town.trip || !isLife(cur)
+      if (!show) town.free = false
+      el.classList.toggle("intown", show)
+      el.classList.toggle("canout", isLife(cur))
+      const btn = el.querySelector(".bfxl-out")
+      btn.textContent = town.out ? "🏠" : "🏘"
+      btn.title = town.out ? L("回屋", "Back inside") : L("出门看看小镇", "Step out into the town")
       buildTown()
     }
     function buildTown() {
@@ -5038,9 +5091,12 @@
       if (key === town.key) return
       town.key = key
       const bg = art("bg", "town") ? `url("${artUrl("bg/town")}")` : ""
-      el.querySelector(".bfxl-town").style.background = bg ? `${bg} 0 ${-TOWN_BG_Y}px / ${TOWN_BG_W}px auto no-repeat` : ""
+      const box = el.querySelector(".bfxl-town")
+      box.style.background = bg ? `${bg} 0 ${-TOWN_BG_Y}px / ${TOWN_BG_W}px auto no-repeat` : ""
+      delete box.__bfx // the shorthand reset its position
       const strip = el.querySelector(".bfxl-strip")
       strip.innerHTML = ""
+      town.goal = undefined
       strip.style.width = townW + "px"
       const street = document.createElement("div")
       street.className = "bfxl-street"
@@ -5070,10 +5126,13 @@
         } else if (lv > 0) b.insertAdjacentHTML("beforeend", `<span class="bfxl-lv">Lv${lv}</span>`)
         strip.appendChild(b)
       }
+      strip.insertAdjacentHTML("beforeend", '<div class="bfxl-tring"></div>')
       const hero = document.createElement("div")
       hero.className = "bfxl-thero"
       hero.appendChild(document.createElement("div")).appendChild(heroBody(me))
       strip.appendChild(hero)
+      // the visitors stay through a rebuild
+      for (const v of visitors) strip.appendChild(v.el)
       strip.insertAdjacentHTML("beforeend", '<div class="bfxl-tfx"></div>')
     }
     // the title bar and the bar under the picture while the town is shown
@@ -5106,13 +5165,188 @@
       box.appendChild(e)
       e.animate([{ transform: `translate(${x}px,${y}px)`, opacity: 0 }, { opacity: 1, offset: 0.2 }, { transform: `translate(${x + 10}px,${y - 24}px)`, opacity: 0 }], { duration: ms, easing: "ease-out" }).onfinish = () => e.remove()
     }
+    // a completion while the town is shown: what came out pops over the job's building, a rare find lights it up
+    function townDone(skill, gains) {
+      const id = ROOM_OF[skill]
+      const b = el.querySelector(`.bfxl-bld[data-id="${id}"]`)
+      if (!b) return
+      gains.slice(0, 2).forEach((g, i) => {
+        const n = document.createElement("span")
+        n.append(svgUse("items", g.id), "+" + fmt(g.n))
+        setTimeout(() => townPop(n, TOWN_X[id] + 12, 34, 1700), i * 300)
+      })
+      if (gains.some(g => ["sage", "legend", "meteor", "crate"].includes(rarity(g.id))))
+        b.animate([{ filter: "none" }, { filter: "brightness(1.7) drop-shadow(0 0 8px #ffd75a)", transform: "translateX(-50%) scale(1.08)" }, { filter: "none" }], { duration: 1400 })
+    }
+    // someone talking in a chat channel comes to town and stays ten minutes (what they said is not shown; talking
+    // again keeps them longer): their own look when known (a guild member, a profile seen), else a plain avatar and
+    // outfit picked by their name. With the town on screen they walk in from the edge of the view
+    const STAY_MS = 600000
+    const visitors = [] // { name, el, x, to, dir, until, next }
+    function visitorLook(name) {
+      const g = Object.values(guildChars).find(c => c?.name === name)
+      if (g?.avatarHrid) return { avatar: shortId(g.avatarHrid), outfit: shortId(g.avatarOutfitHrid) }
+      const prof = Looks.profileOf(name)
+      if (prof?.avatar) return prof
+      const doll = Doll.list("a_").map(k => k.slice(2)).filter(k => !k.startsWith("custom_"))
+      const pool = doll.length ? doll : ["blue_person_1", "blue_person_2", "blue_person_3", "bunny_1", "bunny_2", "cat_1", "cat_2", "cat_3"]
+      let h = 0
+      for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
+      const wear = ["tshirt_default", "suit_1", "suit_3", "suit_5", "dress_1", "dress_4", "dress_7", "mage_1", "mage_2", "ranger_1", "ranger_2", "warrior_1", "warrior_2", "pirate_1", "tshirt_milking", "tshirt_cooking", "uniform_crafting", "uniform_brewing"]
+      return { avatar: pool[h % pool.length], outfit: wear[(h >>> 8) % wear.length] }
+    }
+    // a profile opened (a click on someone in chat) or the guild's members came: the visitors take their real looks
+    function restyleVisitors() {
+      for (const v of visitors) v.el.firstChild.replaceChildren(heroBody(visitorLook(v.name)))
+    }
+    function townVisitor(m) {
+      const name = m?.sName
+      const strip = el?.querySelector(".bfxl-strip")
+      if (!name || m.gm || name === Looks.me.name || !strip || !cfg.lifeTown) return
+      const now = performance.now()
+      const seen = visitors.find(v => v.name === name)
+      if (seen) return (seen.until = now + STAY_MS)
+      const e = document.createElement("div")
+      e.className = "bfxl-tvis"
+      e.appendChild(document.createElement("div")).appendChild(heroBody(visitorLook(name)))
+      e.insertAdjacentHTML("beforeend", "<b></b>")
+      e.lastChild.textContent = name
+      strip.appendChild(e)
+      const v = { name, el: e, until: now + STAY_MS, next: now + 15000 + Math.random() * 45000 }
+      if (inTown() && visible()) {
+        v.dir = Math.random() < 0.5 ? 1 : -1
+        v.x = v.dir > 0 ? town.cam - 40 : town.cam + 380
+        v.to = town.cam + 40 + Math.random() * 260
+      } else {
+        v.x = v.to = 20 + Math.random() * (townW - 40)
+        v.dir = Math.random() < 0.5 ? 1 : -1
+      }
+      e.style.transform = `translateX(${v.x}px)`
+      visitors.push(v)
+    }
+    function moveVisitors(now, dt) {
+      for (let i = visitors.length - 1; i >= 0; i--) {
+        const v = visitors[i]
+        if (now > v.until) {
+          v.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 800 }).onfinish = () => v.el.remove()
+          visitors.splice(i, 1)
+          continue
+        }
+        // now and then a few steps along the street
+        if (now > v.next && Math.abs(v.to - v.x) < 1) {
+          v.next = now + 15000 + Math.random() * 45000
+          v.to = Math.max(20, Math.min(townW - 20, v.x + (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random() * 60)))
+        }
+        const d = v.to - v.x
+        const walking = Math.abs(d) >= 1
+        if (walking) {
+          v.dir = d > 0 ? 1 : -1
+          v.x += v.dir * Math.min(Math.abs(d), 55 * dt)
+        }
+        // out of the view: not drawn at all (a busy channel fills the street)
+        const seen = v.x > town.cam - 60 && v.x < town.cam + 400
+        put(v.el, "display", seen ? "" : "none")
+        if (!seen) continue
+        // walking on a layer of its own: moved by the compositor, the crowd behind is not repainted each frame
+        const bob = walking ? Math.round(-20 * Math.abs(Math.sin((now / 1000) * Math.PI * 3))) / 10 : 0
+        put(v.el, "transform", `translate(${Math.round(v.x * 10) / 10}px,${bob}px)`)
+        const cls = "bfxl-tvis" + (v.dir < 0 ? " l" : "") + (walking ? " go" : "")
+        if (v.el.className !== cls) v.el.className = cls
+      }
+    }
+    // back from the town into the job's scene: the hero walks in from the left as on any new action
+    function walkIn() {
+      if (!isLife(cur)) return
+      walk.x = -60
+      walk.moves.forEach(m => delete m.t0)
+      if (!walk.moves.length) walk.moves.push({ to: workX(), work: true })
+    }
+    // the town is dragged (a mouse, or a finger sideways: up and down still scroll the page), wheeled, or moved
+    // by holding an edge arrow; a move under 5 px is a tap, as on the title bar
+    function townInput() {
+      const box = el.querySelector(".bfxl-town")
+      const moved = () => {
+        town.free = true
+        town.dragAt = performance.now()
+      }
+      box.addEventListener("pointerdown", e => {
+        if (e.button || e.target.closest(".bfxl-pan,.bfxl-find")) return
+        const x0 = e.clientX
+        const cam0 = town.cam
+        let drag = false
+        let lx = x0
+        let lt = performance.now()
+        town.vel = 0
+        const move = ev => {
+          if (!drag && Math.abs(ev.clientX - x0) < 5) return
+          if (!drag) {
+            drag = town.dragging = true
+            box.classList.add("drag")
+          }
+          const now = performance.now()
+          const v = -(ev.clientX - lx) / curScale / Math.max(0.008, (now - lt) / 1000)
+          town.vel = town.vel * 0.5 + v * 0.5
+          lx = ev.clientX
+          lt = now
+          town.cam = cam0 - (ev.clientX - x0) / curScale
+          moved()
+        }
+        const up = () => {
+          removeEventListener("pointermove", move)
+          removeEventListener("pointerup", up)
+          removeEventListener("pointercancel", up)
+          town.dragging = false
+          box.classList.remove("drag")
+          // let go while still moving: it glides on a little
+          town.vel = performance.now() - lt > 80 ? 0 : Math.max(-1500, Math.min(1500, town.vel))
+        }
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", up)
+        addEventListener("pointercancel", up)
+      })
+      box.addEventListener(
+        "wheel",
+        e => {
+          const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 340 : 1)
+          if (!d) return
+          e.preventDefault()
+          town.vel = 0
+          town.cam += (d * 0.8) / curScale
+          moved()
+        },
+        { passive: false },
+      )
+      for (const [cls, dir] of [["l", -1], ["r", 1]]) {
+        const a = box.querySelector(".bfxl-pan." + cls)
+        a.addEventListener("pointerdown", e => {
+          e.preventDefault()
+          e.stopPropagation()
+          try {
+            a.setPointerCapture(e.pointerId)
+          } catch {}
+          town.hold = dir
+          town.vel = 0
+        })
+        for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) a.addEventListener(ev, () => (town.hold = 0))
+      }
+      box.querySelector(".bfxl-find").addEventListener("click", () => (town.free = false))
+    }
+    // a style written only when it changed: most of the town stands still most of the time, and a rewrite each
+    // frame (even of the same value) had the street with its visitors repainted sixty times a second
+    function put(n, k, v) {
+      const c = (n.__bfx ||= {})
+      if (c[k] === v) return
+      c[k] = v
+      n.style[k] = v
+    }
     function townFrame(now) {
       const hero = el.querySelector(".bfxl-thero")
       if (!hero || cfg.lifeIcon) return
       const dt = Math.min(0.1, (now - (town.lastT || now)) / 1000)
       town.lastT = now
       const tr = town.trip
-      let opacity = town.at === "gate" ? 0 : 1
+      // at the gate the hero is out of town, at a job inside its building
+      let opacity = town.at === "gate" || SKILL_AT[town.at] ? 0 : 1
       let walking = false
       let facing = town.at === "home" ? -1 : 1
       if (tr) {
@@ -5134,27 +5368,77 @@
           town.at = tr.to
           town.trip = null
           ensure()
-          // the job's scene: the hero walks in from the left as on any new action
-          if (isLife(cur) && !inTown()) {
-            walk.x = -60
-            walk.moves.forEach(m => delete m.t0)
-            if (!walk.moves.length) walk.moves.push({ to: workX(), work: true })
-          }
+          if (!inTown()) walkIn()
           return
         }
       } else if (town.at !== "gate") town.x = restX(town.at)
-      const target = Math.max(0, Math.min(townW - 340, town.x - 170))
-      town.cam = town.snap ? target : town.cam + (target - town.cam) * (1 - Math.exp(-dt * 7))
+      // the camera: on the hero (or the building they are in), else where it was moved to, gliding to a stop
+      const maxCam = townW - 340
+      const focus = tr || town.at === "home" ? town.x : TOWN_X[town.at]
+      if (town.hold) {
+        town.cam += town.hold * 320 * dt
+        town.free = true
+        town.dragAt = now
+      } else if (town.free && !town.dragging) {
+        town.cam += town.vel * dt
+        town.vel *= Math.exp(-dt * 4)
+      }
+      if (!town.free) {
+        const target = Math.max(0, Math.min(maxCam, focus - 170))
+        town.cam = town.snap || Math.abs(target - town.cam) < 0.2 ? target : town.cam + (target - town.cam) * (1 - Math.exp(-dt * 7))
+      } else if (Math.abs(town.vel) < 2) town.vel = 0
+      town.cam = Math.max(0, Math.min(maxCam, town.cam))
       town.snap = false
-      el.querySelector(".bfxl-strip").style.transform = `translateX(${-town.cam}px)`
-      el.querySelector(".bfxl-town").style.backgroundPositionX = -(town.cam / Math.max(1, townW - 340)) * (TOWN_BG_W - 340) + "px"
-      hero.style.left = town.x + "px"
-      hero.style.opacity = Math.max(0, Math.min(1, opacity))
-      const bob = walking ? -3 * Math.abs(Math.sin((now / 1000) * Math.PI * 4)) : 0
-      hero.firstChild.style.transform = `translateY(${bob}px) scale(.62) scaleX(${facing})`
+      const box = el.querySelector(".bfxl-town")
+      box.querySelector(".bfxl-pan.l").classList.toggle("on", town.cam > 1)
+      box.querySelector(".bfxl-pan.r").classList.toggle("on", town.cam < maxCam - 1)
+      // off screen: a badge on that side points to them, a click brings the camera back
+      const find = box.querySelector(".bfxl-find")
+      const side = focus < town.cam + 12 ? "l" : focus > town.cam + 328 ? "r" : ""
+      find.classList.toggle("on", !!side)
+      if (side) {
+        const k = side + (isLife(cur) ? skillOf(cur.actionHrid) : cur ? "combat" : "house")
+        if (find.dataset.k !== k) {
+          find.dataset.k = k
+          find.className = "bfxl-find on " + side
+          find.innerHTML = ""
+          find.append(side === "l" ? "◂" : "", isLife(cur) ? svgUse("skills", skillOf(cur.actionHrid)) : svgUse("misc", cur ? "combat" : "house"), side === "r" ? "▸" : "")
+          find.title = L("回到角色", "Back to the hero")
+        }
+      }
+      // at work: the action's progress as a ring at the building's door and in the bar under the picture
+      const ring = el.querySelector(".bfxl-tring")
+      const working = !tr && isLife(cur) && SKILL_AT[town.at]
+      ring?.classList.toggle("on", !!working)
+      if (working) {
+        const d = dur()
+        let t = (now - cycleAt) / (d * 1000)
+        if (t > 1.6) {
+          cycleAt = now
+          t = 0
+        }
+        // in 3° steps: the ring need not be redrawn every frame
+        put(ring, "left", TOWN_X[town.at] + "px")
+        put(ring, "background", `conic-gradient(#7fd0ff ${Math.round(Math.min(1, t) * 120) * 3}deg,#2b3350d0 0)`)
+        put(el.querySelector(".bfxl-bar i"), "width", Math.round(Math.min(100, t * 100) * 2) / 2 + "%")
+        const sec = d.toFixed(2) + "s"
+        const lab = el.querySelector(".bfxl-bar span")
+        if (lab.textContent !== sec) lab.textContent = sec
+      }
+      moveVisitors(now, dt)
+      const cam = Math.round(town.cam * 10) / 10
+      put(el.querySelector(".bfxl-strip"), "transform", `translateX(${-cam}px)`)
+      put(box, "backgroundPositionX", Math.round(-(cam / Math.max(1, maxCam)) * (TOWN_BG_W - 340) * 10) / 10 + "px")
+      put(hero, "left", Math.round(town.x * 10) / 10 + "px")
+      put(hero, "opacity", String(Math.round(Math.max(0, Math.min(1, opacity)) * 50) / 50))
+      const bob = walking ? Math.round(-30 * Math.abs(Math.sin((now / 1000) * Math.PI * 4))) / 10 : 0
+      put(hero.firstChild, "transform", `translateY(${bob}px) scale(.62) scaleX(${facing})`)
       // the building the hero is heading for lights up
-      const goal = tr?.to
-      for (const b of el.querySelectorAll(".bfxl-bld")) b.classList.toggle("here", b.dataset.id === goal)
+      const goal = tr?.to || (working ? town.at : null)
+      if (town.goal !== goal) {
+        town.goal = goal
+        for (const b of el.querySelectorAll(".bfxl-bld")) b.classList.toggle("here", b.dataset.id === goal)
+      }
       // resting at home: z-z-z; out fighting: crossed swords over the gate
       if (!tr && now - town.zAt > 1700) {
         town.zAt = now
@@ -5725,7 +6009,7 @@
 
   // ---------- websocket hook ----------
   // battle ticks drive the stage; character / profile / item / action messages feed looks and the location
-  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed|new_guild_skilling|guild_skilling_updated|labyrinth_room_progress|guild_updated|guild_characters_updated)$|party|buff|house/
+  const WANTED = /^(new_battle|battle_updated|new_guild_battle|guild_battle_updated|labyrinth_updated|init_character_data|profile_shared|items_updated|actions_updated|action_completed|new_guild_skilling|guild_skilling_updated|labyrinth_room_progress|guild_updated|guild_characters_updated|chat_message_received)$|party|buff|house/
   function onCharacterMessage(obj) {
     // completions only carry inventory counts (and the tools' slots), never the visible gear
     if (obj.type !== "action_completed") Looks.onMessage(obj)
