@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.19.1
+// @version      0.19.2
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6481,90 +6481,89 @@ void main(){
       player: {
         // the sword held out forward, clear of the face
         idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { arm: 4, fore: -52, barm: 30 } }, { t: 800, a: { body: 2, arm: 8, fore: -50, barm: 34 }, y: -0.012 }, { t: 1600, a: { arm: 4, fore: -52, barm: 30 } }] },
-        // 普攻 1: shield up in front while the sword goes back over the head, the shield pulls in as the body turns into the cut
+        // Attacks are quick and small (≈ 0.7 s, short wind-up); skills are big (a long wind-up with a charge, a jump or
+        // a dash, a hit-stop, a slow recovery). 普攻 1: a short step and a chop
         attack: {
-          dur: 820, hit: 360, lunge: true,
+          dur: 640, hit: 250, lunge: true,
           keys: [
             { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 240, e: "out", a: { body: -10, arm: 85, fore: -45, barm: 55 }, x: -0.03 },
-            { t: 300, a: { body: -12, arm: 90, fore: -50, barm: 58 }, x: -0.04 },
-            { t: 370, e: "in", a: { body: 14, arm: -35, fore: -80, barm: -15 }, x: 0.06 },
-            { t: 480, a: { body: 10, arm: -45, fore: -85, barm: -10 }, x: 0.05 },
+            { t: 160, e: "out", a: { body: -8, arm: 90, fore: -50, barm: 50 }, x: -0.02 },
+            { t: 250, e: "in", a: { body: 12, arm: -35, fore: -85, barm: -10 }, x: 0.04 },
+            { t: 380, a: { body: 10, arm: -42, fore: -88, barm: -5 }, x: 0.035 },
+            { t: 640, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // 普攻 2: a deep lunge, body low and forward, the blade level
+        attack2: {
+          dur: 720, hit: 290, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 200, e: "out", a: { body: -10, arm: 10, fore: -75, barm: 55 }, x: -0.07 },
+            { t: 290, e: "in", a: { body: 28, arm: -5, fore: -22, barm: -20 }, x: 0.2, y: -0.05 },
+            { t: 430, a: { body: 26, arm: -3, fore: -24, barm: -15 }, x: 0.19, y: -0.05 },
+            { t: 720, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // 普攻 3: crouch, then a hopping rising cut
+        attack3: {
+          dur: 820, hit: 300, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 180, e: "out", a: { body: 10, arm: -45, fore: -150, barm: 40 }, y: -0.05 },
+            { t: 300, e: "in", a: { body: -12, arm: 100, fore: -50, barm: 15 }, x: 0.05, y: 0.14 },
+            { t: 430, e: "out", a: { body: -10, arm: 98, fore: -48, barm: 20 }, x: 0.05, y: 0.1 },
+            { t: 560, e: "in", a: { body: 4, arm: 40, fore: -50, barm: 30 }, x: 0.03 },
             { t: 820, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        // 普攻 2: the sword drawn back at the shoulder, then a straight thrust
-        attack2: {
-          dur: 760, hit: 330, lunge: true,
+        // 普攻 4: shoulder down, a shield charge
+        attack4: {
+          dur: 760, hit: 300, lunge: true,
           keys: [
             { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 220, e: "out", a: { body: -10, arm: 35, fore: -15, barm: 50 }, x: -0.05 },
-            { t: 280, a: { body: -11, arm: 38, fore: -12, barm: 52 }, x: -0.055 },
-            { t: 340, e: "in", a: { body: 12, arm: -5, fore: -72, barm: 0 }, x: 0.1 },
-            { t: 460, a: { body: 10, arm: -2, fore: -70, barm: 5 }, x: 0.09 },
+            { t: 150, e: "out", a: { body: 18, arm: -10, fore: -60, barm: 70 }, x: -0.02, y: -0.02 },
+            { t: 300, e: "in", a: { body: 24, arm: -12, fore: -62, barm: 88 }, x: 0.16, y: -0.02 },
+            { t: 420, a: { body: 20, arm: -8, fore: -60, barm: 80 }, x: 0.12 },
             { t: 760, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        // 普攻 3: low behind, then a rising cut
-        attack3: {
-          dur: 800, hit: 350, lunge: true,
-          keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 230, e: "out", a: { body: 8, arm: -45, fore: -150, barm: 45 }, x: -0.02, y: -0.02 },
-            { t: 360, e: "in", a: { body: -10, arm: 95, fore: -60, barm: 15 }, x: 0.06, y: 0.03 },
-            { t: 480, a: { body: -12, arm: 100, fore: -48, barm: 20 }, x: 0.05, y: 0.03 },
-            { t: 800, a: { arm: 4, fore: -52, barm: 30 } },
-          ],
-        },
-        // 普攻 4: a shield bash, then a short chop
-        attack4: {
-          dur: 900, hit: 560, hits: [300], lunge: true,
-          keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 180, e: "out", a: { body: -8, arm: 30, fore: -30, barm: 10 }, x: -0.03 },
-            { t: 300, e: "in", a: { body: 12, arm: 25, fore: -35, barm: 70 }, x: 0.1 },
-            { t: 420, a: { body: 4, arm: 85, fore: -50, barm: 62 }, x: 0.07 },
-            { t: 560, e: "in", a: { body: 14, arm: -35, fore: -85, barm: 40 }, x: 0.08 },
-            { t: 900, a: { arm: 4, fore: -52, barm: 30 } },
-          ],
-        },
-        // 分裂斩: steps in whirling the sword a full turn overhead, the blade sweeps through at the end
+        // 分裂斩: a crouch, a leap with a full spin, the blade drawing a whole circle, a landing slam with a shock ring
         "skill:cleave": {
-          dur: 1150, hit: 640, lunge: true,
+          dur: 1350, hit: 780, ring: 780, lunge: true,
           keys: [
             { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 200, e: "out", a: { body: -14, arm: 60, fore: -40, barm: 50 }, x: -0.04, y: -0.02 },
-            { t: 420, e: "linear", a: { body: -4, arm: 75, fore: -220, barm: 45 }, y: 0.03 },
-            { t: 600, e: "linear", a: { body: 10, arm: 40, fore: -380, barm: 20 }, x: 0.05, y: 0.02 },
-            { t: 660, e: "out", a: { body: 18, arm: -30, fore: -440, barm: -15 }, x: 0.09 },
-            { t: 820, a: { body: 14, arm: -40, fore: -445, barm: -10 }, x: 0.07 },
-            { t: 1150, a: { arm: 4, fore: -412, barm: 30 } },
+            { t: 260, e: "out", a: { body: 10, arm: 20, fore: -40, barm: 40 }, y: -0.06 },
+            { t: 400, e: "out", a: { body: 0, arm: 40, fore: -30, barm: 30 }, y: 0.3 },
+            { t: 720, e: "linear", a: { body: 0, arm: 40, fore: -30, barm: 30 }, y: 0.32, r: 360 },
+            { t: 780, e: "in", a: { body: 20, arm: -40, fore: -85, barm: -10 }, x: 0.08, r: 360 },
+            { t: 980, a: { body: 18, arm: -42, fore: -88, barm: -5 }, x: 0.07, r: 360 },
+            { t: 1350, a: { arm: 4, fore: -52, barm: 30 }, r: 360 },
           ],
         },
-        // 血刃斩: a rising cut, then straight back down
+        // 血刃斩: a dash straight through the enemy, cutting on the way in and again with a backhand on the far side
         "skill:maim": {
-          dur: 1050, hit: 600, hits: [330], lunge: true,
+          dur: 1250, hit: 600, hits: [380], through: true, lunge: true, color: 0xff3b3b,
           keys: [
             { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 200, e: "out", a: { body: 8, arm: -45, fore: -150, barm: 45 }, x: -0.02, y: -0.02 },
-            { t: 330, e: "in", a: { body: -10, arm: 95, fore: -60, barm: 20 }, x: 0.04, y: 0.05 },
-            { t: 430, a: { body: -12, arm: 100, fore: -45, barm: 25 }, x: 0.04, y: 0.06 },
-            { t: 600, e: "in", a: { body: 16, arm: -35, fore: -85, barm: -15 }, x: 0.08 },
-            { t: 720, a: { body: 12, arm: -45, fore: -90, barm: -10 }, x: 0.06 },
-            { t: 1050, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 240, e: "out", a: { body: 18, arm: 80, fore: -50, barm: 40 }, x: -0.04, y: -0.04 },
+            { t: 380, e: "in", a: { body: 24, arm: -40, fore: -85, barm: -10 }, x: 0.12, y: -0.03 },
+            { t: 480, e: "out", a: { body: 6, arm: -45, fore: -150, barm: 10 }, x: 0.14 },
+            { t: 600, e: "in", a: { body: -14, arm: 100, fore: -40, barm: 20 }, x: 0.14, y: 0.06 },
+            { t: 820, a: { body: -12, arm: 98, fore: -42, barm: 25 }, x: 0.12, y: 0.03 },
+            { t: 1250, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        // any other damage skill: a leaping shield-first overhead cut
+        // any other damage skill: a high leap and an overhead cut
         skill: {
-          dur: 1100, hit: 620, lunge: true,
+          dur: 1250, hit: 700, lunge: true,
           keys: [
             { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 260, e: "out", a: { body: -14, arm: 95, fore: -50, barm: 60 }, x: -0.05, y: 0.04 },
-            { t: 420, a: { body: -16, arm: 100, fore: -55, barm: 65 }, x: -0.06, y: 0.08 },
-            { t: 520, e: "in", a: { body: 4, arm: 50, fore: -30, barm: 45 }, x: 0.03, y: 0.1 },
-            { t: 630, e: "in", a: { body: 18, arm: -45, fore: -85, barm: -20 }, x: 0.08 },
-            { t: 760, a: { body: 12, arm: -55, fore: -90, barm: -15 }, x: 0.06 },
-            { t: 1100, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 260, e: "out", a: { body: 10, arm: 20, fore: -40, barm: 50 }, y: -0.06 },
+            { t: 420, e: "out", a: { body: -16, arm: 100, fore: -55, barm: 65 }, x: -0.02, y: 0.3 },
+            { t: 560, a: { body: -18, arm: 104, fore: -58, barm: 65 }, y: 0.34 },
+            { t: 700, e: "in", a: { body: 22, arm: -45, fore: -88, barm: -20 }, x: 0.08 },
+            { t: 900, a: { body: 18, arm: -50, fore: -90, barm: -15 }, x: 0.07 },
+            { t: 1250, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
         // the shield punches out to take the blow, the body is knocked back a step
@@ -6633,18 +6632,18 @@ void main(){
     function sample(act, t) {
       const keys = act.keys
       if (!keys?.length) return { a: {}, x: 0, y: 0 }
-      if (t <= keys[0].t) return { a: { ...keys[0].a }, x: keys[0].x || 0, y: keys[0].y || 0 }
+      if (t <= keys[0].t) return { a: { ...keys[0].a }, x: keys[0].x || 0, y: keys[0].y || 0, r: keys[0].r || 0 }
       for (let k = 1; k < keys.length; k++) {
         const b = keys[k]
         if (t > b.t) continue
         const a = keys[k - 1]
         const p = (EASE[b.e] || EASE.inout)(b.t > a.t ? (t - a.t) / (b.t - a.t) : 1)
-        const out = { a: {}, x: lerp(a.x || 0, b.x || 0, p), y: lerp(a.y || 0, b.y || 0, p) }
+        const out = { a: {}, x: lerp(a.x || 0, b.x || 0, p), y: lerp(a.y || 0, b.y || 0, p), r: lerp(a.r || 0, b.r || 0, p) }
         for (const n of new Set([...Object.keys(a.a), ...Object.keys(b.a)])) out.a[n] = lerp(a.a[n] || 0, b.a[n] || 0, p)
         return out
       }
       const z = keys[keys.length - 1]
-      return { a: { ...z.a }, x: z.x || 0, y: z.y || 0 }
+      return { a: { ...z.a }, x: z.x || 0, y: z.y || 0, r: z.r || 0 }
     }
 
     let P, F, app, host, world, bg, lights, unitsLayer, fxLayer, partLayer, textLayer, bloom
@@ -6901,7 +6900,9 @@ void main(){
           // a part hanging below its joint swings forward with a clockwise turn (art facing left), one standing on it counterclockwise
           // (rig.json may set sign itself where that guess fails: a forearm held out sideways)
           const sign = (p.sign ?? (h / 2 > p.pivot[1] ? 1 : -1)) * (def.face === "right" ? -1 : 1)
-          return { name, s, p, w, h, sign, rest: ((p.rot || 0) * Math.PI) / 180, x: 0, y: 0, wr: 0, fall: null }
+          // a weapon's tip: the corner of its piece farthest from the grip (for the blade's light trail)
+          const tip = name === "weapon" && [[0, 0], [w, 0], [0, h], [w, h]].sort((u, v) => Math.hypot(v[0] - p.pivot[0], v[1] - p.pivot[1]) - Math.hypot(u[0] - p.pivot[0], u[1] - p.pivot[1]))[0]
+          return { name, s, p, w, h, tip, sign, rest: ((p.rot || 0) * Math.PI) / 180, x: 0, y: 0, wr: 0, fall: null }
         })
       const by = Object.fromEntries(list.map(q => [q.name, q]))
       const order = []
@@ -6924,6 +6925,9 @@ void main(){
     function rigScale(a) {
       const k = a.h / a.rig.def.h
       a.rig.root.scale.set((a.rig.def.face === "right") === a.dir > 0 ? k : -k, k)
+      const cy = a.rig.def.h * 0.45
+      a.rig.root.pivot.set(0, -cy)
+      a.rig.root.position.set(0, -cy * k)
     }
     // starts an action on a unit; the pose it leaves is blended out over the first `blend` ms
     function play1(a, name, { at = 0, blend = 120 } = {}) {
@@ -6954,17 +6958,19 @@ void main(){
         if (a.from && A && t - A.t0 < a.blend) {
           const p = ease((t - A.t0) / a.blend)
           const b = pose
-          pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p) }
+          const short = (from, to) => to + ((((from || 0) - to) % 360) + 540) % 360 - 180
+          pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p), r: lerp(short(a.from.r, b.r || 0), b.r || 0, p) }
           // the short way round: an action may end a whole turn (or more) away from where the next starts
           for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) {
             const to = b.a[n] || 0
-            const from = to + ((((a.from.a[n] || 0) - to) % 360) + 540) % 360 - 180
-            pose.a[n] = lerp(from, to, p)
+            pose.a[n] = lerp(short(a.from.a[n], to), to, p)
           }
         }
       }
       a.pose = pose
       const D = Math.PI / 180
+      // r: the whole body turns about its middle (a spin, a flip); + turns forward
+      R.root.rotation = (pose.r || 0) * D * a.dir
       const wob = a.jig * 10 * Math.sin(t / 30)
       const h = R.def.h
       for (const q of R.order) {
@@ -7130,6 +7136,73 @@ void main(){
       world.filters = [f]
     }
     const mid = a => ({ x: a.x0 + (a.dash || 0), y: a.y0 - a.h * 0.45 })
+    // the weapon's tip and grip in world coordinates (null without a weapon)
+    function tipOf(a, inner = 1) {
+      const q = a.rig?.by.weapon
+      if (!q?.tip || a.rig.fallen) return null
+      const sp = q.s.children[0]
+      const g = sp.toGlobal(new P.Point(q.p.pivot[0] + (q.tip[0] - q.p.pivot[0]) * inner, q.p.pivot[1] + (q.tip[1] - q.p.pivot[1]) * inner))
+      return world.toLocal(g)
+    }
+    function banner(a, text, color) {
+      if (!text) return
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 }, dropShadow: { color: "#000", blur: 6, distance: 0, alpha: 0.9 } } })
+      tx.anchor.set(0.5)
+      const y = a.y0 - a.h * 1.25
+      tx.position.set(a.x0, y)
+      textLayer.addChild(tx)
+      tween(1000, p => {
+        tx.scale.set(p < 0.12 ? lerp(1.8, 1, p / 0.12) : 1)
+        tx.position.y = y - 14 * p
+        tx.alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25
+        if (p >= 1) tx.destroy()
+      })
+    }
+    // a shock ring along the ground where the unit lands
+    function ring(a, color) {
+      const g = new P.Graphics()
+      g.position.set(a.x0 + (a.dash || 0), a.y0)
+      fxLayer.addChild(g)
+      tween(520, p => {
+        g.clear()
+        const r = a.h * (0.3 + 1.4 * ease(p))
+        g.ellipse(0, 0, r, r * 0.22).stroke({ color, width: a.h * 0.06 * (1 - p), alpha: 1 - p })
+        if (p >= 1) g.destroy()
+      })
+      sparks(a.x0 + (a.dash || 0), a.y0, 0xd8c8a8, 26, { speed: 220, up: 120, gravity: 600, life: 600, size: 0.4 })
+      shake = Math.max(shake, 0.8)
+    }
+    // the blade's light trail: a ribbon between the tip and a point down the blade, fading over trail.life ms
+    let trailG = null
+    function trails(t) {
+      if (!trailG) {
+        trailG = new P.Graphics()
+        fxLayer.addChild(trailG)
+      }
+      trailG.clear()
+      for (const side of ["p", "m"])
+        for (const a of units[side]) {
+          const T = a.trail
+          if (!T) continue
+          if (T.on && !(ed.on && ed.unit === a)) {
+            const o = tipOf(a)
+            const i = tipOf(a, 0.35)
+            const last = T.pts[T.pts.length - 1]
+            if (o && i && (!last || Math.hypot(o.x - last.o.x, o.y - last.o.y) > 2)) T.pts.push({ o, i, t })
+          }
+          while (T.pts.length && t - T.pts[0].t > T.life) T.pts.shift()
+          for (let k = 1; k < T.pts.length; k++) {
+            const A = T.pts[k - 1]
+            const B = T.pts[k]
+            // only fast swings leave light (a slow drift of the blade does not)
+            if (Math.hypot(B.o.x - A.o.x, B.o.y - A.o.y) < 6) continue
+            const age = 1 - (t - B.t) / T.life
+            const ii = { x: lerp(B.o.x, B.i.x, T.w), y: lerp(B.o.y, B.i.y, T.w) }
+            const ia = { x: lerp(A.o.x, A.i.x, T.w), y: lerp(A.o.y, A.i.y, T.w) }
+            trailG.poly([A.o.x, A.o.y, B.o.x, B.o.y, ii.x, ii.y, ia.x, ia.y]).fill({ color: T.color, alpha: 0.75 * age * age })
+          }
+        }
+    }
 
     function hit(a, tg, src, e, isSkill) {
       if (!a) return
@@ -7240,16 +7313,43 @@ void main(){
                 a.jig = 0.7
               }),
             )
-        if (isSkill) light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, Math.max(500, at))
+        // the blade leaves a light trail while it swings: thin and white for an attack, broad and coloured for a skill
+        const tcol = act?.color != null ? act.color : isSkill ? (e.element && e.element !== "physical" ? color : 0xffd84a) : 0xeef4ff
+        src.trail = { on: true, color: tcol, w: isSkill ? 1 : 0.45, life: isSkill ? 260 : 150, pts: src.trail?.pts || [] }
+        later(act?.dur || 800, () => src.trail && (src.trail.on = false))
+        if (isSkill) {
+          // the skill's name pops up, the blade gathers light before the release
+          banner(src, e.ab.name || "", tcol)
+          const charge = Math.max(200, at * 0.6)
+          tween(charge, p => {
+            const tp = tipOf(src)
+            if (tp && Math.random() < 0.6) sparks(tp.x + (Math.random() - 0.5) * src.h * 0.5, tp.y + (Math.random() - 0.5) * src.h * 0.5, tcol, 1, { speed: 20, gravity: 0, life: 300, size: 0.35 })
+          })
+          later(charge * 0.5, () => {
+            const tp = tipOf(src)
+            if (tp) light(tp.x, tp.y, tcol, src.h * 0.5, charge, 1.2)
+          })
+          light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, Math.max(500, at))
+        }
+        if (act?.ring != null) later(act.ring, () => ring(src, tcol))
         const tgt = tgs[0]?.[0]
         if (act?.lunge && tgt) {
-          const reach = tgt.x0 - src.x0 - src.dir * (tgt.h + src.h) * 0.3
+          // reach: stop in front of the target, or (act.through) run past it
+          const reach = act.through ? tgt.x0 - src.x0 + src.dir * tgt.h * 0.55 : tgt.x0 - src.x0 - src.dir * (tgt.h + src.h) * 0.3
           tween(at * 0.45, p => (src.dash = reach * ease(p)), at * 0.55)
           tween(Math.max(200, act.dur - at - 80), p => (src.dash = reach * (1 - ease(p))), at + 80)
           src.cont.zIndex = 1e4
           later(act.dur, () => (src.cont.zIndex = src.y0))
         }
-        later(at, () => tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill)))
+        later(at, () => {
+          tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill))
+          // a skill's blow freezes both sides for a moment and punches the camera in
+          if (isSkill) {
+            for (const u of [src, ...tgs.map(([a]) => a)]) if (u.act) u.act.t0 += 90
+            punch = Math.max(punch, 0.7)
+            shake = Math.max(shake, 0.6)
+          }
+        })
       }
     }
 
@@ -7287,6 +7387,7 @@ void main(){
           a.cont.x = a.x0 + (a.dash || 0)
           if (a.rig) rigFrame(a, t)
         }
+      trails(t)
       // camera: shake and a short zoom punch toward the middle
       shake *= Math.pow(0.004, dt)
       punch *= Math.pow(0.01, dt)
