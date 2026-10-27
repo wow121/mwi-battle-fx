@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.8
+// @version      0.18.9
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6857,14 +6857,14 @@ void main(){
       layout()
       for (const side of ["p", "m"])
         for (const a of units[side]) {
-          if (!a.art) continue
+          if (!a.art || a.skip) continue
           const urls = POSES.map(p => Assets.url(`${a.art}/${p}.webp`))
           const tex = await P.Assets.load(urls).catch(() => null)
           if (!tex || !app) continue
           a.tex = Object.fromEntries(POSES.map((p, k) => [p, tex[urls[k]]]))
           setPose(a, a.dead ? "dead" : "idle")
-          if (side === "p" && opt.rig && a.u.avatar && Assets.has("rig", "player"))
-            loadPlayerRig(a.u)
+          if (side === "p" && opt.rig && (a.u.avatar || a.i === 0) && Assets.has("rig", "player"))
+            loadPlayerRig(a.u, a.i === 0)
               .then(r => r && app && !a.cont.destroyed && buildRig(a, r))
               .catch(e => console.warn("[PixiJS 原型] player rig", e))
           if (side === "m" && opt.rig && Assets.has("rig", a.id))
@@ -6876,6 +6876,9 @@ void main(){
     function makeUnit(side, i, u) {
       const a = { side, i, u, id: (u.hrid || "").split("/").pop(), style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
       a.cont = new P.Container()
+      // 骨骼怪物 on: only monsters that have a rig are drawn (the rest are left out, their events ignored)
+      a.skip = side === "m" && opt.rig && !Assets.has("rig", a.id)
+      a.cont.visible = !a.skip
       a.mesh = new P.MeshPlane({ texture: P.Texture.WHITE, verticesX: 10, verticesY: 10 })
       a.mesh.visible = false
       a.filter = P.Filter.from({
@@ -6905,23 +6908,25 @@ void main(){
         bg.position.set((W2 - bg.texture.width * k) / 2, (H - bg.texture.height * k) * 0.85)
       }
       for (const side of ["p", "m"])
-        units[side].forEach((a, i) => {
-          const n = units[side].length
-          // like the stage: the first of each side stands nearest the middle
-          const gap = (W2 * 0.38) / Math.max(3, n)
-          a.h = Math.min(H * 0.4, gap * 1.2)
-          a.x0 = side === "p" ? W2 * 0.45 - (i + 0.5) * gap : W2 * 0.55 + (i + 0.5) * gap
-          a.y0 = H * 0.86 + (i % 2) * H * 0.03
-          a.dir = side === "p" ? 1 : -1
-          a.cont.position.set(a.x0, a.y0)
-          a.cont.zIndex = a.y0
-          a.shadow.width = a.h * 0.6
-          a.shadow.height = a.h * 0.12
-          a.label.position.set(0, 4)
-          drawHp(a)
-          if (a.tex) setPose(a, a.pose)
-          if (a.rig) rigScale(a)
-        })
+        units[side]
+          .filter(a => !a.skip)
+          .forEach((a, i, shownSide) => {
+            const n = shownSide.length
+            // like the stage: the first of each side stands nearest the middle
+            const gap = (W2 * 0.38) / Math.max(3, n)
+            a.h = Math.min(H * 0.4, gap * 1.2)
+            a.x0 = side === "p" ? W2 * 0.45 - (i + 0.5) * gap : W2 * 0.55 + (i + 0.5) * gap
+            a.y0 = H * 0.86 + (i % 2) * H * 0.03
+            a.dir = side === "p" ? 1 : -1
+            a.cont.position.set(a.x0, a.y0)
+            a.cont.zIndex = a.y0
+            a.shadow.width = a.h * 0.6
+            a.shadow.height = a.h * 0.12
+            a.label.position.set(0, 4)
+            drawHp(a)
+            if (a.tex) setPose(a, a.pose)
+            if (a.rig) rigScale(a)
+          })
       unitsLayer.sortableChildren = true
     }
     function drawHp(a) {
@@ -7018,27 +7023,31 @@ void main(){
     // a player rig: the shared side-view template (rig.json) with this avatar's and outfit's registered layers, the
     // paper-doll weapon piece in the front fist (turned from the doll's arm angle to ours) and the off-hand behind
     let playerBase = null
-    async function loadPlayerRig(u) {
+    // pilot: player 1 always gets the drawn look (its own avatar / outfit when those are drawn, else the pilot's)
+    async function loadPlayerRig(u, pilot) {
       if (!playerBase)
         playerBase = fetch(Assets.url("rig/player/rig.json"))
           .then(r => r.json())
           .catch(e => ((playerBase = null), Promise.reject(e)))
       const base = await playerBase
-      if (!base.avatars.includes(u.avatar)) return null
+      const avatar = base.avatars.includes(u.avatar) ? u.avatar : pilot ? base.avatars[0] : null
+      if (!avatar) return null
+      const outfit = base.outfits.includes(u.outfit) ? u.outfit : pilot ? base.outfits[0] : null
       const def = { ...base, parts: { ...base.parts } }
       const L = n => P.Assets.load(Assets.url(`rig/player/${n}.webp`))
-      const dressed = base.outfits.includes(u.outfit)
       const tex = {
-        body: [await L(`a_${u.avatar}_body`), dressed && (await L(`o_${u.outfit}_body`))],
-        arm: [await L(`a_${u.avatar}_arm`), dressed && (await L(`o_${u.outfit}_arm`))],
+        body: [await L(`a_${avatar}_body`), outfit && (await L(`o_${outfit}_body`))],
+        arm: [await L(`a_${avatar}_arm`), outfit && (await L(`o_${outfit}_arm`))],
       }
+      // the weapon pieces come with the paper-doll index
+      for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
         const h = id && Doll.held(id)
         if (!h) return null
         const t = await P.Assets.load(h.url)
         return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip }
       }
-      const w = await piece(u.items?.main_hand || u.items?.two_hand)
+      const w = await piece(u.items?.main_hand || u.items?.two_hand || (pilot ? "holy_sword" : null))
       if (w) {
         tex.weapon = w.tex
         def.parts.weapon = { pivot: w.grip, at: base.fist, parent: "arm", z: 4, rot: 58 - base.armAngle - 40, scale: base.scale }
@@ -7341,7 +7350,9 @@ void main(){
       if (!app) return
       for (const e of evs) {
         const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
-        const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg])
+        if (src?.skip) continue
+        const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a && !a.skip)
+        if (!tgs.length && e.targets?.length) continue
         const isSkill = !!e.ab
         const el = e.element || "physical"
         const color = COLOR[el] || COLOR.physical
