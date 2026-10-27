@@ -3603,8 +3603,10 @@
 .bfxl-thero{position:absolute;bottom:2px;width:96px;height:96px;margin-left:-48px;z-index:3}
 .bfxl-thero>div{position:absolute;inset:0;transform-origin:50% 100%}
 .bfxl-thero svg{position:absolute;left:0;top:0;width:100%;height:100%}
-.bfxl-tvis{position:absolute;bottom:6px;width:96px;height:96px;margin-left:-48px;z-index:2;pointer-events:none}
-.bfxl-tvis>div{position:absolute;inset:0;transform-origin:50% 100%}
+.bfxl-tvis{position:absolute;left:0;bottom:6px;width:96px;height:96px;margin-left:-48px;z-index:2;pointer-events:none}
+.bfxl-tvis>div{position:absolute;inset:0;transform-origin:50% 100%;transform:scale(.55)}
+.bfxl-tvis.l>div{transform:scale(-.55,.55)}
+.bfxl-tvis.go{will-change:transform}
 .bfxl-tvis svg{position:absolute;left:0;top:0;width:100%;height:100%}
 .bfxl-tvis b{position:absolute;left:50%;top:30px;transform:translateX(-50%);padding:0 3px;border-radius:4px;background:#0007;font:600 8px sans-serif;color:#eef;white-space:nowrap}
 .bfxl-tfx{position:absolute;inset:0;pointer-events:none;z-index:4}
@@ -5153,9 +5155,12 @@
       if (key === town.key) return
       town.key = key
       const bg = art("bg", "town") ? `url("${artUrl("bg/town")}")` : ""
-      el.querySelector(".bfxl-town").style.background = bg ? `${bg} 0 ${-TOWN_BG_Y}px / ${TOWN_BG_W}px auto no-repeat` : ""
+      const box = el.querySelector(".bfxl-town")
+      box.style.background = bg ? `${bg} 0 ${-TOWN_BG_Y}px / ${TOWN_BG_W}px auto no-repeat` : ""
+      delete box.__bfx // the shorthand reset its position
       const strip = el.querySelector(".bfxl-strip")
       strip.innerHTML = ""
+      town.goal = undefined
       strip.style.width = townW + "px"
       const street = document.createElement("div")
       street.className = "bfxl-street"
@@ -5271,7 +5276,7 @@
       e.insertAdjacentHTML("beforeend", "<b></b>")
       e.lastChild.textContent = name
       strip.appendChild(e)
-      const v = { name, el: e, until: now + STAY_MS, next: now + 8000 + Math.random() * 20000 }
+      const v = { name, el: e, until: now + STAY_MS, next: now + 15000 + Math.random() * 45000 }
       if (inTown() && visible()) {
         v.dir = Math.random() < 0.5 ? 1 : -1
         v.x = v.dir > 0 ? town.cam - 40 : town.cam + 380
@@ -5280,7 +5285,7 @@
         v.x = v.to = 20 + Math.random() * (townW - 40)
         v.dir = Math.random() < 0.5 ? 1 : -1
       }
-      e.style.left = v.x + "px"
+      e.style.transform = `translateX(${v.x}px)`
       visitors.push(v)
     }
     function moveVisitors(now, dt) {
@@ -5293,7 +5298,7 @@
         }
         // now and then a few steps along the street
         if (now > v.next && Math.abs(v.to - v.x) < 1) {
-          v.next = now + 8000 + Math.random() * 20000
+          v.next = now + 15000 + Math.random() * 45000
           v.to = Math.max(20, Math.min(townW - 20, v.x + (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random() * 60)))
         }
         const d = v.to - v.x
@@ -5302,9 +5307,15 @@
           v.dir = d > 0 ? 1 : -1
           v.x += v.dir * Math.min(Math.abs(d), 55 * dt)
         }
-        v.el.style.left = v.x + "px"
-        const bob = walking ? -2 * Math.abs(Math.sin((now / 1000) * Math.PI * 3)) : 0
-        v.el.firstChild.style.transform = `translateY(${bob}px) scale(.55) scaleX(${v.dir})`
+        // out of the view: not drawn at all (a busy channel fills the street)
+        const seen = v.x > town.cam - 60 && v.x < town.cam + 400
+        put(v.el, "display", seen ? "" : "none")
+        if (!seen) continue
+        // walking on a layer of its own: moved by the compositor, the crowd behind is not repainted each frame
+        const bob = walking ? Math.round(-20 * Math.abs(Math.sin((now / 1000) * Math.PI * 3))) / 10 : 0
+        put(v.el, "transform", `translate(${Math.round(v.x * 10) / 10}px,${bob}px)`)
+        const cls = "bfxl-tvis" + (v.dir < 0 ? " l" : "") + (walking ? " go" : "")
+        if (v.el.className !== cls) v.el.className = cls
       }
     }
     // back from the town into the job's scene: the hero walks in from the left as on any new action
@@ -5384,6 +5395,14 @@
       }
       box.querySelector(".bfxl-find").addEventListener("click", () => (town.free = false))
     }
+    // a style written only when it changed: most of the town stands still most of the time, and a rewrite each
+    // frame (even of the same value) had the street with its visitors repainted sixty times a second
+    function put(n, k, v) {
+      const c = (n.__bfx ||= {})
+      if (c[k] === v) return
+      c[k] = v
+      n.style[k] = v
+    }
     function townFrame(now) {
       const hero = el.querySelector(".bfxl-thero")
       if (!hero || cfg.lifeIcon) return
@@ -5430,8 +5449,8 @@
       }
       if (!town.free) {
         const target = Math.max(0, Math.min(maxCam, focus - 170))
-        town.cam = town.snap ? target : town.cam + (target - town.cam) * (1 - Math.exp(-dt * 7))
-      }
+        town.cam = town.snap || Math.abs(target - town.cam) < 0.2 ? target : town.cam + (target - town.cam) * (1 - Math.exp(-dt * 7))
+      } else if (Math.abs(town.vel) < 2) town.vel = 0
       town.cam = Math.max(0, Math.min(maxCam, town.cam))
       town.snap = false
       const box = el.querySelector(".bfxl-town")
@@ -5462,21 +5481,28 @@
           cycleAt = now
           t = 0
         }
-        ring.style.left = TOWN_X[town.at] + "px"
-        ring.style.background = `conic-gradient(#7fd0ff ${Math.min(1, t) * 360}deg,#2b3350d0 0)`
-        el.querySelector(".bfxl-bar i").style.width = Math.min(100, t * 100) + "%"
-        el.querySelector(".bfxl-bar span").textContent = d.toFixed(2) + "s"
+        // in 3° steps: the ring need not be redrawn every frame
+        put(ring, "left", TOWN_X[town.at] + "px")
+        put(ring, "background", `conic-gradient(#7fd0ff ${Math.round(Math.min(1, t) * 120) * 3}deg,#2b3350d0 0)`)
+        put(el.querySelector(".bfxl-bar i"), "width", Math.round(Math.min(100, t * 100) * 2) / 2 + "%")
+        const sec = d.toFixed(2) + "s"
+        const lab = el.querySelector(".bfxl-bar span")
+        if (lab.textContent !== sec) lab.textContent = sec
       }
       moveVisitors(now, dt)
-      el.querySelector(".bfxl-strip").style.transform = `translateX(${-town.cam}px)`
-      el.querySelector(".bfxl-town").style.backgroundPositionX = -(town.cam / Math.max(1, townW - 340)) * (TOWN_BG_W - 340) + "px"
-      hero.style.left = town.x + "px"
-      hero.style.opacity = Math.max(0, Math.min(1, opacity))
-      const bob = walking ? -3 * Math.abs(Math.sin((now / 1000) * Math.PI * 4)) : 0
-      hero.firstChild.style.transform = `translateY(${bob}px) scale(.62) scaleX(${facing})`
+      const cam = Math.round(town.cam * 10) / 10
+      put(el.querySelector(".bfxl-strip"), "transform", `translateX(${-cam}px)`)
+      put(box, "backgroundPositionX", Math.round(-(cam / Math.max(1, maxCam)) * (TOWN_BG_W - 340) * 10) / 10 + "px")
+      put(hero, "left", Math.round(town.x * 10) / 10 + "px")
+      put(hero, "opacity", String(Math.round(Math.max(0, Math.min(1, opacity)) * 50) / 50))
+      const bob = walking ? Math.round(-30 * Math.abs(Math.sin((now / 1000) * Math.PI * 4))) / 10 : 0
+      put(hero.firstChild, "transform", `translateY(${bob}px) scale(.62) scaleX(${facing})`)
       // the building the hero is heading for lights up
       const goal = tr?.to || (working ? town.at : null)
-      for (const b of el.querySelectorAll(".bfxl-bld")) b.classList.toggle("here", b.dataset.id === goal)
+      if (town.goal !== goal) {
+        town.goal = goal
+        for (const b of el.querySelectorAll(".bfxl-bld")) b.classList.toggle("here", b.dataset.id === goal)
+      }
       // resting at home: z-z-z; out fighting: crossed swords over the gate
       if (!tr && now - town.zAt > 1700) {
         town.zAt = now

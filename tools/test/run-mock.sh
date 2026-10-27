@@ -12,7 +12,8 @@ SSHO=(-i "$HOME/.ssh/epos_windows_ed25519" -o UserKnownHostsFile="$HOME/.ssh/epo
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/sprites"
-cp "$REPO/tools/test/drive.mjs" "$TMP/"
+# DRIVER=tools/test/perf.mjs swaps in another driver (served as drive.mjs)
+cp "${DRIVER:-$REPO/tools/test/drive.mjs}" "$TMP/drive.mjs"
 # MOCK=tools/test/guild.html swaps in another page (served as mock.html)
 cp "${MOCK:-$REPO/tools/test/mock.html}" "$TMP/mock.html"
 # DUR=<ms> records longer than the default 18 s; PHONE=1 emulates a 390x844 touch phone

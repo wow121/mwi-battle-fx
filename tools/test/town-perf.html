@@ -1,0 +1,55 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
+.ProgressBar_bar{position:relative;width:200px;overflow:hidden;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+</style></head><body>
+<!-- the game's header: action name + seconds per action (run-mock serves this page as mock.html) -->
+<div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm">挤奶 - 奶牛</div></div>
+ <div class="ProgressBar_bar"><div class="ProgressBar_innerBar__q" style="width:0"></div><div class="ProgressBar_text__102Yn" id="pt">2.50s</div></div></div></div>
+<div style="padding:20px">生活技能小窗测试 <b id="st" style="color:#ff0;font-size:20px"></b></div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799',lifeW:0.5}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script>{const raw=window.requestAnimationFrame.bind(window);window.requestAnimationFrame=f=>raw(function g(t){if(window.__freeze&&!f.perf)return raw(g);f(t)})}</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const inv=(item,count,enh=0)=>({itemLocationHrid:'/item_locations/inventory',itemHrid:'/items/'+item,enhancementLevel:enh,count});
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+const sk=(s,level,experience)=>({skillHrid:'/skills/'+s,level,experience});
+const act=(id,hrid,count,extra={})=>({id,actionHrid:hrid,currentCount:count,hasMaxCount:false,maxCount:0,ordinal:0,isDone:false,primaryItemHash:'',enhancingProtectionMinLevel:0,updatedAt:new Date(T0+(extra.at||0)).toISOString(),...extra});
+let T0=Date.now();
+const done=(a,items,skills)=>feed({type:'action_completed',endCharacterAction:a,endCharacterItems:items,endCharacterSkills:skills});
+const header=(name,s)=>{document.getElementById('nm').textContent=name;document.getElementById('pt').textContent=s};
+const PHASES=['scene (milking)','town out, 0 visitors','town out, 30 visitors','town out, 150 visitors','town idle, 150 visitors','scene, 150 visitors in town','town idle 150, script frozen','town idle 150, visitors hidden','town idle 150, no pops'];
+const chat=n=>feed({type:'chat_message_received',message:{chan:'/chat_channel_types/general',cId:1,sName:n,m:'x',t:new Date().toISOString(),gm:''}});
+let nv=0;const addV=n=>{for(let k=0;k<n;k++)chat('V'+(nv++))};
+async function start(){
+ T0=Date.now();
+ const room=(r,level)=>['/house_rooms/'+r,{houseRoomHrid:'/house_rooms/'+r,level}];
+ header('挤奶 - 奶牛','1.60s');
+ feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},
+  characterHouseRoomMap:Object.fromEntries([room('dairy_barn',3),room('garden',0),room('log_shed',5),room('forge',8),room('workshop',1),room('sewing_parlor',0),room('kitchen',2),room('brewery',4),room('laboratory',7),room('observatory',6)]),
+  characterActions:[act(1,'/actions/milking/cow',0)],
+  characterSkills:[sk('milking',9,900)],
+  characterItems:[inv('milk',10),slot('milking_tool','verdant_brush')]});
+ let c=1;setInterval(()=>{if(window.__idle)return;done(act(1,'/actions/milking/cow',c,{at:c*1600}),[inv('milk',10+2*c)],[sk('milking',9,900+12*c)]);c++},1600);
+ await sleep(500);
+}
+async function phase(i){
+ const out=document.querySelector('.bfxl-out');
+ const isOut=()=>document.querySelector('.bfxl').classList.contains('intown');
+ if(i===0){}
+ if(i===1){out.click()}
+ if(i===2){addV(30)}
+ if(i===3){addV(120)}
+ if(i===4){window.__idle=1;feed({type:'actions_updated',endCharacterActions:[act(1,'/actions/milking/cow',1,{isDone:true})]})}
+ if(i===5){window.__idle=0;feed({type:'actions_updated',endCharacterActions:[act(5,'/actions/milking/cow',0)]})}
+ if(i===6){window.__idle=1;feed({type:'actions_updated',endCharacterActions:[act(5,'/actions/milking/cow',1,{isDone:true})]});await sleep(3000);window.__freeze=1}
+ if(i===7){window.__freeze=0;document.head.insertAdjacentHTML('beforeend','<style id=hv>.bfxl-tvis{display:none!important}</style>')}
+ if(i===8){document.getElementById('hv').remove();document.head.insertAdjacentHTML('beforeend','<style>.bfxl-tfx{display:none!important}</style>')}
+}
+function back(){}
+</script></body></html>
