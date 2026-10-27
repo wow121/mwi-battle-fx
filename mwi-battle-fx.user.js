@@ -970,7 +970,7 @@
 .bfx-lab .gal figure{margin:0;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 4px}
 .bfx-lab .gal img{width:96px;height:96px}
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
-.bfx-fps{position:absolute;right:4px;top:4px;z-index:6000;padding:2px 6px;font:11px/15px monospace;white-space:pre;color:#dfe6ff;background:rgba(0,0,0,.6);border-radius:4px}
+.bfx-fps{position:absolute;right:4px;top:26px;z-index:6000;padding:2px 6px;font:11px/15px monospace;white-space:pre;color:#dfe6ff;background:rgba(0,0,0,.6);border-radius:4px}
 /* #dev-end */`
       document.head.appendChild(st)
     }
