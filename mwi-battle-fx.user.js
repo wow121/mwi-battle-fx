@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.19.0
+// @version      0.19.1
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6479,44 +6479,116 @@ void main(){
       // the sword pilot: one-handed sword in the front hand, the off-hand (shield) in the back hand. The front arm rests
       // held forward (3/4 battle stance): + raises it, - lowers it; the back arm (barm): + swings the off-hand forward
       player: {
-        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { arm: 4, fore: -6, barm: 30 } }, { t: 800, a: { body: 2, arm: 8, fore: -2, barm: 34 }, y: -0.012 }, { t: 1600, a: { arm: 4, fore: -6, barm: 30 } }] },
-        // shield up in front while the sword goes back over the head, then the shield pulls in as the body turns into the cut
+        // the sword held out forward, clear of the face
+        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { arm: 4, fore: -52, barm: 30 } }, { t: 800, a: { body: 2, arm: 8, fore: -50, barm: 34 }, y: -0.012 }, { t: 1600, a: { arm: 4, fore: -52, barm: 30 } }] },
+        // 普攻 1: shield up in front while the sword goes back over the head, the shield pulls in as the body turns into the cut
         attack: {
           dur: 820, hit: 360, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
             { t: 240, e: "out", a: { body: -10, arm: 85, fore: -45, barm: 55 }, x: -0.03 },
             { t: 300, a: { body: -12, arm: 90, fore: -50, barm: 58 }, x: -0.04 },
             { t: 370, e: "in", a: { body: 14, arm: -35, fore: -80, barm: -15 }, x: 0.06 },
             { t: 480, a: { body: 10, arm: -45, fore: -85, barm: -10 }, x: 0.05 },
-            { t: 820, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 820, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        // a leaping shield-first overhead cut
+        // 普攻 2: the sword drawn back at the shoulder, then a straight thrust
+        attack2: {
+          dur: 760, hit: 330, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 220, e: "out", a: { body: -10, arm: 35, fore: -15, barm: 50 }, x: -0.05 },
+            { t: 280, a: { body: -11, arm: 38, fore: -12, barm: 52 }, x: -0.055 },
+            { t: 340, e: "in", a: { body: 12, arm: -5, fore: -72, barm: 0 }, x: 0.1 },
+            { t: 460, a: { body: 10, arm: -2, fore: -70, barm: 5 }, x: 0.09 },
+            { t: 760, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // 普攻 3: low behind, then a rising cut
+        attack3: {
+          dur: 800, hit: 350, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 230, e: "out", a: { body: 8, arm: -45, fore: -150, barm: 45 }, x: -0.02, y: -0.02 },
+            { t: 360, e: "in", a: { body: -10, arm: 95, fore: -60, barm: 15 }, x: 0.06, y: 0.03 },
+            { t: 480, a: { body: -12, arm: 100, fore: -48, barm: 20 }, x: 0.05, y: 0.03 },
+            { t: 800, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // 普攻 4: a shield bash, then a short chop
+        attack4: {
+          dur: 900, hit: 560, hits: [300], lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 180, e: "out", a: { body: -8, arm: 30, fore: -30, barm: 10 }, x: -0.03 },
+            { t: 300, e: "in", a: { body: 12, arm: 25, fore: -35, barm: 70 }, x: 0.1 },
+            { t: 420, a: { body: 4, arm: 85, fore: -50, barm: 62 }, x: 0.07 },
+            { t: 560, e: "in", a: { body: 14, arm: -35, fore: -85, barm: 40 }, x: 0.08 },
+            { t: 900, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // 分裂斩: steps in whirling the sword a full turn overhead, the blade sweeps through at the end
+        "skill:cleave": {
+          dur: 1150, hit: 640, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 200, e: "out", a: { body: -14, arm: 60, fore: -40, barm: 50 }, x: -0.04, y: -0.02 },
+            { t: 420, e: "linear", a: { body: -4, arm: 75, fore: -220, barm: 45 }, y: 0.03 },
+            { t: 600, e: "linear", a: { body: 10, arm: 40, fore: -380, barm: 20 }, x: 0.05, y: 0.02 },
+            { t: 660, e: "out", a: { body: 18, arm: -30, fore: -440, barm: -15 }, x: 0.09 },
+            { t: 820, a: { body: 14, arm: -40, fore: -445, barm: -10 }, x: 0.07 },
+            { t: 1150, a: { arm: 4, fore: -412, barm: 30 } },
+          ],
+        },
+        // 血刃斩: a rising cut, then straight back down
+        "skill:maim": {
+          dur: 1050, hit: 600, hits: [330], lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 200, e: "out", a: { body: 8, arm: -45, fore: -150, barm: 45 }, x: -0.02, y: -0.02 },
+            { t: 330, e: "in", a: { body: -10, arm: 95, fore: -60, barm: 20 }, x: 0.04, y: 0.05 },
+            { t: 430, a: { body: -12, arm: 100, fore: -45, barm: 25 }, x: 0.04, y: 0.06 },
+            { t: 600, e: "in", a: { body: 16, arm: -35, fore: -85, barm: -15 }, x: 0.08 },
+            { t: 720, a: { body: 12, arm: -45, fore: -90, barm: -10 }, x: 0.06 },
+            { t: 1050, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // any other damage skill: a leaping shield-first overhead cut
         skill: {
           dur: 1100, hit: 620, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
             { t: 260, e: "out", a: { body: -14, arm: 95, fore: -50, barm: 60 }, x: -0.05, y: 0.04 },
             { t: 420, a: { body: -16, arm: 100, fore: -55, barm: 65 }, x: -0.06, y: 0.08 },
             { t: 520, e: "in", a: { body: 4, arm: 50, fore: -30, barm: 45 }, x: 0.03, y: 0.1 },
             { t: 630, e: "in", a: { body: 18, arm: -45, fore: -85, barm: -20 }, x: 0.08 },
             { t: 760, a: { body: 12, arm: -55, fore: -90, barm: -15 }, x: 0.06 },
-            { t: 1100, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 1100, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        // the shield comes up to take the blow
-        hurt: { dur: 520, keys: [{ t: 0, a: { arm: 4, fore: -6, barm: 30 } }, { t: 90, e: "out", a: { body: -16, arm: 25, fore: -10, barm: 80 }, x: -0.06 }, { t: 520, a: { arm: 4, fore: -6, barm: 30 } }] },
-        cast: {
-          dur: 1000,
+        // the shield punches out to take the blow, the body is knocked back a step
+        hurt: {
+          dur: 560,
           keys: [
-            { t: 0, a: { arm: 4, fore: -6, barm: 30 } },
-            { t: 300, e: "out", a: { body: -6, arm: 60, fore: -30, barm: 15 }, y: 0.02 },
-            { t: 700, a: { body: -6, arm: 65, fore: -28, barm: 15 }, y: 0.02 },
-            { t: 1000, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 80, e: "out", a: { body: -6, arm: 20, fore: -45, barm: 58 }, x: -0.05 },
+            { t: 240, a: { body: -4, arm: 15, fore: -42, barm: 55 }, x: -0.035 },
+            { t: 560, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        dead: { dur: 650, keys: [{ t: 0, a: { arm: 4, fore: -6, barm: 30 } }, { t: 180, a: { body: -20, arm: 30, fore: 10, barm: 10 } }, { t: 650, e: "in", a: { body: -84, arm: 50, fore: 20, barm: -20 } }] },
+        // the sword raised straight up overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 300, e: "out", a: { body: -4, arm: 100, fore: -100, barm: 15 }, y: 0.03 },
+            { t: 800, a: { body: -4, arm: 102, fore: -100, barm: 15 }, y: 0.03 },
+            { t: 1100, a: { arm: 4, fore: -52, barm: 30 } },
+          ],
+        },
+        // falls on the back, the sword lying along the body
+        dead: { dur: 650, keys: [{ t: 0, a: { arm: 4, fore: -52, barm: 30 } }, { t: 180, a: { body: -20, arm: 10, fore: -60, barm: 10 } }, { t: 650, e: "in", a: { body: -84, arm: -40, fore: -145, barm: -20 } }] },
       },
       magnetic_golem: {
         idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
@@ -6883,7 +6955,12 @@ void main(){
           const p = ease((t - A.t0) / a.blend)
           const b = pose
           pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p) }
-          for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) pose.a[n] = lerp(a.from.a[n] || 0, b.a[n] || 0, p)
+          // the short way round: an action may end a whole turn (or more) away from where the next starts
+          for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) {
+            const to = b.a[n] || 0
+            const from = to + ((((a.from.a[n] || 0) - to) % 360) + 540) % 360 - 180
+            pose.a[n] = lerp(from, to, p)
+          }
         }
       }
       a.pose = pose
@@ -7132,9 +7209,11 @@ void main(){
         if (e.effect !== "damage") {
           if (src) {
             play1(src, "cast")
+            // the sword held high catches the light
             later(300, () => {
+              light(src.x0, src.y0 - src.h * 1.05, COLOR.buff, src.h * 0.7, 800, 1.2)
               light(src.x0, src.y0 - src.h * 0.5, COLOR.buff, src.h * 0.9, 700)
-              sparks(src.x0, src.y0 - src.h * 0.4, COLOR.buff, 30, { speed: 90, up: 120, gravity: -40, life: 900, size: 0.4 })
+              sparks(src.x0, src.y0 - src.h * 1.05, COLOR.buff, 34, { speed: 110, up: 60, gravity: -40, life: 900, size: 0.4 })
             })
           }
           continue
@@ -7144,8 +7223,23 @@ void main(){
           continue
         }
         // the attacker's action: wind up, run in (lunge) before the blow lands at act.hit, come back after
-        const act = play1(src, isSkill ? "skill" : "attack")
+        // a skill plays its own action ("skill:<key>") when it has one, else the generic skill; a plain attack picks
+        // one of its sets at random (attack, attack2, …)
+        const sets = ["attack", "attack2", "attack3", "attack4"].filter(n => actionOf(src.kind, n))
+        const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
+        const act = play1(src, name)
         const at = act?.hit ?? 300
+        // earlier blows of a multi-blow action (hits: [ms, …]): a slash and a flinch, the damage lands at hit
+        for (const t of act?.hits || [])
+          if (t < at)
+            later(t, () =>
+              tgs.forEach(([a]) => {
+                const m = mid(a)
+                playSheet("slash", m.x, m.y, a.h * 0.9, { dur: 300, flip: src.dir < 0 })
+                flash(a, 0xffffff, 160)
+                a.jig = 0.7
+              }),
+            )
         if (isSkill) light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, Math.max(500, at))
         const tgt = tgs[0]?.[0]
         if (act?.lunge && tgt) {
@@ -7333,8 +7427,11 @@ void main(){
         setEditing(true)
       }
       const what = mk("select")
-      for (const [v, n] of Object.entries(NAMES)) {
-        if (v === "dead" && ed.side === "m") continue
+      // the attack sets, then one action per damage skill a player carries (技能·<name>); 其他技能 is the generic one
+      const sets = ["attack", "attack2", "attack3", "attack4"].filter(n => ACTIONS[kindOf()]?.[n] || edits[kindOf()]?.[n]).map((n, k, all) => [n, all.length > 1 ? NAMES.attack + (k + 1) : NAMES.attack])
+      const own = ed.side === "p" ? (Lab.units.p[ed.i]?.skills || []).filter(k => ABILITIES[k]?.[1] === "damage").map(k => ["skill:" + k, "技能·" + ABILITIES[k][0]]) : []
+      const list = [["idle", NAMES.idle], ...sets, ...own, ["skill", own.length ? "其他技能" : NAMES.skill], ["hurt", NAMES.hurt], ["cast", NAMES.cast], ...(ed.side === "p" ? [["dead", NAMES.dead]] : [])]
+      for (const [v, n] of list) {
         const o = mk("option", null, n)
         o.value = v
         what.append(o)
@@ -7353,7 +7450,7 @@ void main(){
       dur.title = "总时长（毫秒）"
       dur.onchange = () => ((ed.act.dur = Math.max(100, +dur.value || 800)), commit(), drawPanel())
       top.append(mk("span", "lbl", "时长"), dur)
-      if (ed.name === "attack" || ed.name === "skill") {
+      if (ed.name.startsWith("attack") || ed.name.startsWith("skill")) {
         const hit = mk("input")
         hit.type = "number"
         hit.step = 10
