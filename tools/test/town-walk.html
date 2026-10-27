@@ -71,8 +71,12 @@ async function start(){
  say('9 queue empty: button gone');
  await sw('',[act(2,'/actions/cheesesmithing/cheese_sword',1,{isDone:true})]);
  await sleep(3000);
- chat('IdleGuy'); await sleep(3000);
- say('end');
+ chat('IdleGuy'); await sleep(2000);
+ say('10 profile of IdleGuy opened');
+ feed({type:'profile_shared',profile:{sharableCharacter:{name:'IdleGuy',avatarHrid:'/avatars/bunny_1',avatarOutfitHrid:'/avatar_outfits/santa_outfit'},wearableItemMap:{}}});
+ await sleep(500);
+ { const v=[...document.querySelectorAll('.bfxl-tvis')].find(e=>e.textContent==='IdleGuy'); say('IdleGuy: '+(v?[...v.querySelectorAll('use')].map(u=>u.getAttribute('href').split('#')[1]).join('+'):'missing')) }
+ await sleep(2500);
 }
 function back(){}
 </script></body></html>

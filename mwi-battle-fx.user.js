@@ -3261,6 +3261,7 @@
     function onMessage(obj) {
       if (obj.guildSharableCharacterMap) Object.assign(guildChars, obj.guildSharableCharacterMap)
       if (obj.type === "chat_message_received") return townVisitor(obj.message)
+      if (visitors.length && (obj.type === "profile_shared" || obj.guildSharableCharacterMap)) restyleVisitors()
       setHouses(obj)
       if (obj.type === "init_character_data") {
         myId = obj.character?.id ?? myId
@@ -5241,6 +5242,22 @@
     // outfit picked by their name. With the town on screen they walk in from the edge of the view
     const STAY_MS = 600000
     const visitors = [] // { name, el, x, to, dir, until, next }
+    function visitorLook(name) {
+      const g = Object.values(guildChars).find(c => c?.name === name)
+      if (g?.avatarHrid) return { avatar: shortId(g.avatarHrid), outfit: shortId(g.avatarOutfitHrid) }
+      const prof = Looks.profileOf(name)
+      if (prof?.avatar) return prof
+      const doll = Doll.list("a_").map(k => k.slice(2)).filter(k => !k.startsWith("custom_"))
+      const pool = doll.length ? doll : ["blue_person_1", "blue_person_2", "blue_person_3", "bunny_1", "bunny_2", "cat_1", "cat_2", "cat_3"]
+      let h = 0
+      for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
+      const wear = ["tshirt_default", "suit_1", "suit_3", "suit_5", "dress_1", "dress_4", "dress_7", "mage_1", "mage_2", "ranger_1", "ranger_2", "warrior_1", "warrior_2", "pirate_1", "tshirt_milking", "tshirt_cooking", "uniform_crafting", "uniform_brewing"]
+      return { avatar: pool[h % pool.length], outfit: wear[(h >>> 8) % wear.length] }
+    }
+    // a profile opened (a click on someone in chat) or the guild's members came: the visitors take their real looks
+    function restyleVisitors() {
+      for (const v of visitors) v.el.firstChild.replaceChildren(heroBody(visitorLook(v.name)))
+    }
     function townVisitor(m) {
       const name = m?.sName
       const strip = el?.querySelector(".bfxl-strip")
@@ -5248,20 +5265,9 @@
       const now = performance.now()
       const seen = visitors.find(v => v.name === name)
       if (seen) return (seen.until = now + STAY_MS)
-      const g = Object.values(guildChars).find(c => c?.name === name)
-      const prof = Looks.profileOf(name)
-      let look = g?.avatarHrid ? { avatar: shortId(g.avatarHrid), outfit: shortId(g.avatarOutfitHrid) } : prof?.avatar ? prof : null
-      if (!look) {
-        const doll = Doll.list("a_").map(k => k.slice(2)).filter(k => !k.startsWith("custom_"))
-        const pool = doll.length ? doll : ["blue_person_1", "blue_person_2", "blue_person_3", "bunny_1", "bunny_2", "cat_1", "cat_2", "cat_3"]
-        let h = 0
-        for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
-        const wear = ["tshirt_default", "suit_1", "suit_3", "suit_5", "dress_1", "dress_4", "dress_7", "mage_1", "mage_2", "ranger_1", "ranger_2", "warrior_1", "warrior_2", "pirate_1", "tshirt_milking", "tshirt_cooking", "uniform_crafting", "uniform_brewing"]
-        look = { avatar: pool[h % pool.length], outfit: wear[(h >>> 8) % wear.length] }
-      }
       const e = document.createElement("div")
       e.className = "bfxl-tvis"
-      e.appendChild(document.createElement("div")).appendChild(heroBody(look))
+      e.appendChild(document.createElement("div")).appendChild(heroBody(visitorLook(name)))
       e.insertAdjacentHTML("beforeend", "<b></b>")
       e.lastChild.textContent = name
       strip.appendChild(e)
