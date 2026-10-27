@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.10
+// @version      0.18.11
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6509,7 +6509,21 @@
         }),
         button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
         button("重置", reset),
-        button("PixiJS 原型", () => (PixiLab.toggle(root.parentElement.querySelector(".bfx-lab-views")), draw()), PixiLab.isOpen() ? "on" : ""),
+        button(
+          "PixiJS 原型",
+          () => {
+            PixiLab.toggle(root.parentElement.querySelector(".bfx-lab-views"))
+            // the drawn pilot look is the default 1号 (blue hair, warrior outfit, holy sword + knight's aegis, sword skills):
+            // put that loadout back so the weapon and skills match the art
+            if (PixiLab.isOpen()) {
+              st.players[0] = structuredClone(DEF.players[0])
+              save()
+              reset()
+            }
+            draw()
+          },
+          PixiLab.isOpen() ? "on" : "",
+        ),
       )
     }
     function draw() {
