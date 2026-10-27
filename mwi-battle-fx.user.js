@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.5
+// @version      0.18.6
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6932,7 +6932,9 @@ void main(){
       a.mesh.scale.set(k)
       a.mesh.pivot.set(t.width / 2, t.height * 0.81)
       a.mesh.visible = true
-      a.base = Float32Array.from(a.mesh.geometry.positions)
+      // the undeformed 10x10 grid; not read back from the mesh: a same-size texture keeps last frame's bent vertices
+      const nx = 10
+      a.base = Float32Array.from({ length: nx * nx * 2 }, (_, k) => (k % 2 ? (Math.floor(k / 2 / nx) * t.height) / (nx - 1) : (((k / 2) % nx) * t.width) / (nx - 1)))
       if (ms) a.poseTimer = setTimeout(() => setPose(a, a.dead ? "dead" : "idle"), ms)
     }
     // the body as a 10x10 mesh: breathing and idle sway, a damped wobble after a hit, a lean into a swing
