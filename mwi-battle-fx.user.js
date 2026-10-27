@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.11
+// @version      0.19.0
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -970,9 +970,21 @@
 .bfx-lab .gal figure{margin:0;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 4px}
 .bfx-lab .gal img{width:96px;height:96px}
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
-.bfx-fps{position:absolute;right:4px;top:26px;z-index:6000;padding:2px 6px;font:11px/15px monospace;white-space:pre;color:#dfe6ff;background:rgba(0,0,0,.6);border-radius:4px}
-.bfx-lab-views.two{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:start}
-.bfx-pixi-view{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
+.bfx-arena{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
+.bfx-lab-stage{display:none}
+.bfx-ed{display:flex;flex-direction:column;gap:4px}
+.bfx-ed .hint{opacity:.6}
+.bfx-ed input[type=number]{width:64px;font:12px sans-serif;background:#1d2440;color:#dfe6ff;border:1px solid #3a4470;border-radius:4px;padding:1px 4px}
+.bfx-tl{position:relative;flex:1;min-width:240px;height:34px}
+.bfx-tl input{position:absolute;left:0;right:0;bottom:0;width:100%;margin:0}
+.bfx-lab .bfx-tl button.key{position:absolute;top:0;transform:translateX(-50%);padding:0 5px;font-size:11px;line-height:16px}
+.bfx-tl i.hit{position:absolute;top:0;bottom:12px;width:2px;background:#ff5a5a;transform:translateX(-1px)}
+.bfx-key{display:flex;flex-direction:column;gap:4px;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px}
+.bfx-sl{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}
+.bfx-sl label{display:flex;align-items:center;gap:6px}
+.bfx-sl label span{min-width:30px;opacity:.75}
+.bfx-sl label input{flex:1}
+.bfx-sl label b{min-width:38px;text-align:right;font-weight:400}
 /* #dev-end */`
       document.head.appendChild(st)
     }
@@ -1202,7 +1214,6 @@
       viewEl.style.transform = ""
       stageEl.style.height = mode === "test" ? cfg.stageH + "px" : ""
       host.appendChild(stageEl)
-      meterOn() // #dev
       reload()
       preloadFx()
       Assets.refresh()
@@ -1728,65 +1739,6 @@
       }, 900)
     }
 
-    // #dev-start
-    // frame meter (menu 调试：显示帧数): the browser's frame rate while the stage is on the page, the slowest frame,
-    // what the canvas effects cost per frame, and how much is animating (canvas fx, CSS / web animations, nodes)
-    // long frames (Chrome's long-animation-frame entries) name who held the main thread: the game, this script,
-    // another userscript, or style / layout / paint when no script ran long
-    const meter = { el: null, raf: 0, n: 0, t0: 0, last: 0, worst: 0, fxMs: 0, fxN: 0, lo: [], obs: null }
-    function longFrameWho(e) {
-      const top = e.scripts?.slice().sort((a, b) => b.duration - a.duration)[0]
-      const js = (e.scripts || []).reduce((a, x) => a + x.duration, 0)
-      if (!top || js < e.duration / 3) return `排版绘制 ${Math.round(e.duration - js)}ms`
-      const u = top.sourceURL || ""
-      const us = /userscript\.html\?name=([^&]+)/.exec(u)
-      const who = /牛牛动起来|mwi-battle-fx/.test(decodeURIComponent(u)) ? "本脚本" : us ? decodeURIComponent(us[1]).replace(/\.user\.js$/, "").slice(0, 16) : /milkywayidle/.test(u) ? "游戏" : u.split("/").pop().slice(0, 16) || top.invoker?.slice(0, 16) || "?"
-      return `${who} ${Math.round(top.duration)}ms`
-    }
-    function meterOn() {
-      if (!cfg.fps || !stageEl?.isConnected || meter.raf) return
-      if (!meter.el) {
-        meter.el = document.createElement("div")
-        meter.el.className = "bfx-fps"
-      }
-      meter.el.textContent = "… fps"
-      stageEl.appendChild(meter.el)
-      if (!meter.obs && PerformanceObserver.supportedEntryTypes?.includes("long-animation-frame")) {
-        meter.obs = new PerformanceObserver(l => meter.lo.push(...l.getEntries()))
-        meter.obs.observe({ type: "long-animation-frame" })
-      }
-      meter.lo.length = 0
-      Object.assign(meter, { n: 0, t0: now(), last: 0, worst: 0, fxMs: 0, fxN: 0 })
-      meter.raf = requestAnimationFrame(meterTick)
-    }
-    function meterTick() {
-      meter.raf = 0
-      if (!cfg.fps || !stageEl?.isConnected) {
-        meter.obs?.disconnect()
-        meter.obs = null
-        meter.lo.length = 0
-        return meter.el?.remove()
-      }
-      const t = now()
-      if (meter.last) meter.worst = Math.max(meter.worst, t - meter.last)
-      meter.last = t
-      meter.n++
-      if (t - meter.t0 >= 1000) {
-        const fps = (meter.n * 1000) / (t - meter.t0)
-        const anims = stageEl.getAnimations?.({ subtree: true }).length ?? "?"
-        const nodes = stageEl.getElementsByTagName("*").length
-        meter.el.style.color = fps >= 55 ? "#8f8" : fps >= 40 ? "#fd6" : "#f77"
-        meter.el.textContent =
-          `${fps.toFixed(0)} fps · 最慢 ${meter.worst.toFixed(0)}ms\n` +
-          `画布 ${meter.fxN ? (meter.fxMs / meter.fxN).toFixed(1) : "0"}ms/帧 · 特效 ${fx.length}\n` +
-          `动画 ${anims} · 节点 ${nodes}` +
-          (!meter.obs ? "" : !meter.lo.length ? "\n长帧 0" : `\n长帧 ${meter.lo.length} · 最长 ${Math.round(Math.max(...meter.lo.map(e => e.duration)))}ms\n← ${longFrameWho(meter.lo.reduce((a, e) => (e.duration > a.duration ? e : a)))}`)
-        meter.lo.length = 0
-        Object.assign(meter, { n: 0, t0: t, worst: 0, fxMs: 0, fxN: 0 })
-      }
-      meter.raf = requestAnimationFrame(meterTick)
-    }
-    // #dev-end
     // ----- canvas effects -----
     function addFx(dur, draw, delay = 0) {
       const f = { t0: now() + delay, dur, draw, done: null }
@@ -1821,7 +1773,6 @@
         }
         ctx.restore()
       }
-      if (cfg.fps) (meter.fxMs += now() - t), meter.fxN++ // #dev
       if (fx.length) raf = requestAnimationFrame(loop)
     }
     function burst(x, y, o = {}) {
@@ -2804,9 +2755,7 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    const api = { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
-    api.meterOn = meterOn // #dev
-    return api
+    return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -6315,64 +6264,31 @@
   // ---------- 动画测试: a sandbox for any location, line-up, skill and pose ----------
   const MONSTERS = {"abyssal_imp":["深渊小鬼","magic","fire"],"acrobat":["杂技师","smash","physical"],"alligator":["夏洛克","slash","physical"],"anchor_shark":["持锚鲨","smash","physical"],"aquahorse":["水马","ranged","water"],"black_bear":["黑熊","stab","physical"],"brine_marksman":["海盐射手","ranged","physical"],"butterjerry":["蝶鼠","stab","physical"],"captain_fishhook":["鱼钩船长","slash","physical"],"centaur_archer":["半人马弓箭手","ranged","physical"],"chronofrost_sorcerer":["霜时巫师","magic","water"],"crab":["螃蟹","smash","physical"],"crystal_colossus":["水晶巨像","stab","physical"],"cyclops":["独眼巨人","smash","physical"],"demonic_overlord":["恶魔霸主","magic","fire"],"deranged_jester":["小丑皇","smash","physical"],"dodocamel":["渡渡驼","smash","physical"],"dryad":["树精","magic","nature"],"dusk_revenant":["黄昏亡灵","ranged","physical"],"elementalist":["元素法师","magic","fire"],"enchanted_bishop":["秘法主教","magic","nature"],"enchanted_king":["秘法国王","slash","physical"],"enchanted_knight":["秘法骑士","slash","physical"],"enchanted_pawn":["秘法士兵","smash","physical"],"enchanted_queen":["秘法王后","magic","water"],"enchanted_rook":["秘法堡垒","ranged","physical"],"eye":["独眼","slash","physical"],"eyes":["叠眼","slash","physical"],"flame_sorcerer":["火焰巫师","magic","fire"],"fly":["苍蝇","smash","physical"],"frog":["青蛙","smash","physical"],"frost_sniper":["霜冻狙击手","ranged","water"],"giant_mantis":["巨螳螂","slash","physical"],"giant_scorpion":["巨蝎","stab","physical"],"giant_shoebill":["鲸头鹳","smash","physical"],"gobo_boomy":["轰轰","magic","fire"],"gobo_chieftain":["哥布林酋长","stab","physical"],"gobo_shooty":["咻咻","ranged","physical"],"gobo_slashy":["砍砍","slash","physical"],"gobo_smashy":["锤锤","smash","physical"],"gobo_stabby":["刺刺","stab","physical"],"granite_golem":["花岗岩魔像","smash","physical"],"griffin":["狮鹫","slash","physical"],"grizzly_bear":["棕熊","slash","physical"],"gummy_bear":["软糖熊","smash","physical"],"ice_sorcerer":["冰霜巫师","magic","water"],"infernal_warlock":["地狱术士","magic","fire"],"jackalope":["鹿角兔","magic","nature"],"juggler":["杂耍者","ranged","physical"],"jungle_sprite":["丛林精灵","magic","nature"],"luna_empress":["月神之蝶","magic","nature"],"magician":["魔术师","magic","fire"],"magnetic_golem":["磁力魔像","smash","physical"],"manticore":["狮蝎兽","ranged","physical"],"marine_huntress":["海洋猎手","ranged","water"],"mimic":["宝箱怪","stab","physical"],"myconid":["蘑菇人","magic","nature"],"nom_nom":["咬咬鱼","stab","physical"],"novice_sorcerer":["新手巫师","magic","water"],"panda":["熊猫","smash","physical"],"polar_bear":["北极熊","smash","physical"],"porcupine":["豪猪","ranged","physical"],"pyre_hunter":["火焰猎手","ranged","fire"],"rabid_rabbit":["疯魔兔","slash","physical"],"rat":["杰瑞","stab","physical"],"red_panda":["小熊猫","slash","physical"],"salamander":["火蜥蜴","magic","fire"],"sea_snail":["蜗牛","smash","physical"],"shadow_archer":["暗影弓手","ranged","physical"],"siren":["海妖","magic","water"],"skunk":["臭鼬","slash","physical"],"slimy":["史莱姆","magic","water"],"snake":["蛇","stab","physical"],"soul_hunter":["灵魂猎手","ranged","physical"],"squawker":["鹦鹉","magic","nature"],"stalactite_golem":["钟乳石魔像","stab","physical"],"swampy":["沼泽虫","smash","physical"],"the_kraken":["克拉肯","ranged","physical"],"the_watcher":["观察者","ranged","physical"],"tidal_conjuror":["潮汐召唤师","magic","water"],"treant":["树人","magic","nature"],"trial_badger":["试炼獾","slash","physical"],"trial_beetle":["试炼甲虫","smash","physical"],"trial_chameleon":["试炼变色龙","ranged","physical"],"trial_dragonfly":["试炼蜻蜓","ranged","physical"],"trial_firefly":["试炼萤火虫","magic","fire"],"trial_hedgehog":["试炼刺猬","magic","nature"],"trial_jellyfish":["试炼水母","magic","water"],"trial_wasp":["试炼黄蜂","stab","physical"],"turtle":["忍者龟","smash","physical"],"vampire":["吸血鬼","stab","physical"],"veyes":["复眼","slash","physical"],"werewolf":["狼人","slash","physical"],"zombie":["僵尸","slash","physical"],"zombie_bear":["僵尸熊","stab","physical"]}
   const LOCATIONS = {"aqua_planet":["海洋星球",["sea_snail","crab","aquahorse","nom_nom","turtle","marine_huntress"]],"bear_with_it":["熊熊星球",["gummy_bear","panda","black_bear","grizzly_bear","polar_bear","red_panda"]],"chimerical_den":["奇幻洞穴",["rat","skunk","porcupine","slimy","frog","snake","swampy","alligator","sea_snail","crab","aquahorse","jungle_sprite","myconid","nom_nom","turtle","centaur_archer","gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","eye","butterjerry","eyes","veyes","jackalope","dodocamel","manticore","griffin"]],"enchanted_fortress":["秘法要塞",["novice_sorcerer","ice_sorcerer","flame_sorcerer","panda","black_bear","magnetic_golem","abyssal_imp","elementalist","grizzly_bear","polar_bear","stalactite_golem","soul_hunter","enchanted_pawn","enchanted_knight","enchanted_bishop","enchanted_rook","enchanted_queen","enchanted_king"]],"gobo_planet":["哥布林星球",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","gobo_chieftain"]],"golem_cave":["魔像洞穴",["magnetic_golem","stalactite_golem","granite_golem","crystal_colossus"]],"infernal_abyss":["地狱深渊",["abyssal_imp","soul_hunter","infernal_warlock","demonic_overlord"]],"jungle_planet":["丛林星球",["jungle_sprite","myconid","treant","centaur_archer","luna_empress"]],"pirate_cove":["海盗基地",["eye","eyes","veyes","zombie","magnetic_golem","abyssal_imp","vampire","stalactite_golem","soul_hunter","squawker","werewolf","granite_golem","infernal_warlock","anchor_shark","brine_marksman","tidal_conjuror","captain_fishhook","the_kraken"]],"planet_of_the_eyes":["眼球星球",["eye","eyes","veyes","the_watcher"]],"sinister_circus":["阴森马戏团",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","novice_sorcerer","gummy_bear","ice_sorcerer","flame_sorcerer","panda","black_bear","grizzly_bear","polar_bear","zombie","vampire","rabid_rabbit","elementalist","werewolf","zombie_bear","acrobat","juggler","magician","deranged_jester"]],"smelly_planet":["臭臭星球",["fly","rat","skunk","porcupine","slimy"]],"sorcerers_tower":["巫师之塔",["novice_sorcerer","ice_sorcerer","flame_sorcerer","elementalist","chronofrost_sorcerer"]],"swamp_planet":["沼泽星球",["frog","snake","swampy","alligator","giant_shoebill"]],"twilight_zone":["暮光之地",["zombie","vampire","werewolf","dusk_revenant"]]}
+  // ---------- 动画测试: the rigged battle (PixiJS) with an auto battle and the action editor ----------
+  // Only units that have a rig take part: 1号 is the drawn player pilot (blue hair, warrior outfit, holy sword +
+  // knight's aegis, sword skills), the monsters are every rigged monster. The DOM stage still hangs in a hidden slot
+  // (Stage.attach(Lab.render(), "test")) but gets no events.
   const Lab = (() => {
-    const STYLES = ["slash", "stab", "smash", "ranged", "magic"]
-    const STYLE_ZH = { slash: "斩击", stab: "刺击", smash: "钝击", ranged: "远程", magic: "魔法" }
-    const POSES = ["idle", "windup", "strike", "hurt", "cast", "dead"]
-    const POSE_ZH = { idle: "待机", windup: "蓄力", strike: "出手", hurt: "受击", cast: "施法", dead: "倒下" }
-    const DEF = {
-      loc: "golem_cave",
-      tier: 0,
-      monsters: ["granite_golem", "magnetic_golem", "stalactite_golem", "", ""],
-      players: [
-        { look: "doll", style: "slash", skills: ["cleave", "maim", "berserk", "fierce_aura"], doll: { avatar: "blue_person_1", outfit: "warrior_1", items: { main_hand: "holy_sword", off_hand: "knights_aegis" }, enh: 10, enhOff: 8 } },
-        { look: "doll", style: "ranged", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "speed_aura"], doll: { avatar: "green_person_2", outfit: "ranger_1", items: { two_hand: "cursed_bow" }, enh: 12 } },
-        { look: "doll", style: "magic", skills: ["fireball", "entangle", "toxic_pollen", "heal"], doll: { avatar: "purple_person_1", outfit: "mage_1", items: { main_hand: "blazing_trident", off_hand: "bishops_codex" }, enh: 15, enhOff: 5 } },
-      ],
-      gallery: "magnetic_golem",
-    }
-    const st = { ...structuredClone(DEF), ...GM_getValue("battle_fx_lab_v1", {}) }
-    const save = () => GM_setValue("battle_fx_lab_v1", st)
-    // older saves used the generic looks: those units switch to the game look with this style's preset gear
-    if (!st.v) {
-      st.players.forEach(pl => {
-        if (pl.look !== "doll") Object.assign(pl, { look: "doll", doll: structuredClone(DEF.players.find(d => d.style === pl.style)?.doll || DEF.players[0].doll) })
-      })
-      st.v = 2
-      save()
-    }
-    // the combat style a weapon fights with (names follow the game's weapon families)
-    const styleOfWeapon = id =>
-      /sword|claymore|scythe/.test(id) ? "slash" : /spear|dirk|dagger/.test(id) ? "stab" : /mace|flail|bulwark|club|hammer/.test(id) ? "smash" : /bow/.test(id) ? "ranged" : /staff|trident|wand/.test(id) ? "magic" : null
+    const PILOT = { name: "1号 剑士", style: "slash", skills: ["cleave", "maim", "berserk", "fierce_aura"], avatar: "blue_person_1", outfit: "warrior_1", items: { main_hand: "holy_sword", off_hand: "knights_aegis" } }
+    const st = { loc: "golem_cave", tier: 0, ...GM_getValue("battle_fx_lab_v2", {}) }
+    const save = () => GM_setValue("battle_fx_lab_v2", st)
     const lab = { p: [], m: [] }
     let root = null
     let autoTimer = 0
+    let pending = 0
     const zh = k => abilityInfo("/abilities/" + k)?.name || k
     const pick = arr => arr[Math.floor(Math.random() * arr.length)]
-    // the stage and the PixiJS copy below it play the same events
-    const show = (evs, m) => (Stage.play(evs, m), PixiLab.play(evs))
     const alive = side => lab[side].map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
+    const rigged = () => Assets.list("rig").filter(id => MONSTERS[id])
 
-    function unitP(pl, i) {
-      const magicSkill = pl.skills.find(k => ABILITIES[k]?.[3] === "magic")
-      return {
-        name: `${i + 1}号 ${STYLE_ZH[pl.style]}`,
-        hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000,
-        style: pl.style,
-        element: pl.style === "magic" ? ABILITIES[magicSkill]?.[4] || "fire" : "physical",
-        lookId: pl.look === "doll" ? null : pl.look,
-        // 游戏形象: the chosen avatar / outfit / held gear
-        ...(pl.look === "doll" ? { lab: true, avatar: pl.doll?.avatar, outfit: pl.doll?.outfit, items: { ...pl.doll?.items }, enh: { main_hand: pl.doll?.enh || 0, two_hand: pl.doll?.enh || 0, off_hand: pl.doll?.enhOff ?? pl.doll?.enh ?? 0 } } : {}),
-        counters: {},
-      }
-    }
+    const unitP = () => ({ ...structuredClone(PILOT), hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000, element: "physical", lab: true, counters: {} })
     function unitM(id) {
       const [name, style, element] = MONSTERS[id] || [id, "smash", "physical"]
       return { name, hrid: "/monsters/" + id, hp: 4000, mp: 1000, maxHp: 4000, maxMp: 1000, style, element, counters: {} }
     }
     function buildUnits() {
-      lab.p = st.players.map(unitP)
-      lab.m = st.monsters.filter(Boolean).map(unitM)
+      lab.p = [unitP()]
+      lab.m = rigged().map(unitM)
     }
     // a change of hp on one unit, in the shape the stage expects
     function change(side, i, d) {
@@ -6382,6 +6298,7 @@
       return { side, i, dHP: u.hp - before, hp: u.hp, maxHp: u.maxHp, died: before > 0 && u.hp <= 0, revived: before <= 0 && u.hp > 0, crit: d < 0 && Math.random() < 0.2 }
     }
     const hitAmount = (side, i) => (Math.random() < 0.1 ? 0 : -Math.round(lab[side][i].maxHp * (0.04 + Math.random() * 0.08)))
+    const show = evs => Arena.play(evs)
 
     function act(side, i, key) {
       const u = lab[side][i]
@@ -6393,56 +6310,46 @@
       if (!ab || ab.kind === "damage") {
         const f = alive(foe)
         if (!f.length) return
-        targets = (ab?.target === "allEnemies" ? f : [pick(f)]).map(j => change(foe, j, hitAmount(foe, j)))
-      } else if (ab.kind === "heal") {
+        targets = (ab?.target === "allEnemies" ? f : [pick(f)]).map(j => change(foe, j, hitAmount(foe, j) * (ab ? 1.6 : 1)))
+      } else if (ab.kind === "heal" || ab.kind === "revive") {
         effect = "heal"
-        const al = alive(side)
-        const low = [...al].sort((a, b) => lab[side][a].hp / lab[side][a].maxHp - lab[side][b].hp / lab[side][b].maxHp)[0]
-        const ids = ab.target === "allAllies" ? al : ab.target === "lowestHpAlly" ? [low] : [i]
-        targets = ids.map(j => change(side, j, Math.round(lab[side][j].maxHp * 0.15)))
-      } else if (ab.kind === "revive") {
-        effect = "heal"
-        const dead = lab[side].map((x, j) => (x.hp <= 0 ? j : -1)).filter(j => j >= 0)
-        targets = dead.slice(0, 1).map(j => change(side, j, Math.round(lab[side][j].maxHp * 0.5)))
+        targets = [change(side, i, Math.round(u.maxHp * 0.15))]
       } else effect = "buff"
-      show([{ actor: { side, i }, ab, effect, style: ab?.style || u.style, element: ab?.kind === "damage" ? ab.element : u.element, targets }], "test")
+      show([{ actor: { side, i }, ab, effect, style: ab?.style || u.style, element: ab?.kind === "damage" ? ab.element : u.element, targets }])
       afterTurn()
     }
     // a cleared wave respawns, a wiped party gets back up
-    let pending = 0
     function afterTurn() {
       if (pending) return
       if (!alive("m").length && lab.m.length)
         pending = setTimeout(() => {
           pending = 0
-          lab.m = st.monsters.filter(Boolean).map(unitM)
-          Stage.newBattle("test")
-          PixiLab.sync()
-        }, 1600)
+          lab.m.forEach((u, j) => show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("m", j, u.maxHp)] }]))
+        }, 2200)
       else if (!alive("p").length)
         pending = setTimeout(() => {
           pending = 0
-          lab.p.forEach((_, j) => show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("p", j, lab.p[j].maxHp)] }], "test"))
-        }, 1600)
+          lab.p.forEach((u, j) => show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("p", j, u.maxHp)] }]))
+        }, 2200)
     }
     function autoTick() {
+      if (Arena.editing()) return
       const who = [...alive("p").map(i => ["p", i]), ...alive("m").map(i => ["m", i])]
       if (!who.length) return
       const [side, i] = pick(who)
-      const skills = side === "p" ? st.players[i].skills.filter(Boolean) : []
+      const skills = side === "p" ? lab.p[i].skills : []
       act(side, i, skills.length && Math.random() < 0.4 ? pick(skills) : null)
     }
     function setAuto(on) {
       clearInterval(autoTimer)
-      autoTimer = on ? setInterval(autoTick, 750) : 0
+      autoTimer = on ? setInterval(autoTick, 1100) : 0
       draw()
     }
     function reset() {
       clearTimeout(pending)
       pending = 0
       buildUnits()
-      Stage.reload()
-      PixiLab.sync()
+      Arena.sync()
     }
 
     // ----- controls -----
@@ -6474,231 +6381,72 @@
       root.appendChild(r)
       return r
     }
-    const monsterOptions = () => {
-      const here = LOCATIONS[st.loc]?.[1] || []
-      const rest = Object.keys(MONSTERS).filter(id => !here.includes(id)).sort((a, b) => MONSTERS[a][0].localeCompare(MONSTERS[b][0], "zh"))
-      return [["", "—"], ...[...here, ...rest].map(id => [id, MONSTERS[id][0]])]
-    }
-    const skillOptions = () => {
-      const order = { damage: 0, heal: 1, revive: 1, buff: 2 }
-      const keys = Object.keys(ABILITIES).sort((a, b) => (order[ABILITIES[a][1]] ?? 3) - (order[ABILITIES[b][1]] ?? 3) || ABILITIES[a][0].localeCompare(ABILITIES[b][0], "zh"))
-      return [["", "—"], ...keys.map(k => [k, ABILITIES[k][0]])]
-    }
-
-    function drawOps() {
-      const r3 = row("操作")
-      r3.append(
-        button("+ 我方", () => {
-          if (st.players.length < 5) st.players.push(structuredClone(DEF.players[st.players.length % 3]))
-          save()
-          draw()
-          reset()
-        }),
-        button("武器闪光", () => lab.p.forEach((u, i) => Stage.flashWeapon("p", i, PROCS[weaponOf(u)] || "#ffe27a"))),
+    function draw() {
+      if (!root) return
+      root.replaceChildren()
+      row("战场").append(
+        select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => ((st.loc = v), save(), Arena.background())),
+        select([0, 1, 2, 3, 4, 5].map(t => [t, "T" + t]), st.tier, v => ((st.tier = +v), save(), Arena.background())),
+      )
+      row("操作").append(
         button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
         button("怪物放技能", () => {
           const dmg = Object.keys(ABILITIES).filter(k => ABILITIES[k][1] === "damage")
           if (alive("m").length) act("m", pick(alive("m")), pick(dmg))
         }),
         button("全部击杀", () => {
-          for (const side of ["m"]) alive(side).forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change(side, j, -99999)] }], "test"))
+          alive("m").forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change("m", j, -99999)] }]))
+          afterTurn()
+        }),
+        button("1号倒下", () => {
+          alive("p").forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change("p", j, -99999)] }]))
           afterTurn()
         }),
         button("全员复活", () => {
-          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }], "test"))
+          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }]))
         }),
         button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
         button("重置", reset),
-        button(
-          "PixiJS 原型",
-          () => {
-            PixiLab.toggle(root.parentElement.querySelector(".bfx-lab-views"))
-            // the drawn pilot look is the default 1号 (blue hair, warrior outfit, holy sword + knight's aegis, sword skills):
-            // put that loadout back so the weapon and skills match the art
-            if (PixiLab.isOpen()) {
-              st.players[0] = structuredClone(DEF.players[0])
-              save()
-              reset()
-            }
-            draw()
-          },
-          PixiLab.isOpen() ? "on" : "",
-        ),
       )
-    }
-    function draw() {
-      if (!root) return
-      root.replaceChildren()
-      // PixiJS copy open: the two views side by side under a short control block (battle buttons only)
-      const two = PixiLab.isOpen()
-      root.parentElement?.querySelector(".bfx-lab-views")?.classList.toggle("two", two)
-      if (two) {
-        drawOps()
-        st.players.forEach((pl, i) => row(`${i + 1}号`).append(button("普攻", () => act("p", i, null)), ...pl.skills.filter(Boolean).map(k => button(zh(k), () => act("p", i, k), "skill"))))
-        row("引擎").append(...PixiLab.optButtons(), el("span", "lbl", "（关掉原型才能改阵容和看图鉴）"))
-        return
-      }
-      const r1 = row("战场")
-      r1.append(
-        select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => {
-          st.loc = v
-          st.monsters = [...LOCATIONS[v][1].slice(0, 3), "", ""]
-          save()
-          draw()
-          reset()
-        }),
-        select([0, 1, 2, 3, 4, 5].map(t => [t, "T" + t]), st.tier, v => {
-          st.tier = +v
-          save()
-          Stage.setBackground()
-        }),
-      )
-      for (let k = 0; k < 5; k++)
-        r1.appendChild(
-          select(monsterOptions(), st.monsters[k] || "", v => {
-            st.monsters[k] = v
-            save()
-            reset()
-          }),
-        )
-
-      const looks = Assets.list("p")
-      const lookOptions = [...(Doll.ready() ? [["doll", "游戏形象"]] : []), ...(looks.length ? looks : [pl0Look()]).map(id => [id, id.replace(/^default_/, "通用·")])]
-      st.players.forEach((pl, i) => {
-        const r = row(`${i + 1}号`)
-        r.append(
-          select(lookOptions, pl.look, v => ((pl.look = v), save(), draw(), reset())),
-          select(STYLES.map(x => [x, STYLE_ZH[x]]), pl.style, v => ((pl.style = v), save(), reset())),
-          ...[0, 1, 2, 3].map(k => select(skillOptions(), pl.skills[k] || "", v => ((pl.skills[k] = v), save(), draw()))),
-          button("普攻", () => act("p", i, null)),
-          ...pl.skills.filter(Boolean).map(k => button(zh(k), () => act("p", i, k), "skill")),
-          button("移除", () => {
-            if (st.players.length > 1) st.players.splice(i, 1)
-            save()
-            draw()
-            reset()
-          }),
-        )
-        if (pl.look === "doll" && Doll.ready()) dollRow(pl, i)
-      })
-
-      drawOps()
-
-      // gallery: every pose of one monster
-      const r4 = row("图鉴")
-      const gal = el("div", "gal")
-      r4.append(select(Object.keys(MONSTERS).sort((a, b) => MONSTERS[a][0].localeCompare(MONSTERS[b][0], "zh")).map(id => [id, MONSTERS[id][0]]), st.gallery, v => ((st.gallery = v), save(), draw())))
-      root.appendChild(gal)
-      for (const pose of POSES) {
-        const fig = el("figure")
-        const img = el("img")
-        img.src = Assets.url(`m/${st.gallery}/${pose}.webp`)
-        fig.append(img, el("span", null, POSE_ZH[pose]))
-        gal.appendChild(fig)
-      }
+      lab.p.forEach((u, i) => row(u.name).append(button("普攻", () => act("p", i, null)), ...u.skills.map(k => button(zh(k), () => act("p", i, k), "skill"))))
+      root.appendChild(Arena.editorPanel())
     }
 
-    const pl0Look = () => st.players[0]?.look || "default_slash"
-    // 游戏形象 controls: avatar, outfit and the held gear (both weapon slots share one list)
-    const DOLL_SLOTS = [["weapon", "武器"], ["off_hand", "副手"]]
-    function dollRow(pl, i) {
-      pl.doll ||= { avatar: "person_default", outfit: "", items: {} }
-      const r = row("")
-      const ids = prefix => Doll.list(prefix).map(k => k.slice(2)).sort()
-      const set = fn => v => (fn(v), save(), reset())
-      r.append(
-        select(ids("a_").map(k => [k, "头像·" + k]), pl.doll.avatar, set(v => (pl.doll.avatar = v))),
-        select([["", "服装·无"], ...ids("o_").map(k => [k, "服装·" + k])], pl.doll.outfit, set(v => (pl.doll.outfit = v))),
-      )
-      const items = Doll.list()
-      for (const [slot, label] of DOLL_SLOTS) {
-        const fits = items.filter(k => (slot === "weapon" ? /^(main|two)_hand$/.test(Doll.slotOf(k)) : Doll.slotOf(k) === slot))
-        fits.sort((a, b) => Doll.nameOf(a).localeCompare(Doll.nameOf(b), "zh"))
-        const cur = slot === "weapon" ? pl.doll.items.main_hand || pl.doll.items.two_hand : pl.doll.items[slot]
-        r.appendChild(
-          select([["", label + "·无"], ...fits.map(k => [k, Doll.nameOf(k)])], cur || "", set(v => {
-            if (slot === "weapon") {
-              delete pl.doll.items.main_hand
-              delete pl.doll.items.two_hand
-              if (v) pl.doll.items[Doll.slotOf(v)] = v
-              // a two-handed weapon leaves no hand for the off-hand; the unit fights in the weapon's style
-              if (Doll.slotOf(v) === "two_hand") delete pl.doll.items.off_hand
-              if (styleOfWeapon(v)) pl.style = styleOfWeapon(v)
-              draw()
-            } else if (v) {
-              pl.doll.items[slot] = v
-              if (pl.doll.items.two_hand) (delete pl.doll.items.two_hand), draw()
-            } else delete pl.doll.items[slot]
-          })),
-        )
-      }
-      // enhancement levels of the weapon and the off-hand, to preview the aura tiers
-      const levels = [0, 5, 8, 10, 12, 15, 20]
-      r.appendChild(select(levels.map(n => [n, "武器 +" + n]), pl.doll.enh || 0, set(v => (pl.doll.enh = +v))))
-      r.appendChild(select(levels.map(n => [n, "副手 +" + n]), pl.doll.enhOff ?? pl.doll.enh ?? 0, set(v => (pl.doll.enhOff = +v))))
-      r.appendChild(
-        button("随机", () => {
-          const any = arr => (arr.length ? pick(arr) : "")
-          pl.doll = { avatar: any(ids("a_")), outfit: Math.random() < 0.5 ? any(ids("o_")) : "", items: {} }
-          for (const [slot] of DOLL_SLOTS) {
-            if (Math.random() < 0.25) continue
-            const fits = items.filter(k => (slot === "weapon" ? /^(main|two)_hand$/.test(Doll.slotOf(k)) : Doll.slotOf(k) === slot))
-            const k = any(fits)
-            if (k) pl.doll.items[Doll.slotOf(k)] = k
-          }
-          if (pl.doll.items.two_hand) delete pl.doll.items.off_hand
-          pl.style = styleOfWeapon(pl.doll.items.main_hand || pl.doll.items.two_hand || "") || pl.style
-          save()
-          draw()
-          reset()
-        }),
-      )
-    }
-
-    // builds the controls in the tab panel and returns the element the stage hangs in
+    // builds the controls and the PixiJS view in the tab panel; returns the (hidden) slot the DOM stage hangs in
     function render(panel) {
       root = panel.querySelector(".bfx-lab")
       if (!root) {
         root = el("div", "bfx-lab")
         panel.prepend(root)
       }
-      let views = panel.querySelector(".bfx-lab-views")
-      if (!views) {
-        views = el("div", "bfx-lab-views")
-        panel.appendChild(views)
+      let view = panel.querySelector(".bfx-arena")
+      if (!view) {
+        view = el("div", "bfx-arena")
+        view.style.height = cfg.stageH + "px"
+        panel.appendChild(view)
       }
-      let slot = views.querySelector(".bfx-lab-stage")
+      let slot = panel.querySelector(".bfx-lab-stage")
       if (!slot) {
         slot = el("div", "bfx-lab-stage")
-        views.appendChild(slot)
+        panel.appendChild(slot)
       }
       buildUnits()
       draw()
+      Arena.open(view)
       return slot
     }
     const stop = () => setAuto(false)
     return { units: lab, render, stop, redraw: () => draw(), loc: () => st.loc, tier: () => st.tier, startAuto: () => setAuto(true) }
   })()
 
-  // ---------- PixiJS 原型: the lab battle drawn a second time in WebGL (PixiJS + pixi-filters), to compare looks ----------
-  // Same events as the stage above it (Lab calls play / sync), drawn with what a GPU engine adds: mesh-deformed
-  // bodies (breathing, squash on hit, lean into a swing), bloom on effects, shockwave + camera punch on crits,
-  // a shader that flashes a body on hit and burns it away on death, lights that dim the scene around a cast.
-  const PixiLab = (() => {
+  // ---------- Arena: rigged units in WebGL (PixiJS + pixi-filters) ----------
+  // Bodies are cutout rigs (assets/rig/): parts on joints, moved by keyframed actions (ACTIONS, editable in the lab's
+  // action editor and kept per viewer). Effects: bloom on effect sheets and sparks, a per-body shader that flashes on
+  // a hit and burns the body away on death, shockwave + camera punch on crits, lights that dim the scene around a cast.
+  const Arena = (() => {
     const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
-    const OPTS = [
-      ["mesh", "网格形变"],
-      ["bloom", "泛光"],
-      ["shock", "暴击冲击波"],
-      ["dissolve", "溶解 / 闪白"],
-      ["light", "光照"],
-      ["rig", "骨骼怪物"],
-    ]
-    const opt = { mesh: true, bloom: true, shock: true, dissolve: true, light: true, rig: true }
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
     const BURST = { fire: "fire_burst", water: "water_burst", nature: "nature_burst" }
-    const ORB = { fire: "fire_orb", water: "ice_orb", nature: "nature_orb" }
-    const MELEE = { slash: 1, stab: 1, smash: 1 }
     // per-body shader: uFlash mixes in a solid colour, uDis burns the body away along value noise (orange edge)
     const FRAG = `in vec2 vTextureCoord;
 out vec4 finalColor;
@@ -6720,6 +6468,113 @@ void main(){
   }
   finalColor=c;
 }`
+
+    // ----- actions -----
+    // An action: { dur (ms), loop?, hit? (ms: the blow lands), lunge? (melee: runs to the target before the hit),
+    // keys: [{ t (ms), e? ("inout" | "in" | "out" | "linear", easing into this key), a: { part: degrees }, x?, y? }] }.
+    // Degrees turn a part toward the foe from its drawn rest (a part not named in a key is at rest); x / y move the
+    // whole body forward / up, in body heights. Kinds: "player" (sword pilot), or a monster id.
+    const NAMES = { idle: "待机", attack: "普攻", skill: "技能", hurt: "受击", cast: "增益", dead: "倒下" }
+    const ACTIONS = {
+      // the sword pilot: one-handed sword in the front hand, the off-hand (shield) in the back hand. The front arm rests
+      // held forward (3/4 battle stance): + raises it, - lowers it; the back arm (barm): + swings the off-hand forward
+      player: {
+        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { arm: 4, fore: -6, barm: 30 } }, { t: 800, a: { body: 2, arm: 8, fore: -2, barm: 34 }, y: -0.012 }, { t: 1600, a: { arm: 4, fore: -6, barm: 30 } }] },
+        // shield up in front while the sword goes back over the head, then the shield pulls in as the body turns into the cut
+        attack: {
+          dur: 820, hit: 360, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 240, e: "out", a: { body: -10, arm: 85, fore: -45, barm: 55 }, x: -0.03 },
+            { t: 300, a: { body: -12, arm: 90, fore: -50, barm: 58 }, x: -0.04 },
+            { t: 370, e: "in", a: { body: 14, arm: -35, fore: -80, barm: -15 }, x: 0.06 },
+            { t: 480, a: { body: 10, arm: -45, fore: -85, barm: -10 }, x: 0.05 },
+            { t: 820, a: { arm: 4, fore: -6, barm: 30 } },
+          ],
+        },
+        // a leaping shield-first overhead cut
+        skill: {
+          dur: 1100, hit: 620, lunge: true,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 260, e: "out", a: { body: -14, arm: 95, fore: -50, barm: 60 }, x: -0.05, y: 0.04 },
+            { t: 420, a: { body: -16, arm: 100, fore: -55, barm: 65 }, x: -0.06, y: 0.08 },
+            { t: 520, e: "in", a: { body: 4, arm: 50, fore: -30, barm: 45 }, x: 0.03, y: 0.1 },
+            { t: 630, e: "in", a: { body: 18, arm: -45, fore: -85, barm: -20 }, x: 0.08 },
+            { t: 760, a: { body: 12, arm: -55, fore: -90, barm: -15 }, x: 0.06 },
+            { t: 1100, a: { arm: 4, fore: -6, barm: 30 } },
+          ],
+        },
+        // the shield comes up to take the blow
+        hurt: { dur: 520, keys: [{ t: 0, a: { arm: 4, fore: -6, barm: 30 } }, { t: 90, e: "out", a: { body: -16, arm: 25, fore: -10, barm: 80 }, x: -0.06 }, { t: 520, a: { arm: 4, fore: -6, barm: 30 } }] },
+        cast: {
+          dur: 1000,
+          keys: [
+            { t: 0, a: { arm: 4, fore: -6, barm: 30 } },
+            { t: 300, e: "out", a: { body: -6, arm: 60, fore: -30, barm: 15 }, y: 0.02 },
+            { t: 700, a: { body: -6, arm: 65, fore: -28, barm: 15 }, y: 0.02 },
+            { t: 1000, a: { arm: 4, fore: -6, barm: 30 } },
+          ],
+        },
+        dead: { dur: 650, keys: [{ t: 0, a: { arm: 4, fore: -6, barm: 30 } }, { t: 180, a: { body: -20, arm: 30, fore: 10, barm: 10 } }, { t: 650, e: "in", a: { body: -84, arm: 50, fore: 20, barm: -20 } }] },
+      },
+      magnetic_golem: {
+        idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
+        attack: {
+          dur: 900, hit: 430, lunge: true,
+          keys: [
+            { t: 0, a: {} },
+            { t: 300, e: "out", a: { torso: -10, head: -8, arm_f: -55, arm_b: -20, leg_f: -6 }, x: -0.03 },
+            { t: 360, a: { torso: -12, head: -9, arm_f: -60, arm_b: -22, leg_f: -7 }, x: -0.035 },
+            { t: 440, e: "in", a: { torso: 14, head: 8, arm_f: 70, arm_b: 18, leg_f: 10, leg_b: -6 }, x: 0.06 },
+            { t: 560, a: { torso: 12, head: 6, arm_f: 62, arm_b: 15, leg_f: 9, leg_b: -5 }, x: 0.05 },
+            { t: 900, a: {} },
+          ],
+        },
+        // the ground pound: both arms up, a hop, both fists down
+        skill: {
+          dur: 1200, hit: 700, lunge: true,
+          keys: [
+            { t: 0, a: {} },
+            { t: 380, e: "out", a: { torso: -8, head: -12, arm_f: -110, arm_b: -120 }, y: 0.06 },
+            { t: 520, a: { torso: -10, head: -14, arm_f: -120, arm_b: -130 }, y: 0.1 },
+            { t: 700, e: "in", a: { torso: 18, head: 10, arm_f: 40, arm_b: 35, leg_f: 8, leg_b: -8 }, y: -0.03, x: 0.04 },
+            { t: 850, a: { torso: 14, head: 8, arm_f: 35, arm_b: 30, leg_f: 6, leg_b: -6 }, y: -0.02, x: 0.03 },
+            { t: 1200, a: {} },
+          ],
+        },
+        hurt: { dur: 560, keys: [{ t: 0, a: {} }, { t: 100, e: "out", a: { torso: -16, head: -20, arm_f: -25, arm_b: -35, leg_f: -6 }, x: -0.05 }, { t: 560, a: {} }] },
+        cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
+      },
+    }
+    // the viewer's edits (action editor) replace whole actions: { kind: { action: {...} } }
+    const edits = GM_getValue("battle_fx_actions_v1", {})
+    const saveEdits = () => GM_setValue("battle_fx_actions_v1", edits)
+    const actionOf = (kind, name) => edits[kind]?.[name] || ACTIONS[kind]?.[name] || null
+    const EASE = {
+      linear: p => p,
+      in: p => p * p * p,
+      out: p => 1 - Math.pow(1 - p, 3),
+      inout: p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2),
+    }
+    // the pose of an action at time t: { a: { part: degrees }, x, y }
+    function sample(act, t) {
+      const keys = act.keys
+      if (!keys?.length) return { a: {}, x: 0, y: 0 }
+      if (t <= keys[0].t) return { a: { ...keys[0].a }, x: keys[0].x || 0, y: keys[0].y || 0 }
+      for (let k = 1; k < keys.length; k++) {
+        const b = keys[k]
+        if (t > b.t) continue
+        const a = keys[k - 1]
+        const p = (EASE[b.e] || EASE.inout)(b.t > a.t ? (t - a.t) / (b.t - a.t) : 1)
+        const out = { a: {}, x: lerp(a.x || 0, b.x || 0, p), y: lerp(a.y || 0, b.y || 0, p) }
+        for (const n of new Set([...Object.keys(a.a), ...Object.keys(b.a)])) out.a[n] = lerp(a.a[n] || 0, b.a[n] || 0, p)
+        return out
+      }
+      const z = keys[keys.length - 1]
+      return { a: { ...z.a }, x: z.x || 0, y: z.y || 0 }
+    }
+
     let P, F, app, host, world, bg, lights, unitsLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
@@ -6766,14 +6621,14 @@ void main(){
         c.fillRect(0, 0, s, s)
       })
 
-    async function open(panel) {
-      if (host?.isConnected) return
-      host = document.createElement("div")
-      host.className = "bfx-pixi"
-      host.innerHTML = '<div class="bfx-pixi-view">载入 PixiJS…</div>'
-      panel.appendChild(host)
-      const view = host.querySelector(".bfx-pixi-view")
-      view.style.height = cfg.stageH + "px"
+    async function open(view) {
+      if (host === view && app) return
+      host = view
+      if (app) {
+        view.appendChild(app.canvas)
+        return sync()
+      }
+      view.textContent = "载入 PixiJS…"
       try {
         loading = loading || libs()
         await loading
@@ -6782,7 +6637,6 @@ void main(){
         view.textContent = "PixiJS 载入失败：" + e.message
         return
       }
-      if (!host?.isConnected) return
       view.textContent = ""
       app = new P.Application()
       await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(2, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
@@ -6793,114 +6647,64 @@ void main(){
       bg = new P.Sprite()
       lights = new P.Container()
       unitsLayer = new P.Container()
+      unitsLayer.sortableChildren = true
       fxLayer = new P.Container()
       partLayer = new P.Container()
       textLayer = new P.Container()
       lights.blendMode = fxLayer.blendMode = partLayer.blendMode = "add"
       bloom = new F.AdvancedBloomFilter({ threshold: 0.45, bloomScale: 1, brightness: 1, blur: 8, quality: 6 })
       bloom.blendMode = "add"
+      fxLayer.filters = [bloom]
+      partLayer.filters = [bloom]
       world.addChild(bg, lights, unitsLayer, fxLayer, partLayer, textLayer)
       app.stage.addChild(world)
-      applyOpts()
+      app.stage.eventMode = "static"
+      app.stage.hitArea = app.screen
+      app.stage.on("globalpointermove", dragMove)
+      app.stage.on("pointerup", dragEnd)
+      app.stage.on("pointerupoutside", dragEnd)
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
-      preload()
+      for (const n of Assets.list("fx")) sheet(n)
       sync()
-    }
-    function close() {
-      app?.destroy(true, { children: true })
-      app = null
-      host?.remove()
-      host = null
-      units = { p: [], m: [] }
-      tweens.length = parts.length = 0
-    }
-    const toggle = panel => (host?.isConnected ? close() : open(panel))
-
-    // one switch per effect, to see what each one adds
-    const optButtons = () =>
-      OPTS.map(([k, label]) => {
-        const b = document.createElement("button")
-        b.textContent = label
-        b.className = opt[k] ? "on" : ""
-        b.onclick = () => {
-          opt[k] = !opt[k]
-          applyOpts()
-          if (k === "rig") sync()
-          b.className = opt[k] ? "on" : ""
-        }
-        return b
-      })
-    function applyOpts() {
-      if (!fxLayer) return
-      fxLayer.filters = opt.bloom ? [bloom] : null
-      partLayer.filters = opt.bloom ? [bloom] : null
-      if (!opt.light) dim = 0
     }
 
     // ----- scene -----
-    function bgUrl() {
+    function background() {
+      if (!app) return
       const loc = Lab.loc()
       const t = Lab.tier()
       const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
       const name = Assets.has("bg", loc + band) ? loc + band : Assets.has("bg", loc) ? loc : null
-      return name && Assets.url("bg/" + name + ".webp")
+      if (name) P.Assets.load(Assets.url("bg/" + name + ".webp")).then(tex => ((bg.texture = tex), layout()))
     }
-    function artOf(side, u) {
-      if (side === "m") {
-        const id = (u.hrid || "").split("/").pop()
-        return Assets.has("m", id) ? "m/" + id : null
-      }
-      const d = "default_" + (u.style || "slash")
-      return Assets.has("p", d) ? "p/" + d : null
-    }
-    const POSES = ["idle", "windup", "strike", "hurt", "cast", "dead"]
+    let syncing = 0
     async function sync() {
       if (!app) return
-      const url = bgUrl()
-      if (url) P.Assets.load(url).then(t => ((bg.texture = t), layout()))
+      const run = ++syncing
+      background()
       for (const side of ["p", "m"]) {
         units[side].forEach(a => a.cont.destroy({ children: true }))
         units[side] = []
       }
-      for (const side of ["p", "m"])
-        Lab.units[side].forEach((u, i) => {
-          const a = makeUnit(side, i, u)
-          units[side].push(a)
-        })
+      for (const side of ["p", "m"]) Lab.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
       layout()
       for (const side of ["p", "m"])
         for (const a of units[side]) {
-          if (!a.art || a.skip) continue
-          const urls = POSES.map(p => Assets.url(`${a.art}/${p}.webp`))
-          const tex = await P.Assets.load(urls).catch(() => null)
-          if (!tex || !app) continue
-          a.tex = Object.fromEntries(POSES.map((p, k) => [p, tex[urls[k]]]))
-          setPose(a, a.dead ? "dead" : "idle")
-          if (side === "p" && opt.rig && (a.u.avatar || a.i === 0) && Assets.has("rig", "player"))
-            loadPlayerRig(a.u, a.i === 0)
-              .then(r => r && app && !a.cont.destroyed && buildRig(a, r))
-              .catch(e => console.warn("[PixiJS 原型] player rig", e))
-          if (side === "m" && opt.rig && Assets.has("rig", a.id))
-            loadRig(a.id)
-              .then(r => app && !a.cont.destroyed && buildRig(a, r))
-              .catch(e => console.warn("[PixiJS 原型] rig", a.id, e))
+          const r = await (side === "p" ? loadPlayerRig(a.u) : loadRig(a.kind)).catch(e => console.warn("[动画测试] rig", a.kind, e))
+          if (run !== syncing) return
+          if (r) buildRig(a, r)
         }
+      editorRefresh()
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, u, id: (u.hrid || "").split("/").pop(), style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
+      const a = { side, i, u, kind: side === "p" ? "player" : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null }
       a.cont = new P.Container()
-      // 骨骼怪物 on: only monsters that have a rig are drawn (the rest are left out, their events ignored)
-      a.skip = side === "m" && opt.rig && !Assets.has("rig", a.id)
-      a.cont.visible = !a.skip
-      a.mesh = new P.MeshPlane({ texture: P.Texture.WHITE, verticesX: 10, verticesY: 10 })
-      a.mesh.visible = false
       a.filter = P.Filter.from({
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
         resources: { u: { uFlash: { value: 0, type: "f32" }, uColor: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" }, uDis: { value: a.dead ? 1 : 0, type: "f32" }, uSeed: { value: Math.random() * 50, type: "f32" } } },
       })
       a.uni = a.filter.resources.u.uniforms
-      a.mesh.filters = [a.filter]
       a.shadow = new P.Sprite(dot)
       a.shadow.anchor.set(0.5)
       a.shadow.tint = 0x000000
@@ -6908,7 +6712,7 @@ void main(){
       a.hpBar = new P.Graphics()
       a.label = new P.Text({ text: u.name || "", style: { fontFamily: "sans-serif", fontSize: 12, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
       a.label.anchor.set(0.5, 0)
-      a.cont.addChild(a.shadow, a.mesh, a.hpBar, a.label)
+      a.cont.addChild(a.shadow, a.hpBar, a.label)
       unitsLayer.addChild(a.cont)
       return a
     }
@@ -6922,26 +6726,21 @@ void main(){
         bg.position.set((W2 - bg.texture.width * k) / 2, (H - bg.texture.height * k) * 0.85)
       }
       for (const side of ["p", "m"])
-        units[side]
-          .filter(a => !a.skip)
-          .forEach((a, i, shownSide) => {
-            const n = shownSide.length
-            // like the stage: the first of each side stands nearest the middle
-            const gap = (W2 * 0.38) / Math.max(3, n)
-            a.h = Math.min(H * 0.4, gap * 1.2)
-            a.x0 = side === "p" ? W2 * 0.45 - (i + 0.5) * gap : W2 * 0.55 + (i + 0.5) * gap
-            a.y0 = H * 0.86 + (i % 2) * H * 0.03
-            a.dir = side === "p" ? 1 : -1
-            a.cont.position.set(a.x0, a.y0)
-            a.cont.zIndex = a.y0
-            a.shadow.width = a.h * 0.6
-            a.shadow.height = a.h * 0.12
-            a.label.position.set(0, 4)
-            drawHp(a)
-            if (a.tex) setPose(a, a.pose)
-            if (a.rig) rigScale(a)
-          })
-      unitsLayer.sortableChildren = true
+        units[side].forEach((a, i, all) => {
+          // the first of each side stands nearest the middle
+          const gap = (W2 * 0.36) / Math.max(2, all.length)
+          a.h = Math.min(H * 0.5, gap * 1.6)
+          a.x0 = side === "p" ? W2 * 0.4 - (i + 0.5) * gap : W2 * 0.6 + (i + 0.5) * gap
+          a.y0 = H * 0.86 + (i % 2) * H * 0.03
+          a.dir = side === "p" ? 1 : -1
+          a.cont.position.set(a.x0, a.y0)
+          a.cont.zIndex = a.y0
+          a.shadow.width = a.h * 0.6
+          a.shadow.height = a.h * 0.12
+          a.label.position.set(0, 4)
+          drawHp(a)
+          if (a.rig) rigScale(a)
+        })
     }
     function drawHp(a) {
       const w = a.h * 0.55
@@ -6950,78 +6749,13 @@ void main(){
       a.hpBar.rect(-w / 2, 20, w, 5).fill({ color: 0x000000, alpha: 0.6 })
       a.hpBar.rect(-w / 2, 20, (w * Math.max(0, a.hp)) / a.maxHp, 5).fill(a.side === "p" ? 0x4fd16a : 0xe0484b)
     }
-    function setPose(a, pose, ms = 0) {
-      clearTimeout(a.poseTimer)
-      if (a.dead && pose !== "dead") return
-      a.pose = pose
-      if (a.rig) {
-        if (ms) a.poseTimer = setTimeout(() => setPose(a, a.dead ? "dead" : "idle"), ms)
-        return
-      }
-      if (!a.tex?.[pose]) return
-      const t = a.tex[pose]
-      a.mesh.texture = t
-      // pose frames keep a 96/512 margin round the body: a.h is the body, feet on the bottom margin line
-      const k = a.h / (t.height * 0.62)
-      a.mesh.scale.set(k)
-      a.mesh.pivot.set(t.width / 2, t.height * 0.81)
-      a.mesh.visible = true
-      // the undeformed 10x10 grid; not read back from the mesh: a same-size texture keeps last frame's bent vertices
-      const nx = 10
-      a.base = Float32Array.from({ length: nx * nx * 2 }, (_, k) => (k % 2 ? (Math.floor(k / 2 / nx) * t.height) / (nx - 1) : (((k / 2) % nx) * t.width) / (nx - 1)))
-      if (ms) a.poseTimer = setTimeout(() => setPose(a, a.dead ? "dead" : "idle"), ms)
-    }
-    // the body as a 10x10 mesh: breathing and idle sway, a damped wobble after a hit, a lean into a swing
-    function deform(a, t, dt) {
-      if (a.rig) return rigFrame(a, t, dt)
-      const pos = a.mesh.geometry.positions
-      const base = a.base
-      if (!base || pos.length !== base.length) return
-      const w = a.mesh.texture.width
-      const h = a.mesh.texture.height
-      const cx = w / 2
-      const foot = h * 0.81
-      const live = opt.mesh && !a.dead
-      const br = Math.sin(t / 420 + a.phase)
-      const sway = Math.sin(t / 900 + a.phase * 2)
-      const wob = a.jig * Math.sin(t / 26)
-      for (let k = 0; k < pos.length; k += 2) {
-        const x = base[k]
-        const y = base[k + 1]
-        if (!live) {
-          pos[k] = x
-          pos[k + 1] = y
-          continue
-        }
-        const v = Math.max(0, (foot - y) / foot) // 0 at the feet, 1 at the top
-        const v2 = v * v
-        const sq = 1 - 0.14 * a.jig * Math.cos(t / 40) // squash and stretch after a hit
-        pos[k] = cx + (x - cx) * (1 + 0.018 * br * v + (1 - sq) * 0.6 * v) + h * (0.014 * sway * v2 + 0.05 * wob * v2 + 0.16 * a.lean * a.dir * v2)
-        pos[k + 1] = foot - (foot - y) * (1 + 0.022 * br * v) * sq
-      }
-      a.mesh.geometry.getBuffer("aPosition").update()
-    }
 
-    // ----- cutout rigs (assets/rig/<monster>/): separate parts on joints, posed by code instead of swapping frames -----
-    // rig.json: foot = the ground point under the body, h = body height, parts { img, pivot (in the part image),
-    // at (where that pivot sits in the assembled body), z, parent }. Art faces left like the monster frames.
-    // RIG_POSES: degrees each part turns toward the foe from rest; parts spring there (a little bouncy)
-    const RIG_POSES = {
-      idle: {},
-      windup: { torso: -10, head: -8, arm_f: -45, arm_b: -30, leg_f: -6 },
-      strike: { torso: 14, head: 8, arm_f: 65, arm_b: 20, leg_f: 12, leg_b: -8 },
-      hurt: { torso: -16, head: -20, arm_f: -30, arm_b: -40, leg_f: -8 },
-      cast: { torso: -6, head: -10, arm_f: -100, arm_b: -115 },
-      dead: {},
-    }
-    // players (assets/rig/player): body + the front arm holding the weapon
-    Object.assign(RIG_POSES.windup, { body: -6, arm: -150 })
-    Object.assign(RIG_POSES.strike, { body: 10, arm: 75 })
-    Object.assign(RIG_POSES.hurt, { body: -12, arm: -30 })
-    Object.assign(RIG_POSES.cast, { body: -4, arm: 115 })
-    Object.assign(RIG_POSES.dead, { body: -82, arm: -50 }) // players fall over backward; monsters fall apart instead
+    // ----- rigs (assets/rig/<id>/rig.json): parts on joints -----
+    // rig.json: foot = the ground point under the body, h = body height, face = "right" for player art (monsters face
+    // left), parts { img, pivot (in the part image), at (where that pivot sits in the assembled body), z, parent, rot?, scale? }
     const rigs = {} // monster id -> Promise<{ def, tex }>
     function loadRig(id) {
+      if (!Assets.has("rig", id)) return Promise.resolve(null)
       if (!rigs[id])
         rigs[id] = (async () => {
           const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
@@ -7034,25 +6768,22 @@ void main(){
         })
       return rigs[id]
     }
-    // a player rig: the shared side-view template (rig.json) with this avatar's and outfit's registered layers, the
-    // paper-doll weapon piece in the front fist (turned from the doll's arm angle to ours) and the off-hand behind
+    // a player: the shared 3/4 battle-view template with this avatar's and outfit's registered layers (body, upper
+    // arm, forearm), the paper-doll weapon piece in the fist (turned from the doll's arm angle) and the off-hand behind
     let playerBase = null
-    // pilot: player 1 always gets the drawn look (its own avatar / outfit when those are drawn, else the pilot's)
-    async function loadPlayerRig(u, pilot) {
+    async function loadPlayerRig(u) {
+      if (!Assets.has("rig", "player")) return null
       if (!playerBase)
         playerBase = fetch(Assets.url("rig/player/rig.json"))
           .then(r => r.json())
           .catch(e => ((playerBase = null), Promise.reject(e)))
       const base = await playerBase
-      const avatar = base.avatars.includes(u.avatar) ? u.avatar : pilot ? base.avatars[0] : null
-      if (!avatar) return null
-      const outfit = base.outfits.includes(u.outfit) ? u.outfit : pilot ? base.outfits[0] : null
+      const avatar = base.avatars.includes(u.avatar) ? u.avatar : base.avatars[0]
+      const outfit = base.outfits.includes(u.outfit) ? u.outfit : base.outfits[0]
       const def = { ...base, parts: { ...base.parts } }
       const L = n => P.Assets.load(Assets.url(`rig/player/${n}.webp`))
-      const tex = {
-        body: [await L(`a_${avatar}_body`), outfit && (await L(`o_${outfit}_body`))],
-        arm: [await L(`a_${avatar}_arm`), outfit && (await L(`o_${outfit}_arm`))],
-      }
+      const tex = {}
+      for (const part of Object.keys(base.parts)) tex[part] = [await L(`a_${avatar}_${part}`), outfit && (await L(`o_${outfit}_${part}`))]
       // the weapon pieces come with the paper-doll index
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
@@ -7061,22 +6792,23 @@ void main(){
         const t = await P.Assets.load(h.url)
         return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip }
       }
-      const w = await piece(u.items?.main_hand || u.items?.two_hand || (pilot ? "holy_sword" : null))
+      const w = await piece(u.items?.main_hand || u.items?.two_hand || "holy_sword")
       if (w) {
         tex.weapon = w.tex
-        def.parts.weapon = { pivot: w.grip, at: base.fist, parent: "arm", z: 4, rot: 58 - base.armAngle - 40, scale: base.scale }
+        def.parts.weapon = { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
       }
       const off = await piece(u.items?.off_hand)
       if (off) {
         tex.off = off.tex
-        def.parts.off = { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
+        // in the back hand, in front of the body (a guard's shield); the back arm swings it
+        def.parts.off = base.parts.barm ? { pivot: off.grip, at: base.back, parent: "barm", z: 2.5, scale: base.scale } : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
       }
       return { def, tex }
     }
     function buildRig(a, { def, tex }) {
-      a.rig?.root.destroy()
+      a.rig?.root.destroy({ children: true })
       const root = new P.Container()
-      const parts = Object.entries(def.parts)
+      const list = Object.entries(def.parts)
         .sort((x, y) => x[1].z - y[1].z)
         .map(([name, p]) => {
           // a part may be several registered layers (a player's avatar and outfit), all on the same pivot
@@ -7088,47 +6820,80 @@ void main(){
             sp.scale.set(p.scale || 1)
             s.addChild(sp)
           }
+          s.eventMode = "static"
+          s.cursor = "grab"
+          s.on("pointerdown", e => dragStart(a, name, e))
           root.addChild(s)
           const w = layers[0]?.width || 0
           const h = layers[0]?.height || 0
           // a part hanging below its joint swings forward with a clockwise turn (art facing left), one standing on it counterclockwise
-          const sign = (h / 2 > p.pivot[1] ? 1 : -1) * (def.face === "right" ? -1 : 1)
-          return { name, s, p, w, h, sign, rest: ((p.rot || 0) * Math.PI) / 180, r: 0, v: 0, x: 0, y: 0, wr: 0, fall: null }
+          // (rig.json may set sign itself where that guess fails: a forearm held out sideways)
+          const sign = (p.sign ?? (h / 2 > p.pivot[1] ? 1 : -1)) * (def.face === "right" ? -1 : 1)
+          return { name, s, p, w, h, sign, rest: ((p.rot || 0) * Math.PI) / 180, x: 0, y: 0, wr: 0, fall: null }
         })
-      const by = Object.fromEntries(parts.map(q => [q.name, q]))
+      const by = Object.fromEntries(list.map(q => [q.name, q]))
       const order = []
       const add = q => {
         if (order.includes(q)) return
         if (q.p.parent) add(by[q.p.parent])
         order.push(q)
       }
-      parts.forEach(add)
-      a.mesh.visible = false
-      a.mesh.filters = null
+      list.forEach(add)
       root.filters = [a.filter]
       a.cont.addChildAt(root, 1)
-      a.rig = { root, parts, by, order, def, fallen: false, back: 0 }
+      a.rig = { root, parts: list, by, order, def, fallen: false, back: 0, crumble: def.face !== "right" }
       rigScale(a)
-      if (a.dead && def.face !== "right") rigCrumble(a, true)
+      if (a.dead) {
+        if (a.rig.crumble) rigCrumble(a, true)
+        else play1(a, "dead", { at: 1e6 })
+      } else play1(a, "idle")
     }
     // art faces left unless rig.json says face: "right"; mirrored to face the foe
     function rigScale(a) {
       const k = a.h / a.rig.def.h
       a.rig.root.scale.set((a.rig.def.face === "right") === a.dir > 0 ? k : -k, k)
     }
-    function rigFrame(a, t, dt) {
+    // starts an action on a unit; the pose it leaves is blended out over the first `blend` ms
+    function play1(a, name, { at = 0, blend = 120 } = {}) {
+      const act = actionOf(a.kind, name) || actionOf(a.kind, "idle")
+      if (!act) return null
+      a.from = a.pose ? { ...a.pose, a: { ...a.pose.a } } : null
+      a.blend = blend
+      a.act = { name, def: act, t0: now() - at }
+      return act
+    }
+    function rigFrame(a, t) {
       const R = a.rig
-      if (R.fallen) return rigDebris(a, dt)
+      if (R.fallen) return rigDebris(a)
+      let pose
+      if (ed.on && ed.unit === a) pose = sample(ed.act, ed.t)
+      else {
+        const A = a.act
+        let at = A ? t - A.t0 : 0
+        if (A && at >= A.def.dur) {
+          if (A.def.loop) at %= A.def.dur
+          else if (A.name === "dead") at = A.def.dur
+          else {
+            play1(a, "idle")
+            return rigFrame(a, t)
+          }
+        }
+        pose = A ? sample(A.def, at) : { a: {}, x: 0, y: 0 }
+        if (a.from && A && t - A.t0 < a.blend) {
+          const p = ease((t - A.t0) / a.blend)
+          const b = pose
+          pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p) }
+          for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) pose.a[n] = lerp(a.from.a[n] || 0, b.a[n] || 0, p)
+        }
+      }
+      a.pose = pose
       const D = Math.PI / 180
-      const pose = RIG_POSES[a.pose] || {}
-      const br = Math.sin(t / 420 + a.phase)
+      const wob = a.jig * 10 * Math.sin(t / 30)
+      const h = R.def.h
       for (const q of R.order) {
-        let T = (pose[q.name] || 0) * q.sign
-        if (q.name.startsWith("arm")) T += 4 * Math.sin(t / 650 + a.phase + (q.name === "arm_b" ? 1.7 : 0)) * q.sign
-        if (q.name === "head") T += 3 * br
-        if (q.name === "torso" || q.name === "head") T += a.jig * 12 * Math.sin(t / 30)
-        q.v += (260 * (T * D - q.r) - 18 * q.v) * dt
-        q.r += q.v * dt
+        let deg = pose.a[q.name] || 0
+        if (q.name === "body" || q.name === "torso" || q.name === "head") deg -= wob
+        const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
         if (par) {
           const dx = q.p.at[0] - par.p.at[0]
@@ -7137,11 +6902,13 @@ void main(){
           const s = Math.sin(par.wr)
           q.x = par.x + dx * c - dy * s
           q.y = par.y + dx * s + dy * c
-          q.wr = par.wr + q.r + q.rest
+          q.wr = par.wr + r + q.rest
         } else {
-          q.x = q.p.at[0] - R.def.foot[0]
-          q.y = q.p.at[1] - R.def.foot[1] + (q.name === "torso" ? 3 * br : 0)
-          q.wr = q.r + q.rest
+          // forward is -x in the art for a left-facing rig
+          const fwd = R.def.face === "right" ? 1 : -1
+          q.x = q.p.at[0] - R.def.foot[0] + pose.x * h * fwd
+          q.y = q.p.at[1] - R.def.foot[1] - pose.y * h
+          q.wr = r + q.rest
         }
         // getting back up: fly from where the piece lay into place
         const b = R.back
@@ -7149,13 +6916,12 @@ void main(){
         q.s.rotation = b ? lerp(q.wr, q.fr, b) : q.wr
       }
     }
-    // death: the golem falls apart, pieces tumble backward, bounce and settle
+    // a monster's death: it falls apart, pieces tumble backward, bounce and settle
     function rigCrumble(a, instant) {
       const R = a.rig
       R.fallen = true
       for (const q of R.parts) {
-        const w = Math.min(q.w, q.h)
-        q.fall = { vx: 60 + Math.random() * 220, vy: -(120 + Math.random() * 260), vr: (Math.random() - 0.5) * 12, floor: -w * 0.3 }
+        q.fall = { vx: 60 + Math.random() * 220, vy: -(120 + Math.random() * 260), vr: (Math.random() - 0.5) * 12, floor: -Math.min(q.w, q.h) * 0.3 }
         if (instant) {
           q.s.position.set(q.p.at[0] - R.def.foot[0] + 80 + Math.random() * 120, q.fall.floor)
           q.s.rotation = (Math.random() - 0.5) * 3
@@ -7163,7 +6929,8 @@ void main(){
         }
       }
     }
-    function rigDebris(a, dt) {
+    let dt = 0.016
+    function rigDebris(a) {
       for (const q of a.rig.parts) {
         const f = q.fall
         if (!f) continue
@@ -7188,10 +6955,9 @@ void main(){
         q.fy = q.s.y
         q.fr = q.s.rotation
         q.fall = null
-        q.r = q.v = 0
       }
-      tween(650, p => (R.back = 1 - ease(p)))
       R.back = 1
+      tween(650, p => (R.back = 1 - ease(p)))
     }
 
     // ----- effects -----
@@ -7210,9 +6976,6 @@ void main(){
           .catch(() => delete sheets[name])
       }
       return null
-    }
-    function preload() {
-      for (const n of Assets.list("fx")) sheet(n)
     }
     function playSheet(name, x, y, h, { dur = 480, flip = false, tint = 0xffffff, delay = 0 } = {}) {
       const frames = sheet(name)
@@ -7250,7 +7013,6 @@ void main(){
       }
     }
     function light(x, y, color, r, dur, peak = 1) {
-      if (!opt.light) return
       const s = new P.Sprite(glow)
       s.anchor.set(0.5)
       s.tint = color
@@ -7268,19 +7030,17 @@ void main(){
       const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: big ? 30 : 20, fontWeight: "900", fill: color, stroke: { color: "#000", width: big ? 6 : 4 }, dropShadow: { color: "#000", blur: 4, distance: 0, alpha: 0.8 } } })
       tx.anchor.set(0.5)
       const x = a.x0 + (Math.random() - 0.5) * a.h * 0.3
-      const y = a.y0 - a.h * 0.75
+      const y = a.y0 - a.h * 0.95
       tx.position.set(x, y)
       textLayer.addChild(tx)
       tween(big ? 1100 : 850, p => {
         tx.position.y = y - 46 * ease(p)
-        const pop = p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1
-        tx.scale.set(pop)
+        tx.scale.set(p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1)
         tx.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
         if (p >= 1) tx.destroy()
       })
     }
     function flash(a, color, dur = 220) {
-      if (!opt.dissolve) return
       const c = new P.Color(color).toArray()
       a.uni.uColor = new Float32Array([c[0], c[1], c[2]])
       tween(dur, p => (a.uni.uFlash = p >= 1 ? 0 : 0.9 * (1 - p)))
@@ -7288,12 +7048,11 @@ void main(){
     function crit(a) {
       shake = Math.max(shake, 1)
       punch = 1
-      if (!opt.shock) return
       const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
       shock = { f, t0: now() }
       world.filters = [f]
     }
-    const mid = a => ({ x: a.x0, y: a.y0 - a.h * 0.42 })
+    const mid = a => ({ x: a.x0 + (a.dash || 0), y: a.y0 - a.h * 0.45 })
 
     function hit(a, tg, src, e, isSkill) {
       if (!a) return
@@ -7301,52 +7060,47 @@ void main(){
       const color = COLOR[el] || COLOR.physical
       const m = mid(a)
       a.hp = tg.hp
-      if (tg.dHP === 0) {
-        number(a, "Miss", "#cfd6ff", false)
-        a.lean = -0.4 * a.dir
-        tween(300, p => (a.lean = -0.4 * a.dir * (1 - p)))
-        return
-      }
+      if (tg.dHP === 0) return number(a, "Miss", "#cfd6ff", false)
       const key = e.ab?.key
       const style = e.style || "smash"
-      const named = isSkill && key && Assets.has("fx", key)
       const flip = src ? src.dir < 0 : false
-      if (!(named && playSheet(key, m.x, m.y, a.h * 1.1, { flip })))
-        playSheet(el !== "physical" ? BURST[el] || "phys_hit" : MELEE[style] ? style : "phys_hit", m.x, m.y, a.h * (tg.crit ? 1.2 : 0.9), { flip })
+      if (!(isSkill && key && Assets.has("fx", key) && playSheet(key, m.x, m.y, a.h * 1.1, { flip })))
+        playSheet(el !== "physical" ? BURST[el] || "phys_hit" : { slash: 1, stab: 1, smash: 1 }[style] ? style : "phys_hit", m.x, m.y, a.h * (tg.crit ? 1.2 : 0.9), { flip })
       sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
       flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
       a.jig = tg.crit ? 1.3 : 0.9
-      setPose(a, "hurt", 320)
       number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
       if (tg.crit) crit(a)
       drawHp(a)
       if (tg.died) die(a)
+      else if (a.rig && !a.act?.def.hit) play1(a, "hurt")
     }
     function die(a) {
       a.dead = true
-      setPose(a, "dead")
       drawHp(a)
       a.label.visible = false
-      if (a.rig && a.rig.def.face !== "right") rigCrumble(a)
-      const body = a.rig ? a.rig.root : a.mesh
-      const wait = a.rig ? 900 : 250
-      if (!opt.dissolve) return tween(900, p => (body.alpha = 1 - p), wait)
-      tween(1500, p => (a.uni.uDis = ease(p)), wait)
-      for (let k = 0; k < 6; k++) later(250 + k * 180, () => sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
+      if (!a.rig) return
+      if (a.rig.crumble) {
+        rigCrumble(a)
+        tween(1500, p => (a.uni.uDis = ease(p)), 900)
+        for (let k = 0; k < 6; k++) later(900 + k * 180, () => sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
+      } else play1(a, "dead")
     }
     function revive(a, tg) {
       a.dead = false
       a.hp = tg.hp
-      a.mesh.alpha = 1
-      if (a.rig) {
-        a.rig.root.alpha = 1
-        if (a.rig.fallen) rigRise(a)
-      }
       a.label.visible = true
-      setPose(a, "idle")
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.9, 900)
-      if (opt.dissolve) tween(900, p => (a.uni.uDis = 1 - ease(p)))
-      else a.uni.uDis = 0
+      if (a.rig) {
+        if (a.rig.fallen) {
+          rigRise(a)
+          tween(900, p => (a.uni.uDis = 1 - ease(p)))
+        } else {
+          a.uni.uDis = 0
+          // getting up: a slow blend out of the lying pose
+          play1(a, "idle", { blend: 650 })
+        }
+      }
       drawHp(a)
     }
     function heal(a, tg) {
@@ -7364,25 +7118,24 @@ void main(){
       if (!app) return
       for (const e of evs) {
         const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
-        if (src?.skip) continue
-        const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a && !a.skip)
-        if (!tgs.length && e.targets?.length) continue
+        const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a)
         const isSkill = !!e.ab
-        const el = e.element || "physical"
-        const color = COLOR[el] || COLOR.physical
+        const color = COLOR[e.element] || COLOR.physical
         if (e.effect === "heal" || e.effect === "regen") {
           if (src) {
-            setPose(src, "cast", 500)
+            play1(src, "cast")
             light(src.x0, src.y0 - src.h * 0.4, COLOR.heal, src.h, 600)
           }
-          tgs.forEach(([a, tg]) => later(src ? 250 : 0, () => heal(a, tg)))
+          tgs.forEach(([a, tg]) => later(src ? 300 : 0, () => heal(a, tg)))
           continue
         }
         if (e.effect !== "damage") {
           if (src) {
-            setPose(src, "cast", 500)
-            light(src.x0, src.y0 - src.h * 0.4, COLOR.buff, src.h * 0.9, 700)
-            sparks(src.x0, src.y0 - src.h * 0.3, COLOR.buff, 30, { speed: 90, up: 120, gravity: -40, life: 900, size: 0.4 })
+            play1(src, "cast")
+            later(300, () => {
+              light(src.x0, src.y0 - src.h * 0.5, COLOR.buff, src.h * 0.9, 700)
+              sparks(src.x0, src.y0 - src.h * 0.4, COLOR.buff, 30, { speed: 90, up: 120, gravity: -40, life: 900, size: 0.4 })
+            })
           }
           continue
         }
@@ -7390,86 +7143,25 @@ void main(){
           tgs.forEach(([a, tg]) => hit(a, tg, null, e, false))
           continue
         }
-        const style = e.style || src.style || "smash"
-        const melee = MELEE[style] && !(isSkill && e.ab?.target === "allEnemies" && style !== "slash")
-        if (isSkill) light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, 700)
-        if (melee) {
-          // wind up, rush in leaning into the swing, strike, come back
-          const tgt = tgs[0]?.[0]
-          // stops in front of the target, drawn over everyone on the way
-          const reach = tgt ? tgt.x0 - src.x0 - src.dir * (tgt.h + src.h) * 0.42 : 0
+        // the attacker's action: wind up, run in (lunge) before the blow lands at act.hit, come back after
+        const act = play1(src, isSkill ? "skill" : "attack")
+        const at = act?.hit ?? 300
+        if (isSkill) light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, Math.max(500, at))
+        const tgt = tgs[0]?.[0]
+        if (act?.lunge && tgt) {
+          const reach = tgt.x0 - src.x0 - src.dir * (tgt.h + src.h) * 0.3
+          tween(at * 0.45, p => (src.dash = reach * ease(p)), at * 0.55)
+          tween(Math.max(200, act.dur - at - 80), p => (src.dash = reach * (1 - ease(p))), at + 80)
           src.cont.zIndex = 1e4
-          later(720, () => (src.cont.zIndex = src.y0))
-          setPose(src, "windup")
-          tween(160, p => (src.lean = -0.25 * p))
-          tween(
-            140,
-            p => {
-              src.dash = reach * ease(p)
-              src.lean = lerp(-0.25, 0.45, p)
-              if (p >= 1) setPose(src, "strike")
-            },
-            160,
-          )
-          later(300, () => tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill)))
-          tween(
-            260,
-            p => {
-              src.dash = reach * (1 - ease(p))
-              src.lean = 0.45 * (1 - p)
-              if (p >= 1) setPose(src, "idle")
-            },
-            460,
-          )
-        } else {
-          // ranged / magic: cast, a glowing orb or arrow flies over with a trail
-          setPose(src, isSkill || style === "magic" ? "cast" : "strike", 520)
-          tgs.forEach(([a, tg], k) => {
-            if (!a) return
-            const s0 = mid(src)
-            const s1 = mid(a)
-            const orb = new P.Sprite(glow)
-            orb.anchor.set(0.5)
-            orb.tint = color
-            orb.width = orb.height = style === "magic" ? src.h * 0.45 : src.h * 0.22
-            orb.visible = false
-            fxLayer.addChild(orb)
-            const frames = sheet(ORB[el])
-            const core = frames ? new P.Sprite(frames[0]) : null
-            if (core) {
-              core.anchor.set(0.5)
-              core.scale.set((src.h * 0.5) / frames[0].height)
-              core.visible = false
-              fxLayer.addChild(core)
-            }
-            tween(
-              300,
-              p => {
-                const x = lerp(s0.x, s1.x, p)
-                const y = lerp(s0.y, s1.y, p) - Math.sin(Math.PI * p) * src.h * 0.25
-                orb.visible = true
-                orb.position.set(x, y)
-                if (core) {
-                  core.visible = true
-                  core.position.set(x, y)
-                  core.texture = frames[Math.floor(p * 16) % 8]
-                }
-                if (Math.random() < 0.7) sparks(x, y, color, 2, { speed: 40, gravity: 0, life: 350, size: 0.35 })
-                if (p >= 1) {
-                  orb.destroy()
-                  core?.destroy()
-                  hit(a, tg, src, e, isSkill)
-                }
-              },
-              200 + k * 60,
-            )
-          })
+          later(act.dur, () => (src.cont.zIndex = src.y0))
         }
+        later(at, () => tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill)))
       }
     }
 
     function frame() {
       const t = now()
+      dt = Math.min(0.05, app.ticker.deltaMS / 1000)
       for (let k = 0; k < tweens.length; k++) {
         const w = tweens[k]
         if (t < w.t0) continue
@@ -7477,11 +7169,10 @@ void main(){
         try {
           w.f(p)
         } catch (e) {
-          console.warn("[PixiJS 原型]", e)
+          console.warn("[动画测试]", e)
         }
         if (p >= 1) tweens.splice(k--, 1)
       }
-      const dt = Math.min(0.05, app.ticker.deltaMS / 1000)
       for (let k = 0; k < parts.length; k++) {
         const q = parts[k]
         const age = (t - q.t0) / q.life
@@ -7500,7 +7191,7 @@ void main(){
           a.jig *= Math.pow(0.02, dt)
           if (a.jig < 0.01) a.jig = 0
           a.cont.x = a.x0 + (a.dash || 0)
-          deform(a, t, dt)
+          if (a.rig) rigFrame(a, t)
         }
       // camera: shake and a short zoom punch toward the middle
       shake *= Math.pow(0.004, dt)
@@ -7523,7 +7214,296 @@ void main(){
       bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
     }
 
-    return { toggle, play, optButtons, sync: () => app && sync(), isOpen: () => !!host?.isConnected }
+    // ----- action editor -----
+    // Pick a unit and an action; the unit freezes on the timeline. Drag a body part on the stage (or its slider) to
+    // turn it at the selected key; + adds a key at the playhead. Edits are kept per viewer (GM storage) and override
+    // the built-in actions; 导出 copies them as JSON (send it to Claude to make them the defaults).
+    const ed = { on: false, side: "p", i: 0, name: "attack", act: null, t: 0, key: 0, playing: 0, unit: null, drag: null }
+    let panelEl = null
+    const editUnit = () => units[ed.side]?.[ed.i] || null
+    const kindOf = () => editUnit()?.kind || (ed.side === "p" ? "player" : Lab.units.m[ed.i] && (Lab.units.m[ed.i].hrid || "").split("/").pop())
+    function editAct() {
+      const kind = kindOf()
+      const own = edits[kind]?.[ed.name]
+      return own || structuredClone(ACTIONS[kind]?.[ed.name] || { dur: 800, keys: [{ t: 0, a: {} }] })
+    }
+    // writes the action being edited into the viewer's edits
+    function commit() {
+      const kind = kindOf()
+      ed.act.keys.sort((x, y) => x.t - y.t)
+      ;(edits[kind] ||= {})[ed.name] = ed.act
+      saveEdits()
+    }
+    function editorRefresh() {
+      ed.unit = ed.on ? editUnit() : null
+      if (ed.on) ed.act = editAct()
+      drawPanel()
+    }
+    const partNames = () => (editUnit()?.rig?.parts || []).filter(q => q.name !== "weapon" && q.name !== "off").map(q => q.name)
+    function setEditing(on) {
+      ed.on = on
+      cancelAnimationFrame(ed.playing)
+      ed.playing = 0
+      if (on) {
+        ed.act = editAct()
+        ed.key = Math.min(ed.key, ed.act.keys.length - 1)
+        ed.t = ed.act.keys[ed.key]?.t || 0
+      }
+      ed.unit = on ? editUnit() : null
+      drawPanel()
+    }
+    function playEdited() {
+      cancelAnimationFrame(ed.playing)
+      const t0 = now()
+      const step = () => {
+        ed.t = Math.min(ed.act.dur, now() - t0)
+        drawTime()
+        ed.playing = ed.t < ed.act.dur ? requestAnimationFrame(step) : 0
+      }
+      ed.playing = requestAnimationFrame(step)
+    }
+    // dragging a part turns it around its joint at the selected key
+    function dragStart(a, name, e) {
+      if (!ed.on || a !== ed.unit || name === "weapon" || name === "off") return
+      const q = a.rig.by[name]
+      const g = a.rig.root.toGlobal(q.s.position)
+      ed.drag = { q, a, g, ang: Math.atan2(e.global.y - g.y, e.global.x - g.x), base: ed.act.keys[ed.key].a[name] || 0 }
+      selectKeyAt()
+    }
+    function dragMove(e) {
+      const d = ed.drag
+      if (!d) return
+      const ang = Math.atan2(e.global.y - d.g.y, e.global.x - d.g.x)
+      let delta = ((ang - d.ang) * 180) / Math.PI
+      delta = ((delta + 540) % 360) - 180
+      const mirror = d.a.rig.root.scale.x < 0 ? -1 : 1
+      ed.act.keys[ed.key].a[d.q.name] = Math.round(d.base + delta * mirror * d.q.sign)
+      commit()
+      drawKey()
+    }
+    function dragEnd() {
+      ed.drag = null
+    }
+    // the playhead snaps onto the selected key so edits land where they show
+    function selectKeyAt() {
+      const k = ed.act.keys[ed.key]
+      if (k) ed.t = k.t
+      drawTime()
+    }
+
+    const mk = (tag, cls, text) => {
+      const e = document.createElement(tag)
+      if (cls) e.className = cls
+      if (text != null) e.textContent = text
+      return e
+    }
+    const btn = (label, onClick, cls) => {
+      const b = mk("button", cls, label)
+      b.addEventListener("click", onClick)
+      return b
+    }
+    let timeEl, keyEl
+    function editorPanel() {
+      panelEl = panelEl || mk("div", "bfx-ed")
+      drawPanel()
+      return panelEl
+    }
+    function drawPanel() {
+      if (!panelEl) return
+      panelEl.replaceChildren()
+      const top = mk("div", "row")
+      top.append(mk("span", "lbl", "动作编辑"))
+      top.append(btn(ed.on ? "结束编辑" : "开始编辑", () => setEditing(!ed.on), ed.on ? "on" : ""))
+      if (!ed.on) {
+        top.append(mk("span", "hint", "（编辑时这个角色停在时间轴上，在画面上拖动身体部位就能转动它）"))
+        panelEl.append(top)
+        return
+      }
+      const who = mk("select")
+      const opts = [...Lab.units.p.map((u, i) => ["p:" + i, u.name]), ...Lab.units.m.map((u, i) => ["m:" + i, u.name])]
+      for (const [v, n] of opts) {
+        const o = mk("option", null, n)
+        o.value = v
+        who.append(o)
+      }
+      who.value = ed.side + ":" + ed.i
+      who.onchange = () => {
+        ;[ed.side, ed.i] = [who.value[0], +who.value.slice(2)]
+        ed.key = 0
+        setEditing(true)
+      }
+      const what = mk("select")
+      for (const [v, n] of Object.entries(NAMES)) {
+        if (v === "dead" && ed.side === "m") continue
+        const o = mk("option", null, n)
+        o.value = v
+        what.append(o)
+      }
+      what.value = ed.name
+      what.onchange = () => {
+        ed.name = what.value
+        ed.key = 0
+        setEditing(true)
+      }
+      top.append(who, what, btn("▶ 播放", playEdited))
+      const dur = mk("input")
+      dur.type = "number"
+      dur.step = 50
+      dur.value = ed.act.dur
+      dur.title = "总时长（毫秒）"
+      dur.onchange = () => ((ed.act.dur = Math.max(100, +dur.value || 800)), commit(), drawPanel())
+      top.append(mk("span", "lbl", "时长"), dur)
+      if (ed.name === "attack" || ed.name === "skill") {
+        const hit = mk("input")
+        hit.type = "number"
+        hit.step = 10
+        hit.value = ed.act.hit ?? 300
+        hit.title = "打中的时刻（毫秒）"
+        hit.onchange = () => ((ed.act.hit = +hit.value || 0), commit())
+        top.append(mk("span", "lbl", "命中"), hit)
+      }
+      panelEl.append(top)
+
+      // timeline: keys as markers, the playhead as a slider
+      const line = mk("div", "row")
+      line.append(mk("span", "lbl", "时间轴"))
+      const bar = mk("div", "bfx-tl")
+      ed.act.keys.forEach((k, i) => {
+        const m = btn(String(i + 1), () => ((ed.key = i), selectKeyAt(), drawPanel()), "key" + (i === ed.key ? " on" : ""))
+        m.style.left = (k.t / ed.act.dur) * 100 + "%"
+        m.title = k.t + " ms"
+        bar.append(m)
+      })
+      if (ed.act.hit != null) {
+        const h = mk("i", "hit")
+        h.style.left = (ed.act.hit / ed.act.dur) * 100 + "%"
+        h.title = "命中"
+        bar.append(h)
+      }
+      timeEl = mk("input")
+      timeEl.type = "range"
+      timeEl.min = 0
+      timeEl.max = ed.act.dur
+      timeEl.value = ed.t
+      timeEl.oninput = () => ((ed.t = +timeEl.value), drawTime())
+      bar.append(timeEl)
+      line.append(bar)
+      line.append(
+        btn("+ 关键帧", () => {
+          const pose = sample(ed.act, ed.t)
+          const t = Math.round(ed.t)
+          const k = { t, a: Object.fromEntries(Object.entries(pose.a).map(([n, v]) => [n, Math.round(v)])), x: +pose.x.toFixed(3), y: +pose.y.toFixed(3) }
+          ed.act.keys = ed.act.keys.filter(x => x.t !== t)
+          ed.act.keys.push(k)
+          commit()
+          ed.key = ed.act.keys.indexOf(k)
+          drawPanel()
+        }),
+        btn("删除这帧", () => {
+          if (ed.act.keys.length <= 1) return
+          ed.act.keys.splice(ed.key, 1)
+          ed.key = Math.max(0, ed.key - 1)
+          commit()
+          selectKeyAt()
+          drawPanel()
+        }),
+      )
+      panelEl.append(line)
+      keyEl = mk("div", "bfx-key")
+      panelEl.append(keyEl)
+      drawKey()
+
+      const io = mk("div", "row")
+      io.append(
+        mk("span", "lbl", "保存"),
+        btn("导出全部（复制）", () => {
+          GM_setClipboard(JSON.stringify(edits))
+          alert("已复制你改过的动作（JSON），发给 Claude 就能设成默认")
+        }),
+        btn("导入", () => {
+          const s = prompt("粘贴动作 JSON")
+          if (!s) return
+          try {
+            Object.assign(edits, JSON.parse(s))
+            saveEdits()
+            setEditing(true)
+          } catch (e) {
+            alert("JSON 不对：" + e.message)
+          }
+        }),
+        btn("这个动作恢复默认", () => {
+          delete edits[kindOf()]?.[ed.name]
+          saveEdits()
+          setEditing(true)
+        }),
+      )
+      panelEl.append(io)
+    }
+    // the selected key: its time, easing and one slider per part (+ forward / up)
+    function drawKey() {
+      if (!keyEl) return
+      keyEl.replaceChildren()
+      const k = ed.act.keys[ed.key]
+      if (!k) return
+      const head = mk("div", "row")
+      const t = mk("input")
+      t.type = "number"
+      t.step = 10
+      t.value = k.t
+      t.onchange = () => {
+        k.t = Math.max(0, Math.min(ed.act.dur, +t.value || 0))
+        commit()
+        ed.key = ed.act.keys.indexOf(k)
+        selectKeyAt()
+        drawPanel()
+      }
+      const e = mk("select")
+      for (const [v, n] of [["inout", "缓入缓出"], ["out", "快起慢停"], ["in", "慢起快停"], ["linear", "匀速"]]) {
+        const o = mk("option", null, n)
+        o.value = v
+        e.append(o)
+      }
+      e.value = k.e || "inout"
+      e.onchange = () => ((k.e = e.value), commit())
+      head.append(mk("span", "lbl", `第 ${ed.key + 1} 帧`), t, mk("span", "lbl", "毫秒"), e)
+      keyEl.append(head)
+      const sliders = mk("div", "bfx-sl")
+      const slider = (label, get, set, min, max, step) => {
+        const w = mk("label")
+        const r = mk("input")
+        r.type = "range"
+        r.min = min
+        r.max = max
+        r.step = step
+        r.value = get()
+        const v = mk("b", null, String(get()))
+        r.oninput = () => {
+          set(+r.value)
+          v.textContent = r.value
+          commit()
+        }
+        w.append(mk("span", null, label), r, v)
+        sliders.append(w)
+      }
+      const ZH = { body: "身体", arm: "大臂", fore: "小臂", barm: "副手臂", torso: "躯干", head: "头", arm_f: "前臂", arm_b: "后臂", leg_f: "前腿", leg_b: "后腿" }
+      for (const n of partNames())
+        slider(
+          ZH[n] || n,
+          () => k.a[n] || 0,
+          v => (k.a[n] = v),
+          -180,
+          180,
+          1,
+        )
+      slider("前移", () => k.x || 0, v => (k.x = v), -0.3, 0.3, 0.005)
+      slider("上移", () => k.y || 0, v => (k.y = v), -0.2, 0.3, 0.005)
+      keyEl.append(sliders)
+    }
+    function drawTime() {
+      if (timeEl) timeEl.value = ed.t
+    }
+
+    return { open, sync, play, background, editorPanel, editing: () => ed.on, units: () => units, ed }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
@@ -7659,7 +7639,6 @@ void main(){
       GM_registerMenuCommand("生活动画测试（小窗）", () => Life.lab()), // #dev
       GM_registerMenuCommand(Recorder.active() ? L("⏹ 停止录制并下载文件", "⏹ Stop recording and download") : L("⏺ 录制战斗消息（迷宫 / 公会战）", "⏺ Record battle messages (labyrinth / guild)"), () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
       toggle("debug", L("调试：控制台打印战斗消息", "Debug: log battle messages")), // #dev
-      toggle("fps", "调试：战斗舞台显示帧数", () => Stage.meterOn()), // #dev
     ]
   }
   menu()
@@ -7712,5 +7691,5 @@ void main(){
   }
   for (const msg of earlyWs.splice(0)) onWsMessage(msg)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life, PixiLab } // #dev
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life, Arena } // #dev
 })()
