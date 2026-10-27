@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.0
+// @version      0.18.1
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -970,6 +970,7 @@
 .bfx-lab .gal figure{margin:0;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 4px}
 .bfx-lab .gal img{width:96px;height:96px}
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
+.bfx-fps{position:absolute;right:4px;top:4px;z-index:6000;padding:2px 6px;font:11px/15px monospace;white-space:pre;color:#dfe6ff;background:rgba(0,0,0,.6);border-radius:4px}
 /* #dev-end */`
       document.head.appendChild(st)
     }
@@ -1199,6 +1200,7 @@
       viewEl.style.transform = ""
       stageEl.style.height = mode === "test" ? cfg.stageH + "px" : ""
       host.appendChild(stageEl)
+      meterOn() // #dev
       reload()
       preloadFx()
       Assets.refresh()
@@ -1724,6 +1726,42 @@
       }, 900)
     }
 
+    // #dev-start
+    // frame meter (menu 调试：显示帧数): the browser's frame rate while the stage is on the page, the slowest frame,
+    // what the canvas effects cost per frame, and how much is animating (canvas fx, CSS / web animations, nodes)
+    const meter = { el: null, raf: 0, n: 0, t0: 0, last: 0, worst: 0, fxMs: 0, fxN: 0 }
+    function meterOn() {
+      if (!cfg.fps || !stageEl?.isConnected || meter.raf) return
+      if (!meter.el) {
+        meter.el = document.createElement("div")
+        meter.el.className = "bfx-fps"
+      }
+      meter.el.textContent = "… fps"
+      stageEl.appendChild(meter.el)
+      Object.assign(meter, { n: 0, t0: now(), last: 0, worst: 0, fxMs: 0, fxN: 0 })
+      meter.raf = requestAnimationFrame(meterTick)
+    }
+    function meterTick() {
+      meter.raf = 0
+      if (!cfg.fps || !stageEl?.isConnected) return meter.el?.remove()
+      const t = now()
+      if (meter.last) meter.worst = Math.max(meter.worst, t - meter.last)
+      meter.last = t
+      meter.n++
+      if (t - meter.t0 >= 500) {
+        const fps = (meter.n * 1000) / (t - meter.t0)
+        const anims = stageEl.getAnimations?.({ subtree: true }).length ?? "?"
+        const nodes = stageEl.getElementsByTagName("*").length
+        meter.el.style.color = fps >= 55 ? "#8f8" : fps >= 40 ? "#fd6" : "#f77"
+        meter.el.textContent =
+          `${fps.toFixed(0)} fps · 最慢 ${meter.worst.toFixed(0)}ms\n` +
+          `画布 ${meter.fxN ? (meter.fxMs / meter.fxN).toFixed(1) : "0"}ms/帧 · 特效 ${fx.length}\n` +
+          `动画 ${anims} · 节点 ${nodes}`
+        Object.assign(meter, { n: 0, t0: t, worst: 0, fxMs: 0, fxN: 0 })
+      }
+      meter.raf = requestAnimationFrame(meterTick)
+    }
+    // #dev-end
     // ----- canvas effects -----
     function addFx(dur, draw, delay = 0) {
       const f = { t0: now() + delay, dur, draw, done: null }
@@ -1758,6 +1796,7 @@
         }
         ctx.restore()
       }
+      if (cfg.fps) (meter.fxMs += now() - t), meter.fxN++ // #dev
       if (fx.length) raf = requestAnimationFrame(loop)
     }
     function burst(x, y, o = {}) {
@@ -2740,7 +2779,9 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    const api = { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    api.meterOn = meterOn // #dev
+    return api
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -6711,6 +6752,7 @@
       GM_registerMenuCommand("生活动画测试（小窗）", () => Life.lab()), // #dev
       GM_registerMenuCommand(Recorder.active() ? L("⏹ 停止录制并下载文件", "⏹ Stop recording and download") : L("⏺ 录制战斗消息（迷宫 / 公会战）", "⏺ Record battle messages (labyrinth / guild)"), () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
       toggle("debug", L("调试：控制台打印战斗消息", "Debug: log battle messages")), // #dev
+      toggle("fps", "调试：战斗舞台显示帧数", () => Stage.meterOn()), // #dev
     ]
   }
   menu()
