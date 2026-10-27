@@ -1,0 +1,77 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
+body{margin:0;background:#1d2236;font:13px sans-serif;color:#ddd;height:100vh}
+.Header_x{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#262c48}
+.ProgressBar_bar{position:relative;width:200px;overflow:hidden;height:14px;background:#111}.ProgressBar_innerBar__q{position:absolute;left:0;top:0;bottom:0;background:#4a8}
+</style></head><body>
+<!-- the game's header: action name + seconds per action (run-mock serves this page as mock.html) -->
+<div class="Header_x"><div class="Header_currentAction__a"><div class="Header_actionName__31-L2"><div class="Header_displayName__1hN09" id="nm">挤奶 - 奶牛</div></div>
+ <div class="ProgressBar_bar"><div class="ProgressBar_innerBar__q" style="width:0"></div><div class="ProgressBar_text__102Yn" id="pt">2.50s</div></div></div></div>
+<div style="padding:20px">生活技能小窗测试 <b id="st" style="color:#ff0;font-size:20px"></b></div>
+<svg style="display:none"><use href="/sprites/avatars.svg#blue_person_1"/><use href="/sprites/avatar_outfits.svg#cow_suit"/><use href="/sprites/items.svg#milk"/><use href="/sprites/actions.svg#cow"/><use href="/sprites/skills.svg#milking"/></svg>
+<script>window.GM_getValue=(k,d)=>k==='battle_fx_cfg_v1'?{assetBase:'http://127.0.0.1:8799',lifeW:0.5}:d;window.GM_setClipboard=t=>console.log("CLIP",t);window.alert=t=>console.log("ALERT",t);window.GM_xmlhttpRequest=o=>fetch(o.url).then(r=>r.text()).then(t=>o.onload({responseText:t})).catch(()=>o.onerror&&o.onerror());window.GM_setValue=()=>{};window.GM_registerMenuCommand=()=>0;window.GM_unregisterMenuCommand=()=>{};window.GM_info={script:{version:'test'}};</script>
+<script src="mwi-battle-fx.user.js"></script>
+<script>
+const ws=new WebSocket('ws://api.milkywayidle.com.invalid/ws');ws.onerror=()=>{};
+const feed=o=>ws.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(o)}));
+ws.addEventListener('message',e=>{void e.data});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const inv=(item,count,enh=0)=>({itemLocationHrid:'/item_locations/inventory',itemHrid:'/items/'+item,enhancementLevel:enh,count});
+const slot=(loc,item)=>({itemLocationHrid:'/item_locations/'+loc,itemHrid:'/items/'+item,enhancementLevel:0,count:1});
+const sk=(s,level,experience)=>({skillHrid:'/skills/'+s,level,experience});
+const act=(id,hrid,count,extra={})=>({id,actionHrid:hrid,currentCount:count,hasMaxCount:false,maxCount:0,ordinal:0,isDone:false,primaryItemHash:'',enhancingProtectionMinLevel:0,updatedAt:new Date(T0+(extra.at||0)).toISOString(),...extra});
+let T0=Date.now();
+const done=(a,items,skills)=>feed({type:'action_completed',endCharacterAction:a,endCharacterItems:items,endCharacterSkills:skills});
+const header=(name,s)=>{document.getElementById('nm').textContent=name;document.getElementById('pt').textContent=s};
+async function start(){
+ T0=Date.now(); const D=1600; let at=0;
+ const step=async(id,hrid,count,items,skills,extra={})=>{await sleep(D);at+=D;done(act(id,hrid,count,{...extra,at}),items,skills)};
+ const sw=async(name,acts,wait=300)=>{await sleep(wait);at+=wait;header(name,(D/1000).toFixed(2)+'s');feed({type:'actions_updated',endCharacterActions:acts})};
+ const room=(r,level)=>['/house_rooms/'+r,{houseRoomHrid:'/house_rooms/'+r,level}];
+ const say=t=>{document.getElementById('st').textContent=t};
+ const town=()=>document.querySelector('.bfxl-town');
+ const pt=(type,x,y,tgt=window)=>tgt.dispatchEvent(new PointerEvent(type,{bubbles:true,clientX:x,clientY:y,pointerId:1,button:0,pointerType:'mouse'}));
+ const drag=async(dx)=>{const r=town().getBoundingClientRect();const x=r.left+r.width/2,y=r.top+r.height/2;pt('pointerdown',x,y,town());for(let k=1;k<=12;k++){await sleep(30);pt('pointermove',x+dx*k/12,y)}pt('pointerup',x+dx,y)};
+ header('挤奶 - 奶牛',(D/1000).toFixed(2)+'s');
+ feed({type:'init_character_data',character:{name:'测试',avatarHrid:'/avatars/blue_person_1',avatarOutfitHrid:'/avatar_outfits/cow_suit'},
+  characterHouseRoomMap:Object.fromEntries([room('dairy_barn',3),room('garden',0),room('log_shed',5),room('forge',8),room('workshop',1),room('sewing_parlor',0),room('kitchen',2),room('brewery',4),room('laboratory',7),room('observatory',6),room('dojo',2)]),
+  characterActions:[act(1,'/actions/milking/cow',0)],
+  characterSkills:[sk('milking',9,900),sk('woodcutting',20,5000),sk('cheesesmithing',15,3000),sk('enhancing',30,9000),sk('foraging',5,100)],
+  characterItems:[inv('milk',10),inv('cheese',30),inv('coin',100000),
+   slot('milking_tool','verdant_brush'),slot('woodcutting_tool','azure_hatchet'),slot('cheesesmithing_tool','verdant_hammer'),slot('enhancing_tool','cheese_enhancer'),slot('foraging_tool','azure_shears')]});
+ say('1 scene');
+ await step(1,'/actions/milking/cow',1,[inv('milk',12)],[sk('milking',9,912)]);
+ say('2 out button');
+ document.querySelector('.bfxl-out').click();
+ await step(1,'/actions/milking/cow',2,[inv('milk',14)],[sk('milking',9,924)]);
+ await step(1,'/actions/milking/cow',3,[inv('milk',16),inv('small_artisans_crate',1)],[sk('milking',9,936)]);
+ say('3 drag left (look right)');
+ await drag(-260);
+ await sleep(1800);
+ say('4 wheel');
+ for(let k=0;k<6;k++){town().dispatchEvent(new WheelEvent('wheel',{deltaY:100,bubbles:true,cancelable:true}));await sleep(60)}
+ await sleep(1500);
+ say('5 hold left arrow');
+ { const a=document.querySelector('.bfxl-pan.l');const r=a.getBoundingClientRect();pt('pointerdown',r.left+5,r.top+20,a);await sleep(900);pt('pointerup',r.left+5,r.top+20,a) }
+ await sleep(1000);
+ say('6 find badge click');
+ document.querySelector('.bfxl-find').click();
+ await sleep(2000);
+ say('6b chat visitors');
+ feed({type:'guild_updated',guildSharableCharacterMap:{77:{name:'BigShield',avatarHrid:'/avatars/cat_2',avatarOutfitHrid:'/avatar_outfits/cow_suit'}}});
+ const chat=n=>feed({type:'chat_message_received',message:{chan:'/chat_channel_types/general',cId:1,sName:n,m:'hello there',t:new Date().toISOString(),gm:''}});
+ chat('BigShield'); await sleep(1700); chat('路人甲'); await sleep(1700); chat('Moo'); chat('Moo2'); await sleep(2500);
+ say('7 switch to cheesesmithing while out');
+ await sw('奶酪锻造 - 奶酪剑',[act(1,'/actions/milking/cow',3,{isDone:true}),act(2,'/actions/cheesesmithing/cheese_sword',0,{hasMaxCount:true,maxCount:5})]);
+ await sleep(3500);
+ await step(2,'/actions/cheesesmithing/cheese_sword',1,[inv('cheese_sword',1),inv('cheese',20)],[sk('cheesesmithing',15,3050)]);
+ say('8 back inside');
+ document.querySelector('.bfxl-out').click();
+ await sleep(3000);
+ say('9 queue empty: button gone');
+ await sw('',[act(2,'/actions/cheesesmithing/cheese_sword',1,{isDone:true})]);
+ await sleep(3000);
+ chat('IdleGuy'); await sleep(3000);
+ say('end');
+}
+function back(){}
+</script></body></html>
