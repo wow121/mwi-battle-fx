@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.7
+// @version      0.18.8
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6863,6 +6863,10 @@ void main(){
           if (!tex || !app) continue
           a.tex = Object.fromEntries(POSES.map((p, k) => [p, tex[urls[k]]]))
           setPose(a, a.dead ? "dead" : "idle")
+          if (side === "p" && opt.rig && a.u.avatar && Assets.has("rig", "player"))
+            loadPlayerRig(a.u)
+              .then(r => r && app && !a.cont.destroyed && buildRig(a, r))
+              .catch(e => console.warn("[PixiJS 原型] player rig", e))
           if (side === "m" && opt.rig && Assets.has("rig", a.id))
             loadRig(a.id)
               .then(r => app && !a.cont.destroyed && buildRig(a, r))
@@ -6870,7 +6874,7 @@ void main(){
         }
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, id: (u.hrid || "").split("/").pop(), style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
+      const a = { side, i, u, id: (u.hrid || "").split("/").pop(), style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
       a.cont = new P.Container()
       a.mesh = new P.MeshPlane({ texture: P.Texture.WHITE, verticesX: 10, verticesY: 10 })
       a.mesh.visible = false
@@ -6916,7 +6920,7 @@ void main(){
           a.label.position.set(0, 4)
           drawHp(a)
           if (a.tex) setPose(a, a.pose)
-          if (a.rig) a.rig.root.scale.set(a.dir < 0 ? a.h / a.rig.def.h : -a.h / a.rig.def.h, a.h / a.rig.def.h)
+          if (a.rig) rigScale(a)
         })
       unitsLayer.sortableChildren = true
     }
@@ -6985,12 +6989,18 @@ void main(){
     // RIG_POSES: degrees each part turns toward the foe from rest; parts spring there (a little bouncy)
     const RIG_POSES = {
       idle: {},
-      windup: { torso: -12, head: -10, arm_f: -75, arm_b: -40, leg_f: -8 },
-      strike: { torso: 18, head: 12, arm_f: 110, arm_b: 35, leg_f: 16, leg_b: -12 },
-      hurt: { torso: -20, head: -25, arm_f: -40, arm_b: -55, leg_f: -10 },
-      cast: { torso: -8, head: -14, arm_f: -155, arm_b: -170 },
+      windup: { torso: -10, head: -8, arm_f: -45, arm_b: -30, leg_f: -6 },
+      strike: { torso: 14, head: 8, arm_f: 65, arm_b: 20, leg_f: 12, leg_b: -8 },
+      hurt: { torso: -16, head: -20, arm_f: -30, arm_b: -40, leg_f: -8 },
+      cast: { torso: -6, head: -10, arm_f: -100, arm_b: -115 },
       dead: {},
     }
+    // players (assets/rig/player): body + the front arm holding the weapon
+    Object.assign(RIG_POSES.windup, { body: -6, arm: -150 })
+    Object.assign(RIG_POSES.strike, { body: 10, arm: 75 })
+    Object.assign(RIG_POSES.hurt, { body: -12, arm: -30 })
+    Object.assign(RIG_POSES.cast, { body: -4, arm: 115 })
+    Object.assign(RIG_POSES.dead, { body: -82, arm: -50 }) // players fall over backward; monsters fall apart instead
     const rigs = {} // monster id -> Promise<{ def, tex }>
     function loadRig(id) {
       if (!rigs[id])
@@ -7005,18 +7015,62 @@ void main(){
         })
       return rigs[id]
     }
+    // a player rig: the shared side-view template (rig.json) with this avatar's and outfit's registered layers, the
+    // paper-doll weapon piece in the front fist (turned from the doll's arm angle to ours) and the off-hand behind
+    let playerBase = null
+    async function loadPlayerRig(u) {
+      if (!playerBase)
+        playerBase = fetch(Assets.url("rig/player/rig.json"))
+          .then(r => r.json())
+          .catch(e => ((playerBase = null), Promise.reject(e)))
+      const base = await playerBase
+      if (!base.avatars.includes(u.avatar)) return null
+      const def = { ...base, parts: { ...base.parts } }
+      const L = n => P.Assets.load(Assets.url(`rig/player/${n}.webp`))
+      const dressed = base.outfits.includes(u.outfit)
+      const tex = {
+        body: [await L(`a_${u.avatar}_body`), dressed && (await L(`o_${u.outfit}_body`))],
+        arm: [await L(`a_${u.avatar}_arm`), dressed && (await L(`o_${u.outfit}_arm`))],
+      }
+      const piece = async id => {
+        const h = id && Doll.held(id)
+        if (!h) return null
+        const t = await P.Assets.load(h.url)
+        return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip }
+      }
+      const w = await piece(u.items?.main_hand || u.items?.two_hand)
+      if (w) {
+        tex.weapon = w.tex
+        def.parts.weapon = { pivot: w.grip, at: base.fist, parent: "arm", z: 4, rot: 58 - base.armAngle - 40, scale: base.scale }
+      }
+      const off = await piece(u.items?.off_hand)
+      if (off) {
+        tex.off = off.tex
+        def.parts.off = { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
+      }
+      return { def, tex }
+    }
     function buildRig(a, { def, tex }) {
       a.rig?.root.destroy()
       const root = new P.Container()
       const parts = Object.entries(def.parts)
         .sort((x, y) => x[1].z - y[1].z)
         .map(([name, p]) => {
-          const s = new P.Sprite(tex[name])
-          s.pivot.set(p.pivot[0], p.pivot[1])
+          // a part may be several registered layers (a player's avatar and outfit), all on the same pivot
+          const layers = [].concat(tex[name]).filter(Boolean)
+          const s = new P.Container()
+          for (const t of layers) {
+            const sp = new P.Sprite(t)
+            sp.pivot.set(p.pivot[0], p.pivot[1])
+            sp.scale.set(p.scale || 1)
+            s.addChild(sp)
+          }
           root.addChild(s)
-          // a part hanging below its joint swings forward with a clockwise turn, one standing on it counterclockwise
-          const sign = tex[name].height / 2 > p.pivot[1] ? 1 : -1
-          return { name, s, p, sign, r: 0, v: 0, x: 0, y: 0, wr: 0, fall: null }
+          const w = layers[0]?.width || 0
+          const h = layers[0]?.height || 0
+          // a part hanging below its joint swings forward with a clockwise turn (art facing left), one standing on it counterclockwise
+          const sign = (h / 2 > p.pivot[1] ? 1 : -1) * (def.face === "right" ? -1 : 1)
+          return { name, s, p, w, h, sign, rest: ((p.rot || 0) * Math.PI) / 180, r: 0, v: 0, x: 0, y: 0, wr: 0, fall: null }
         })
       const by = Object.fromEntries(parts.map(q => [q.name, q]))
       const order = []
@@ -7030,10 +7084,14 @@ void main(){
       a.mesh.filters = null
       root.filters = [a.filter]
       a.cont.addChildAt(root, 1)
-      const k = a.h / def.h
-      root.scale.set(a.dir < 0 ? k : -k, k)
       a.rig = { root, parts, by, order, def, fallen: false, back: 0 }
-      if (a.dead) rigCrumble(a, true)
+      rigScale(a)
+      if (a.dead && def.face !== "right") rigCrumble(a, true)
+    }
+    // art faces left unless rig.json says face: "right"; mirrored to face the foe
+    function rigScale(a) {
+      const k = a.h / a.rig.def.h
+      a.rig.root.scale.set((a.rig.def.face === "right") === a.dir > 0 ? k : -k, k)
     }
     function rigFrame(a, t, dt) {
       const R = a.rig
@@ -7056,11 +7114,11 @@ void main(){
           const s = Math.sin(par.wr)
           q.x = par.x + dx * c - dy * s
           q.y = par.y + dx * s + dy * c
-          q.wr = par.wr + q.r
+          q.wr = par.wr + q.r + q.rest
         } else {
           q.x = q.p.at[0] - R.def.foot[0]
           q.y = q.p.at[1] - R.def.foot[1] + (q.name === "torso" ? 3 * br : 0)
-          q.wr = q.r
+          q.wr = q.r + q.rest
         }
         // getting back up: fly from where the piece lay into place
         const b = R.back
@@ -7073,7 +7131,7 @@ void main(){
       const R = a.rig
       R.fallen = true
       for (const q of R.parts) {
-        const w = Math.min(q.s.texture.width, q.s.texture.height)
+        const w = Math.min(q.w, q.h)
         q.fall = { vx: 60 + Math.random() * 220, vy: -(120 + Math.random() * 260), vr: (Math.random() - 0.5) * 12, floor: -w * 0.3 }
         if (instant) {
           q.s.position.set(q.p.at[0] - R.def.foot[0] + 80 + Math.random() * 120, q.fall.floor)
@@ -7246,7 +7304,7 @@ void main(){
       setPose(a, "dead")
       drawHp(a)
       a.label.visible = false
-      if (a.rig) rigCrumble(a)
+      if (a.rig && a.rig.def.face !== "right") rigCrumble(a)
       const body = a.rig ? a.rig.root : a.mesh
       const wait = a.rig ? 900 : 250
       if (!opt.dissolve) return tween(900, p => (body.alpha = 1 - p), wait)
@@ -7259,7 +7317,7 @@ void main(){
       a.mesh.alpha = 1
       if (a.rig) {
         a.rig.root.alpha = 1
-        rigRise(a)
+        if (a.rig.fallen) rigRise(a)
       }
       a.label.visible = true
       setPose(a, "idle")
