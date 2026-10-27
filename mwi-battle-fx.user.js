@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.3
+// @version      0.18.4
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -971,6 +971,11 @@
 .bfx-lab .gal img{width:96px;height:96px}
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
 .bfx-fps{position:absolute;right:4px;top:26px;z-index:6000;padding:2px 6px;font:11px/15px monospace;white-space:pre;color:#dfe6ff;background:rgba(0,0,0,.6);border-radius:4px}
+.bfx-pixi{margin-top:6px}
+.bfx-pixi-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:4px;font:12px/1.4 sans-serif;color:#dfe6ff}
+.bfx-pixi-bar button{font:12px sans-serif;background:#1d2440;color:#dfe6ff;border:1px solid #3a4470;border-radius:4px;padding:2px 6px;cursor:pointer}
+.bfx-pixi-bar button.on{background:#2f6a3a;border-color:#4fa860}
+.bfx-pixi-view{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
 /* #dev-end */`
       document.head.appendChild(st)
     }
@@ -6347,6 +6352,8 @@
     let autoTimer = 0
     const zh = k => abilityInfo("/abilities/" + k)?.name || k
     const pick = arr => arr[Math.floor(Math.random() * arr.length)]
+    // the stage and the PixiJS copy below it play the same events
+    const show = (evs, m) => (Stage.play(evs, m), PixiLab.play(evs))
     const alive = side => lab[side].map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
 
     function unitP(pl, i) {
@@ -6401,7 +6408,7 @@
         const dead = lab[side].map((x, j) => (x.hp <= 0 ? j : -1)).filter(j => j >= 0)
         targets = dead.slice(0, 1).map(j => change(side, j, Math.round(lab[side][j].maxHp * 0.5)))
       } else effect = "buff"
-      Stage.play([{ actor: { side, i }, ab, effect, style: ab?.style || u.style, element: ab?.kind === "damage" ? ab.element : u.element, targets }], "test")
+      show([{ actor: { side, i }, ab, effect, style: ab?.style || u.style, element: ab?.kind === "damage" ? ab.element : u.element, targets }], "test")
       afterTurn()
     }
     // a cleared wave respawns, a wiped party gets back up
@@ -6413,11 +6420,12 @@
           pending = 0
           lab.m = st.monsters.filter(Boolean).map(unitM)
           Stage.newBattle("test")
+          PixiLab.sync()
         }, 1600)
       else if (!alive("p").length)
         pending = setTimeout(() => {
           pending = 0
-          lab.p.forEach((_, j) => Stage.play([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("p", j, lab.p[j].maxHp)] }], "test"))
+          lab.p.forEach((_, j) => show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("p", j, lab.p[j].maxHp)] }], "test"))
         }, 1600)
     }
     function autoTick() {
@@ -6437,6 +6445,7 @@
       pending = 0
       buildUnits()
       Stage.reload()
+      PixiLab.sync()
     }
 
     // ----- controls -----
@@ -6541,14 +6550,15 @@
           if (alive("m").length) act("m", pick(alive("m")), pick(dmg))
         }),
         button("全部击杀", () => {
-          for (const side of ["m"]) alive(side).forEach(j => Stage.play([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change(side, j, -99999)] }], "test"))
+          for (const side of ["m"]) alive(side).forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change(side, j, -99999)] }], "test"))
           afterTurn()
         }),
         button("全员复活", () => {
-          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && Stage.play([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }], "test"))
+          for (const side of ["p", "m"]) lab[side].forEach((u, j) => u.hp <= 0 && show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change(side, j, u.maxHp)] }], "test"))
         }),
         button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
         button("重置", reset),
+        button("PixiJS 原型", () => (PixiLab.toggle(root.parentElement), setTimeout(draw, 0)), PixiLab.isOpen() ? "on" : ""),
       )
 
       // gallery: every pose of one monster
@@ -6640,6 +6650,632 @@
     }
     const stop = () => setAuto(false)
     return { units: lab, render, stop, redraw: () => draw(), loc: () => st.loc, tier: () => st.tier, startAuto: () => setAuto(true) }
+  })()
+
+  // ---------- PixiJS 原型: the lab battle drawn a second time in WebGL (PixiJS + pixi-filters), to compare looks ----------
+  // Same events as the stage above it (Lab calls play / sync), drawn with what a GPU engine adds: mesh-deformed
+  // bodies (breathing, squash on hit, lean into a swing), bloom on effects, shockwave + camera punch on crits,
+  // a shader that flashes a body on hit and burns it away on death, lights that dim the scene around a cast.
+  const PixiLab = (() => {
+    const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
+    const OPTS = [
+      ["mesh", "网格形变"],
+      ["bloom", "泛光"],
+      ["shock", "暴击冲击波"],
+      ["dissolve", "溶解 / 闪白"],
+      ["light", "光照"],
+    ]
+    const opt = { mesh: true, bloom: true, shock: true, dissolve: true, light: true }
+    const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
+    const BURST = { fire: "fire_burst", water: "water_burst", nature: "nature_burst" }
+    const ORB = { fire: "fire_orb", water: "ice_orb", nature: "nature_orb" }
+    const MELEE = { slash: 1, stab: 1, smash: 1 }
+    // per-body shader: uFlash mixes in a solid colour, uDis burns the body away along value noise (orange edge)
+    const FRAG = `in vec2 vTextureCoord;
+out vec4 finalColor;
+uniform sampler2D uTexture;
+uniform float uFlash;
+uniform vec3 uColor;
+uniform float uDis;
+uniform float uSeed;
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233))+uSeed)*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1.0,0.0)),f.x),mix(hash(i+vec2(0.0,1.0)),hash(i+vec2(1.0,1.0)),f.x),f.y);}
+void main(){
+  vec4 c=texture(uTexture,vTextureCoord);
+  c.rgb=mix(c.rgb,uColor*c.a,uFlash);
+  if(uDis>0.0){
+    float n=noise(vTextureCoord*14.0)*0.65+noise(vTextureCoord*41.0)*0.35;
+    float th=uDis*1.1;
+    if(n<th-0.07) c=vec4(0.0);
+    else if(n<th) c=vec4(vec3(1.0,0.55,0.15)*c.a*1.6,c.a);
+  }
+  finalColor=c;
+}`
+    let P, F, app, host, bar, world, bg, lights, unitsLayer, fxLayer, partLayer, textLayer, bloom
+    let loading = null
+    let units = { p: [], m: [] }
+    let dot, glow
+    let shock = null
+    let shake = 0
+    let punch = 0
+    let dim = 0
+    const tweens = []
+    const parts = []
+    const sheets = {} // fx sheet name -> [8 textures] | "loading"
+    const now = () => performance.now()
+    const later = (ms, f) => tweens.push({ t0: now() + ms, dur: 0, f: () => f() })
+    const tween = (dur, f, delay = 0) => tweens.push({ t0: now() + delay, dur, f })
+    const lerp = (a, b, p) => a + (b - a) * p
+    const ease = p => 1 - (1 - p) * (1 - p)
+
+    function loadScript(src) {
+      return new Promise((ok, fail) => {
+        const s = document.createElement("script")
+        s.src = src
+        s.onload = ok
+        s.onerror = () => fail(new Error(src))
+        document.head.appendChild(s)
+      })
+    }
+    async function libs() {
+      if (!W.PIXI?.Application) await loadScript(LIBS[0])
+      if (!W.PIXI?.filters) await loadScript(LIBS[1])
+      P = W.PIXI
+      F = W.PIXI.filters
+    }
+    function canvasTex(size, paint) {
+      const c = document.createElement("canvas")
+      c.width = c.height = size
+      paint(c.getContext("2d"), size)
+      return P.Texture.from(c)
+    }
+    const radial = (stops, size) =>
+      canvasTex(size, (c, s) => {
+        const g = c.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2)
+        stops.forEach(([o, col]) => g.addColorStop(o, col))
+        c.fillStyle = g
+        c.fillRect(0, 0, s, s)
+      })
+
+    async function open(panel) {
+      if (host?.isConnected) return
+      host = document.createElement("div")
+      host.className = "bfx-pixi"
+      host.innerHTML = '<div class="bfx-pixi-bar"></div><div class="bfx-pixi-view">载入 PixiJS…</div>'
+      panel.appendChild(host)
+      bar = host.querySelector(".bfx-pixi-bar")
+      drawBar()
+      const view = host.querySelector(".bfx-pixi-view")
+      view.style.height = cfg.stageH + "px"
+      try {
+        loading = loading || libs()
+        await loading
+      } catch (e) {
+        loading = null
+        view.textContent = "PixiJS 载入失败：" + e.message
+        return
+      }
+      if (!host?.isConnected) return
+      view.textContent = ""
+      app = new P.Application()
+      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(2, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
+      view.appendChild(app.canvas)
+      dot = radial([[0, "rgba(255,255,255,1)"], [0.35, "rgba(255,255,255,.8)"], [1, "rgba(255,255,255,0)"]], 32)
+      glow = radial([[0, "rgba(255,255,255,.9)"], [0.4, "rgba(255,255,255,.35)"], [1, "rgba(255,255,255,0)"]], 256)
+      world = new P.Container()
+      bg = new P.Sprite()
+      lights = new P.Container()
+      unitsLayer = new P.Container()
+      fxLayer = new P.Container()
+      partLayer = new P.Container()
+      textLayer = new P.Container()
+      lights.blendMode = fxLayer.blendMode = partLayer.blendMode = "add"
+      bloom = new F.AdvancedBloomFilter({ threshold: 0.45, bloomScale: 1, brightness: 1, blur: 8, quality: 6 })
+      bloom.blendMode = "add"
+      world.addChild(bg, lights, unitsLayer, fxLayer, partLayer, textLayer)
+      app.stage.addChild(world)
+      applyOpts()
+      app.ticker.add(frame)
+      new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
+      preload()
+      sync()
+    }
+    function close() {
+      app?.destroy(true, { children: true })
+      app = null
+      host?.remove()
+      host = null
+      units = { p: [], m: [] }
+      tweens.length = parts.length = 0
+    }
+    const toggle = panel => (host?.isConnected ? close() : open(panel))
+
+    function drawBar() {
+      bar.replaceChildren()
+      bar.append("PixiJS 原型（和上面同一场战斗）：")
+      for (const [k, label] of OPTS) {
+        const b = document.createElement("button")
+        b.textContent = label
+        b.className = opt[k] ? "on" : ""
+        b.onclick = () => {
+          opt[k] = !opt[k]
+          applyOpts()
+          drawBar()
+        }
+        bar.appendChild(b)
+      }
+    }
+    function applyOpts() {
+      if (!fxLayer) return
+      fxLayer.filters = opt.bloom ? [bloom] : null
+      partLayer.filters = opt.bloom ? [bloom] : null
+      if (!opt.light) dim = 0
+    }
+
+    // ----- scene -----
+    function bgUrl() {
+      const loc = Lab.loc()
+      const t = Lab.tier()
+      const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
+      const name = Assets.has("bg", loc + band) ? loc + band : Assets.has("bg", loc) ? loc : null
+      return name && Assets.url("bg/" + name + ".webp")
+    }
+    function artOf(side, u) {
+      if (side === "m") {
+        const id = (u.hrid || "").split("/").pop()
+        return Assets.has("m", id) ? "m/" + id : null
+      }
+      const d = "default_" + (u.style || "slash")
+      return Assets.has("p", d) ? "p/" + d : null
+    }
+    const POSES = ["idle", "windup", "strike", "hurt", "cast", "dead"]
+    async function sync() {
+      if (!app) return
+      const url = bgUrl()
+      if (url) P.Assets.load(url).then(t => ((bg.texture = t), layout()))
+      for (const side of ["p", "m"]) {
+        units[side].forEach(a => a.cont.destroy({ children: true }))
+        units[side] = []
+      }
+      for (const side of ["p", "m"])
+        Lab.units[side].forEach((u, i) => {
+          const a = makeUnit(side, i, u)
+          units[side].push(a)
+        })
+      layout()
+      for (const side of ["p", "m"])
+        for (const a of units[side]) {
+          if (!a.art) continue
+          const urls = POSES.map(p => Assets.url(`${a.art}/${p}.webp`))
+          const tex = await P.Assets.load(urls).catch(() => null)
+          if (!tex || !app) continue
+          a.tex = Object.fromEntries(POSES.map((p, k) => [p, tex[urls[k]]]))
+          setPose(a, a.dead ? "dead" : "idle")
+        }
+    }
+    function makeUnit(side, i, u) {
+      const a = { side, i, style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
+      a.cont = new P.Container()
+      a.mesh = new P.MeshPlane({ texture: P.Texture.WHITE, verticesX: 10, verticesY: 10 })
+      a.mesh.visible = false
+      a.filter = P.Filter.from({
+        gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
+        resources: { u: { uFlash: { value: 0, type: "f32" }, uColor: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" }, uDis: { value: a.dead ? 1 : 0, type: "f32" }, uSeed: { value: Math.random() * 50, type: "f32" } } },
+      })
+      a.uni = a.filter.resources.u.uniforms
+      a.mesh.filters = [a.filter]
+      a.shadow = new P.Sprite(dot)
+      a.shadow.anchor.set(0.5)
+      a.shadow.tint = 0x000000
+      a.shadow.alpha = 0.45
+      a.hpBar = new P.Graphics()
+      a.label = new P.Text({ text: u.name || "", style: { fontFamily: "sans-serif", fontSize: 12, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
+      a.label.anchor.set(0.5, 0)
+      a.cont.addChild(a.shadow, a.mesh, a.hpBar, a.label)
+      unitsLayer.addChild(a.cont)
+      return a
+    }
+    function layout() {
+      if (!app) return
+      const W2 = app.screen.width
+      const H = app.screen.height
+      if (bg.texture && bg.texture !== P.Texture.EMPTY) {
+        const k = Math.max(W2 / bg.texture.width, H / bg.texture.height)
+        bg.scale.set(k)
+        bg.position.set((W2 - bg.texture.width * k) / 2, (H - bg.texture.height * k) * 0.85)
+      }
+      for (const side of ["p", "m"])
+        units[side].forEach((a, i) => {
+          const n = units[side].length
+          // like the stage: the first of each side stands nearest the middle
+          const gap = (W2 * 0.38) / Math.max(3, n)
+          a.h = Math.min(H * 0.4, gap * 1.2)
+          a.x0 = side === "p" ? W2 * 0.45 - (i + 0.5) * gap : W2 * 0.55 + (i + 0.5) * gap
+          a.y0 = H * 0.86 + (i % 2) * H * 0.03
+          a.dir = side === "p" ? 1 : -1
+          a.cont.position.set(a.x0, a.y0)
+          a.cont.zIndex = a.y0
+          a.shadow.width = a.h * 0.6
+          a.shadow.height = a.h * 0.12
+          a.label.position.set(0, 4)
+          drawHp(a)
+          if (a.tex) setPose(a, a.pose)
+        })
+      unitsLayer.sortableChildren = true
+    }
+    function drawHp(a) {
+      const w = a.h * 0.55
+      a.hpBar.clear()
+      if (a.dead) return
+      a.hpBar.rect(-w / 2, 20, w, 5).fill({ color: 0x000000, alpha: 0.6 })
+      a.hpBar.rect(-w / 2, 20, (w * Math.max(0, a.hp)) / a.maxHp, 5).fill(a.side === "p" ? 0x4fd16a : 0xe0484b)
+    }
+    function setPose(a, pose, ms = 0) {
+      clearTimeout(a.poseTimer)
+      if (a.dead && pose !== "dead") return
+      a.pose = pose
+      if (!a.tex?.[pose]) return
+      const t = a.tex[pose]
+      a.mesh.texture = t
+      // pose frames keep a 96/512 margin round the body: a.h is the body, feet on the bottom margin line
+      const k = a.h / (t.height * 0.62)
+      a.mesh.scale.set(k)
+      a.mesh.pivot.set(t.width / 2, t.height * 0.81)
+      a.mesh.visible = true
+      a.base = Float32Array.from(a.mesh.geometry.positions)
+      if (ms) a.poseTimer = setTimeout(() => setPose(a, a.dead ? "dead" : "idle"), ms)
+    }
+    // the body as a 10x10 mesh: breathing and idle sway, a damped wobble after a hit, a lean into a swing
+    function deform(a, t) {
+      const pos = a.mesh.geometry.positions
+      const base = a.base
+      if (!base || pos.length !== base.length) return
+      const w = a.mesh.texture.width
+      const h = a.mesh.texture.height
+      const cx = w / 2
+      const foot = h * 0.81
+      const live = opt.mesh && !a.dead
+      const br = Math.sin(t / 420 + a.phase)
+      const sway = Math.sin(t / 900 + a.phase * 2)
+      const wob = a.jig * Math.sin(t / 26)
+      for (let k = 0; k < pos.length; k += 2) {
+        const x = base[k]
+        const y = base[k + 1]
+        if (!live) {
+          pos[k] = x
+          pos[k + 1] = y
+          continue
+        }
+        const v = Math.max(0, (foot - y) / foot) // 0 at the feet, 1 at the top
+        const v2 = v * v
+        const sq = 1 - 0.14 * a.jig * Math.cos(t / 40) // squash and stretch after a hit
+        pos[k] = cx + (x - cx) * (1 + 0.018 * br * v + (1 - sq) * 0.6 * v) + h * (0.014 * sway * v2 + 0.05 * wob * v2 + 0.16 * a.lean * a.dir * v2)
+        pos[k + 1] = foot - (foot - y) * (1 + 0.022 * br * v) * sq
+      }
+      a.mesh.geometry.getBuffer("aPosition").update()
+    }
+
+    // ----- effects -----
+    function sheet(name) {
+      if (!Assets.has("fx", name)) return null
+      const s = sheets[name]
+      if (s && s !== "loading") return s
+      if (!s) {
+        sheets[name] = "loading"
+        P.Assets.load(Assets.url("fx/" + name + ".webp"))
+          .then(tex => {
+            const fw = tex.width / 4
+            const fh = tex.height / 2
+            sheets[name] = Array.from({ length: 8 }, (_, f) => new P.Texture({ source: tex.source, frame: new P.Rectangle((f % 4) * fw, Math.floor(f / 4) * fh, fw, fh) }))
+          })
+          .catch(() => delete sheets[name])
+      }
+      return null
+    }
+    function preload() {
+      for (const n of Assets.list("fx")) sheet(n)
+    }
+    function playSheet(name, x, y, h, { dur = 480, flip = false, tint = 0xffffff, delay = 0 } = {}) {
+      const frames = sheet(name)
+      if (!frames) return false
+      const s = new P.Sprite(frames[0])
+      s.anchor.set(0.5)
+      s.tint = tint
+      s.position.set(x, y)
+      const k = h / frames[0].height
+      s.scale.set(flip ? -k : k, k)
+      s.visible = false
+      fxLayer.addChild(s)
+      tween(
+        dur,
+        p => {
+          s.visible = true
+          s.texture = frames[Math.min(7, Math.floor(p * 8))]
+          if (p >= 1) s.destroy()
+        },
+        delay,
+      )
+      return true
+    }
+    function sparks(x, y, color, n, { speed = 260, up = 0, life = 600, size = 0.5, gravity = 500 } = {}) {
+      for (let k = 0; k < n; k++) {
+        const s = new P.Sprite(dot)
+        s.anchor.set(0.5)
+        s.tint = color
+        s.position.set(x, y)
+        const ang = Math.random() * Math.PI * 2
+        const v = speed * (0.3 + Math.random() * 0.9)
+        s.scale.set(size * (0.5 + Math.random()))
+        partLayer.addChild(s)
+        parts.push({ s, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - up, t0: now(), life: life * (0.6 + Math.random() * 0.6), g: gravity })
+      }
+    }
+    function light(x, y, color, r, dur, peak = 1) {
+      if (!opt.light) return
+      const s = new P.Sprite(glow)
+      s.anchor.set(0.5)
+      s.tint = color
+      s.position.set(x, y)
+      s.width = s.height = r * 2
+      s.alpha = 0
+      lights.addChild(s)
+      tween(dur, p => {
+        s.alpha = peak * Math.sin(Math.PI * Math.min(1, p))
+        if (p >= 1) s.destroy()
+      })
+      tween(dur, p => (dim = Math.max(dim, 0.45 * Math.sin(Math.PI * Math.min(1, p)))))
+    }
+    function number(a, text, color, big) {
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: big ? 30 : 20, fontWeight: "900", fill: color, stroke: { color: "#000", width: big ? 6 : 4 }, dropShadow: { color: "#000", blur: 4, distance: 0, alpha: 0.8 } } })
+      tx.anchor.set(0.5)
+      const x = a.x0 + (Math.random() - 0.5) * a.h * 0.3
+      const y = a.y0 - a.h * 0.75
+      tx.position.set(x, y)
+      textLayer.addChild(tx)
+      tween(big ? 1100 : 850, p => {
+        tx.position.y = y - 46 * ease(p)
+        const pop = p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1
+        tx.scale.set(pop)
+        tx.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
+        if (p >= 1) tx.destroy()
+      })
+    }
+    function flash(a, color, dur = 220) {
+      if (!opt.dissolve) return
+      const c = new P.Color(color).toArray()
+      a.uni.uColor = new Float32Array([c[0], c[1], c[2]])
+      tween(dur, p => (a.uni.uFlash = p >= 1 ? 0 : 0.9 * (1 - p)))
+    }
+    function crit(a) {
+      shake = Math.max(shake, 1)
+      punch = 1
+      if (!opt.shock) return
+      const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
+      shock = { f, t0: now() }
+      world.filters = [f]
+    }
+    const mid = a => ({ x: a.x0, y: a.y0 - a.h * 0.42 })
+
+    function hit(a, tg, src, e, isSkill) {
+      if (!a) return
+      const el = e.element || "physical"
+      const color = COLOR[el] || COLOR.physical
+      const m = mid(a)
+      a.hp = tg.hp
+      if (tg.dHP === 0) {
+        number(a, "Miss", "#cfd6ff", false)
+        a.lean = -0.4 * a.dir
+        tween(300, p => (a.lean = -0.4 * a.dir * (1 - p)))
+        return
+      }
+      const key = e.ab?.key
+      const style = e.style || "smash"
+      const named = isSkill && key && Assets.has("fx", key)
+      const flip = src ? src.dir < 0 : false
+      if (!(named && playSheet(key, m.x, m.y, a.h * 1.1, { flip })))
+        playSheet(el !== "physical" ? BURST[el] || "phys_hit" : MELEE[style] ? style : "phys_hit", m.x, m.y, a.h * (tg.crit ? 1.2 : 0.9), { flip })
+      sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
+      flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
+      a.jig = tg.crit ? 1.3 : 0.9
+      setPose(a, "hurt", 320)
+      number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
+      if (tg.crit) crit(a)
+      drawHp(a)
+      if (tg.died) die(a)
+    }
+    function die(a) {
+      a.dead = true
+      setPose(a, "dead")
+      drawHp(a)
+      a.label.visible = false
+      if (!opt.dissolve) return tween(900, p => (a.mesh.alpha = 1 - p), 300)
+      tween(1500, p => (a.uni.uDis = ease(p)), 250)
+      for (let k = 0; k < 6; k++) later(250 + k * 180, () => sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
+    }
+    function revive(a, tg) {
+      a.dead = false
+      a.hp = tg.hp
+      a.mesh.alpha = 1
+      a.label.visible = true
+      setPose(a, "idle")
+      light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.9, 900)
+      if (opt.dissolve) tween(900, p => (a.uni.uDis = 1 - ease(p)))
+      else a.uni.uDis = 0
+      drawHp(a)
+    }
+    function heal(a, tg) {
+      if (!a) return
+      if (tg.revived) return revive(a, tg)
+      a.hp = tg.hp
+      drawHp(a)
+      flash(a, COLOR.heal, 380)
+      light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.7, 700, 0.8)
+      sparks(a.x0, a.y0 - a.h * 0.2, COLOR.heal, 24, { speed: 60, up: 140, gravity: -80, life: 900, size: 0.4 })
+      if (tg.dHP > 0) number(a, "+" + tg.dHP, "#6cff9a", false)
+    }
+
+    function play(evs) {
+      if (!app) return
+      for (const e of evs) {
+        const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
+        const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg])
+        const isSkill = !!e.ab
+        const el = e.element || "physical"
+        const color = COLOR[el] || COLOR.physical
+        if (e.effect === "heal" || e.effect === "regen") {
+          if (src) {
+            setPose(src, "cast", 500)
+            light(src.x0, src.y0 - src.h * 0.4, COLOR.heal, src.h, 600)
+          }
+          tgs.forEach(([a, tg]) => later(src ? 250 : 0, () => heal(a, tg)))
+          continue
+        }
+        if (e.effect !== "damage") {
+          if (src) {
+            setPose(src, "cast", 500)
+            light(src.x0, src.y0 - src.h * 0.4, COLOR.buff, src.h * 0.9, 700)
+            sparks(src.x0, src.y0 - src.h * 0.3, COLOR.buff, 30, { speed: 90, up: 120, gravity: -40, life: 900, size: 0.4 })
+          }
+          continue
+        }
+        if (!src) {
+          tgs.forEach(([a, tg]) => hit(a, tg, null, e, false))
+          continue
+        }
+        const style = e.style || src.style || "smash"
+        const melee = MELEE[style] && !(isSkill && e.ab?.target === "allEnemies" && style !== "slash")
+        if (isSkill) light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, 700)
+        if (melee) {
+          // wind up, rush in leaning into the swing, strike, come back
+          const tgt = tgs[0]?.[0]
+          // stops in front of the target, drawn over everyone on the way
+          const reach = tgt ? tgt.x0 - src.x0 - src.dir * (tgt.h + src.h) * 0.42 : 0
+          src.cont.zIndex = 1e4
+          later(720, () => (src.cont.zIndex = src.y0))
+          setPose(src, "windup")
+          tween(160, p => (src.lean = -0.25 * p))
+          tween(
+            140,
+            p => {
+              src.dash = reach * ease(p)
+              src.lean = lerp(-0.25, 0.45, p)
+              if (p >= 1) setPose(src, "strike")
+            },
+            160,
+          )
+          later(300, () => tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill)))
+          tween(
+            260,
+            p => {
+              src.dash = reach * (1 - ease(p))
+              src.lean = 0.45 * (1 - p)
+              if (p >= 1) setPose(src, "idle")
+            },
+            460,
+          )
+        } else {
+          // ranged / magic: cast, a glowing orb or arrow flies over with a trail
+          setPose(src, isSkill || style === "magic" ? "cast" : "strike", 520)
+          tgs.forEach(([a, tg], k) => {
+            if (!a) return
+            const s0 = mid(src)
+            const s1 = mid(a)
+            const orb = new P.Sprite(glow)
+            orb.anchor.set(0.5)
+            orb.tint = color
+            orb.width = orb.height = style === "magic" ? src.h * 0.45 : src.h * 0.22
+            orb.visible = false
+            fxLayer.addChild(orb)
+            const frames = sheet(ORB[el])
+            const core = frames ? new P.Sprite(frames[0]) : null
+            if (core) {
+              core.anchor.set(0.5)
+              core.scale.set((src.h * 0.5) / frames[0].height)
+              core.visible = false
+              fxLayer.addChild(core)
+            }
+            tween(
+              300,
+              p => {
+                const x = lerp(s0.x, s1.x, p)
+                const y = lerp(s0.y, s1.y, p) - Math.sin(Math.PI * p) * src.h * 0.25
+                orb.visible = true
+                orb.position.set(x, y)
+                if (core) {
+                  core.visible = true
+                  core.position.set(x, y)
+                  core.texture = frames[Math.floor(p * 16) % 8]
+                }
+                if (Math.random() < 0.7) sparks(x, y, color, 2, { speed: 40, gravity: 0, life: 350, size: 0.35 })
+                if (p >= 1) {
+                  orb.destroy()
+                  core?.destroy()
+                  hit(a, tg, src, e, isSkill)
+                }
+              },
+              200 + k * 60,
+            )
+          })
+        }
+      }
+    }
+
+    function frame() {
+      const t = now()
+      for (let k = 0; k < tweens.length; k++) {
+        const w = tweens[k]
+        if (t < w.t0) continue
+        const p = w.dur ? Math.min(1, (t - w.t0) / w.dur) : 1
+        try {
+          w.f(p)
+        } catch (e) {
+          console.warn("[PixiJS 原型]", e)
+        }
+        if (p >= 1) tweens.splice(k--, 1)
+      }
+      const dt = Math.min(0.05, app.ticker.deltaMS / 1000)
+      for (let k = 0; k < parts.length; k++) {
+        const q = parts[k]
+        const age = (t - q.t0) / q.life
+        if (age >= 1) {
+          q.s.destroy()
+          parts.splice(k--, 1)
+          continue
+        }
+        q.vy += q.g * dt
+        q.s.x += q.vx * dt
+        q.s.y += q.vy * dt
+        q.s.alpha = 1 - age
+      }
+      for (const side of ["p", "m"])
+        for (const a of units[side]) {
+          a.jig *= Math.pow(0.02, dt)
+          if (a.jig < 0.01) a.jig = 0
+          a.cont.x = a.x0 + (a.dash || 0)
+          deform(a, t)
+        }
+      // camera: shake and a short zoom punch toward the middle
+      shake *= Math.pow(0.004, dt)
+      punch *= Math.pow(0.01, dt)
+      const W2 = app.screen.width
+      const H = app.screen.height
+      const z = 1 + 0.05 * punch
+      world.scale.set(z)
+      world.position.set((W2 - W2 * z) / 2 + (Math.random() - 0.5) * 14 * shake, (H - H * z) / 2 + (Math.random() - 0.5) * 10 * shake)
+      if (shock) {
+        const age = (t - shock.t0) / 1000
+        shock.f.time = age
+        if (age > 0.9) {
+          world.filters = null
+          shock = null
+        }
+      }
+      dim *= Math.pow(0.05, dt)
+      const d = Math.round(255 * (1 - dim))
+      bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
+    }
+
+    return { toggle, play, sync: () => app && sync(), preload: () => app && preload(), isOpen: () => !!app }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
