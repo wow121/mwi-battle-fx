@@ -15,13 +15,7 @@ python3 -I tools/build-release.py
 git add -A
 if ! git diff --cached --quiet; then git commit -q -m "$MSG$TRAILER"; fi
 REV=$(git rev-parse --short=10 HEAD)
-python3 -I - "$REV" <<'EOF'
-import json, sys
-p = "assets/manifest.json"
-m = json.load(open(p))
-m["rev"] = sys.argv[1]
-json.dump(m, open(p, "w"), separators=(",", ":"))
-EOF
+python3 -I tools/pin-manifest.py "$REV"
 # the scripts carry the art commit too (their fallback manifest when raw.githubusercontent.com is out of reach)
 sed -i "s/^  const ASSET_REV = \".*\"$/  const ASSET_REV = \"$REV\"/" mwi-battle-fx.user.js
 python3 -I tools/build-release.py

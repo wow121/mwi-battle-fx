@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.17.3
+// @version      0.17.4
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -553,33 +553,31 @@
     let mirror = GM_getValue("battle_fx_mirror_v1", false)
     let probing = false
     let probedAt = 0
-    function probe() {
-      if (custom() || probing || Date.now() - probedAt < 60e3) return
+    // jsDelivr counts as down only when two checks in a row fail: a single slow answer (a commit jsDelivr hasn't
+    // fetched yet, a busy evening in China) used to flip every image to the slower mirror for good
+    function probe(again) {
+      if (custom() || (!again && (probing || Date.now() - probedAt < 60e3))) return
       probing = true
       probedAt = Date.now()
       const done = ok => {
+        if (!ok && !mirror && !again) return probe(true)
         probing = false
         if (mirror === !ok) return
         mirror = !ok
         GM_setValue("battle_fx_mirror_v1", mirror)
         if (cfg.debug) console.warn("[战斗动画] jsDelivr", ok ? "reachable again" : "unreachable, art from " + MIRROR) // #dev
-        // what is already on screen switches over too (pinned urls only differ in their prefix)
-        const [from, to] = mirror ? [JSD, MIRROR] : [MIRROR, JSD]
-        for (const el of document.querySelectorAll("img, image"))
-          for (const a of ["src", "href"]) {
-            const v = el.getAttribute(a)
-            if (v?.includes(from)) el.setAttribute(a, v.split(from).join(to))
-          }
-        for (const el of document.querySelectorAll(`[style*="${from}"]`)) el.style.cssText = el.style.cssText.split(from).join(to)
+        // what is on screen but didn't load switches over too (pinned urls only differ in their prefix); what did
+        // load stays as it is: moving it to the other host only made it download again, or vanish when that failed
+        for (const el of document.querySelectorAll("img")) if (!(el.complete && el.naturalWidth) && el.src.includes(other())) el.src = remap(el.src)
         listeners.forEach(f => f())
       }
       GM_xmlhttpRequest({
         method: "GET",
-        url: JSD + (manifest?.rev || ASSET_REV) + "/assets/manifest.json",
-        timeout: 8000,
+        url: JSD + (manifest?.rev || ASSET_REV) + "/assets/manifest.json?p=" + Date.now(),
+        timeout: 20000,
         onload: r => {
           try {
-            done(!!JSON.parse(r.responseText))
+            done(r.status < 400 && !!JSON.parse(r.responseText))
           } catch (e) {
             done(false)
           }
@@ -588,11 +586,48 @@
         ontimeout: () => done(false),
       })
     }
-    const failed = src => !mirror && String(src).startsWith(JSD) && probe()
-    document.addEventListener("error", e => e.target instanceof Element && failed(e.target.getAttribute("src") || e.target.getAttribute("href")), true)
+    // the host not in use, and a url moved to the one in use
+    const other = () => (mirror ? JSD : MIRROR)
+    const remap = src => String(src).split(other()).join(mirror ? MIRROR : JSD)
+    // an image of ours that failed: either host failing has the other checked (the mirror failing can mean jsDelivr
+    // is back), and the image is asked for again a few times, from whichever host is in use by then: a frame that
+    // failed once used to stay blank for the rest of the fight
+    const ours = src => !custom() && (String(src).startsWith(JSD) || String(src).startsWith(MIRROR))
+    const failed = src => ours(src) && probe()
+    const tries = new WeakMap()
+    document.addEventListener(
+      "error",
+      e => {
+        const el = e.target
+        if (!(el instanceof HTMLImageElement)) return
+        const src = el.getAttribute("src") || ""
+        if (!ours(src)) return
+        failed(src)
+        const n = tries.get(el) || 0
+        if (n >= 3) return
+        tries.set(el, n + 1)
+        setTimeout(() => {
+          if (el.isConnected && el.getAttribute("src") === src) el.src = remap(src.replace(/[?&]r=\d+$/, "")) + "?r=" + (n + 1)
+        }, [2e3, 6e3, 15e3][n])
+      },
+      true,
+    )
+    document.addEventListener("load", e => e.target instanceof HTMLImageElement && tries.delete(e.target), true)
     // files come from the commit the manifest was published at, so the CDN can never serve stale art
-    const root = () => (custom() ? base() : mirror ? MIRROR + (manifest?.rev || "main") : manifest?.rev ? JSD + manifest.rev : base())
-    const url = path => root() + "/assets/" + path
+    // each file from its own last commit (manifest.revs, see tools/pin-manifest.py): its url stays the same across
+    // pins until the file itself changes, so the browser's cache keeps it; files not listed come from manifest.rev
+    let revOf = null
+    let revsOf = null
+    function fileRev(path) {
+      if (revsOf !== manifest) {
+        revsOf = manifest
+        revOf = new Map()
+        for (const [r, paths] of Object.entries(manifest?.revs || {})) for (const f of paths) revOf.set(f, r)
+      }
+      return revOf.get(path) || manifest?.rev
+    }
+    const root = r => (custom() ? base() : mirror ? MIRROR + (r || "main") : r ? JSD + r : base())
+    const url = path => root(fileRev(path)) + "/assets/" + path
     return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "", mirror }), refresh, probe, failed, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
   })()
 
@@ -1245,7 +1280,8 @@
       }
       const url = Assets.url("bg/" + name + ".webp")
       const img = new Image()
-      img.onerror = () => Assets.failed(url)
+      // a backdrop that failed is asked for again with the next update
+      img.onerror = () => (Assets.failed(url), bgKey === key && (bgKey = ""))
       img.onload = () => {
         bgEl.style.backgroundImage = `url("${url}")`
         bgEl.style.filter = `brightness(${1 - t * 0.035}) saturate(${1 + t * 0.06}) contrast(${1 + t * 0.03})`
@@ -1490,11 +1526,13 @@
         a.img = document.createElement("img")
         a.img.decoding = "async"
         showFrame(a, a.dead ? "dead" : "idle")
-        for (const p of ["windup", "strike", "hurt", "cast", "dead"]) {
+        // kept on the actor: a preload nobody holds can be dropped before it is ever shown
+        a.pre = ["windup", "strike", "hurt", "cast", "dead"].map(p => {
           const im = new Image()
           im.onerror = () => Assets.failed(im.src)
           im.src = frameUrl(a, p)
-        }
+          return im
+        })
         a.spriteEl.replaceChildren(a.img)
         a.el.classList.add("bfx-art")
         a.real = true
