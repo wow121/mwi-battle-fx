@@ -546,6 +546,9 @@ if doll_sheets:
     open(os.path.join(REPO, "doll-report.tsv"), "w").write("\n".join(report) + "\n")
     manifest["doll"] = len(rects)
 manifest["life"] = life
+# cutout rigs (assets/rig/<monster>/rig.json + part images), made by hand from a Codex parts sheet; kept as they are
+RIGS = os.path.join(ASSETS, "rig")
+manifest["rig"] = sorted(d for d in os.listdir(RIGS) if os.path.exists(os.path.join(RIGS, d, "rig.json"))) if os.path.isdir(RIGS) else []
 # shipped mirroring, so the userscript's gallery can show and edit absolute flips
 manifest["flips"] = {k: sorted(v) for k, v in sorted(FLIP.items())}
 json.dump(manifest, open(os.path.join(ASSETS, "manifest.json"), "w"), separators=(",", ":"))

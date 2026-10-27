@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.18.6
+// @version      0.18.7
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6678,8 +6678,9 @@
       ["shock", "暴击冲击波"],
       ["dissolve", "溶解 / 闪白"],
       ["light", "光照"],
+      ["rig", "骨骼怪物"],
     ]
-    const opt = { mesh: true, bloom: true, shock: true, dissolve: true, light: true }
+    const opt = { mesh: true, bloom: true, shock: true, dissolve: true, light: true, rig: true }
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
     const BURST = { fire: "fire_burst", water: "water_burst", nature: "nature_burst" }
     const ORB = { fire: "fire_orb", water: "ice_orb", nature: "nature_orb" }
@@ -6811,6 +6812,7 @@ void main(){
         b.onclick = () => {
           opt[k] = !opt[k]
           applyOpts()
+          if (k === "rig") sync()
           b.className = opt[k] ? "on" : ""
         }
         return b
@@ -6861,10 +6863,14 @@ void main(){
           if (!tex || !app) continue
           a.tex = Object.fromEntries(POSES.map((p, k) => [p, tex[urls[k]]]))
           setPose(a, a.dead ? "dead" : "idle")
+          if (side === "m" && opt.rig && Assets.has("rig", a.id))
+            loadRig(a.id)
+              .then(r => app && !a.cont.destroyed && buildRig(a, r))
+              .catch(e => console.warn("[PixiJS 原型] rig", a.id, e))
         }
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
+      const a = { side, i, id: (u.hrid || "").split("/").pop(), style: u.style, art: artOf(side, u), tex: null, pose: "idle", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, lean: 0, dash: 0, phase: Math.random() * 6, poseTimer: 0 }
       a.cont = new P.Container()
       a.mesh = new P.MeshPlane({ texture: P.Texture.WHITE, verticesX: 10, verticesY: 10 })
       a.mesh.visible = false
@@ -6910,6 +6916,7 @@ void main(){
           a.label.position.set(0, 4)
           drawHp(a)
           if (a.tex) setPose(a, a.pose)
+          if (a.rig) a.rig.root.scale.set(a.dir < 0 ? a.h / a.rig.def.h : -a.h / a.rig.def.h, a.h / a.rig.def.h)
         })
       unitsLayer.sortableChildren = true
     }
@@ -6924,6 +6931,10 @@ void main(){
       clearTimeout(a.poseTimer)
       if (a.dead && pose !== "dead") return
       a.pose = pose
+      if (a.rig) {
+        if (ms) a.poseTimer = setTimeout(() => setPose(a, a.dead ? "dead" : "idle"), ms)
+        return
+      }
       if (!a.tex?.[pose]) return
       const t = a.tex[pose]
       a.mesh.texture = t
@@ -6938,7 +6949,8 @@ void main(){
       if (ms) a.poseTimer = setTimeout(() => setPose(a, a.dead ? "dead" : "idle"), ms)
     }
     // the body as a 10x10 mesh: breathing and idle sway, a damped wobble after a hit, a lean into a swing
-    function deform(a, t) {
+    function deform(a, t, dt) {
+      if (a.rig) return rigFrame(a, t, dt)
       const pos = a.mesh.geometry.positions
       const base = a.base
       if (!base || pos.length !== base.length) return
@@ -6965,6 +6977,140 @@ void main(){
         pos[k + 1] = foot - (foot - y) * (1 + 0.022 * br * v) * sq
       }
       a.mesh.geometry.getBuffer("aPosition").update()
+    }
+
+    // ----- cutout rigs (assets/rig/<monster>/): separate parts on joints, posed by code instead of swapping frames -----
+    // rig.json: foot = the ground point under the body, h = body height, parts { img, pivot (in the part image),
+    // at (where that pivot sits in the assembled body), z, parent }. Art faces left like the monster frames.
+    // RIG_POSES: degrees each part turns toward the foe from rest; parts spring there (a little bouncy)
+    const RIG_POSES = {
+      idle: {},
+      windup: { torso: -12, head: -10, arm_f: -75, arm_b: -40, leg_f: -8 },
+      strike: { torso: 18, head: 12, arm_f: 110, arm_b: 35, leg_f: 16, leg_b: -12 },
+      hurt: { torso: -20, head: -25, arm_f: -40, arm_b: -55, leg_f: -10 },
+      cast: { torso: -8, head: -14, arm_f: -155, arm_b: -170 },
+      dead: {},
+    }
+    const rigs = {} // monster id -> Promise<{ def, tex }>
+    function loadRig(id) {
+      if (!rigs[id])
+        rigs[id] = (async () => {
+          const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
+          const tex = {}
+          for (const [n, q] of Object.entries(def.parts)) tex[n] = await P.Assets.load(Assets.url(`rig/${id}/${q.img}`))
+          return { def, tex }
+        })().catch(e => {
+          delete rigs[id]
+          throw e
+        })
+      return rigs[id]
+    }
+    function buildRig(a, { def, tex }) {
+      a.rig?.root.destroy()
+      const root = new P.Container()
+      const parts = Object.entries(def.parts)
+        .sort((x, y) => x[1].z - y[1].z)
+        .map(([name, p]) => {
+          const s = new P.Sprite(tex[name])
+          s.pivot.set(p.pivot[0], p.pivot[1])
+          root.addChild(s)
+          // a part hanging below its joint swings forward with a clockwise turn, one standing on it counterclockwise
+          const sign = tex[name].height / 2 > p.pivot[1] ? 1 : -1
+          return { name, s, p, sign, r: 0, v: 0, x: 0, y: 0, wr: 0, fall: null }
+        })
+      const by = Object.fromEntries(parts.map(q => [q.name, q]))
+      const order = []
+      const add = q => {
+        if (order.includes(q)) return
+        if (q.p.parent) add(by[q.p.parent])
+        order.push(q)
+      }
+      parts.forEach(add)
+      a.mesh.visible = false
+      a.mesh.filters = null
+      root.filters = [a.filter]
+      a.cont.addChildAt(root, 1)
+      const k = a.h / def.h
+      root.scale.set(a.dir < 0 ? k : -k, k)
+      a.rig = { root, parts, by, order, def, fallen: false, back: 0 }
+      if (a.dead) rigCrumble(a, true)
+    }
+    function rigFrame(a, t, dt) {
+      const R = a.rig
+      if (R.fallen) return rigDebris(a, dt)
+      const D = Math.PI / 180
+      const pose = RIG_POSES[a.pose] || {}
+      const br = Math.sin(t / 420 + a.phase)
+      for (const q of R.order) {
+        let T = (pose[q.name] || 0) * q.sign
+        if (q.name.startsWith("arm")) T += 4 * Math.sin(t / 650 + a.phase + (q.name === "arm_b" ? 1.7 : 0)) * q.sign
+        if (q.name === "head") T += 3 * br
+        if (q.name === "torso" || q.name === "head") T += a.jig * 12 * Math.sin(t / 30)
+        q.v += (260 * (T * D - q.r) - 18 * q.v) * dt
+        q.r += q.v * dt
+        const par = q.p.parent && R.by[q.p.parent]
+        if (par) {
+          const dx = q.p.at[0] - par.p.at[0]
+          const dy = q.p.at[1] - par.p.at[1]
+          const c = Math.cos(par.wr)
+          const s = Math.sin(par.wr)
+          q.x = par.x + dx * c - dy * s
+          q.y = par.y + dx * s + dy * c
+          q.wr = par.wr + q.r
+        } else {
+          q.x = q.p.at[0] - R.def.foot[0]
+          q.y = q.p.at[1] - R.def.foot[1] + (q.name === "torso" ? 3 * br : 0)
+          q.wr = q.r
+        }
+        // getting back up: fly from where the piece lay into place
+        const b = R.back
+        q.s.position.set(b ? lerp(q.x, q.fx, b) : q.x, b ? lerp(q.y, q.fy, b) : q.y)
+        q.s.rotation = b ? lerp(q.wr, q.fr, b) : q.wr
+      }
+    }
+    // death: the golem falls apart, pieces tumble backward, bounce and settle
+    function rigCrumble(a, instant) {
+      const R = a.rig
+      R.fallen = true
+      for (const q of R.parts) {
+        const w = Math.min(q.s.texture.width, q.s.texture.height)
+        q.fall = { vx: 60 + Math.random() * 220, vy: -(120 + Math.random() * 260), vr: (Math.random() - 0.5) * 12, floor: -w * 0.3 }
+        if (instant) {
+          q.s.position.set(q.p.at[0] - R.def.foot[0] + 80 + Math.random() * 120, q.fall.floor)
+          q.s.rotation = (Math.random() - 0.5) * 3
+          q.fall = null
+        }
+      }
+    }
+    function rigDebris(a, dt) {
+      for (const q of a.rig.parts) {
+        const f = q.fall
+        if (!f) continue
+        f.vy += 1500 * dt
+        q.s.x += f.vx * dt
+        q.s.y += f.vy * dt
+        q.s.rotation += f.vr * dt
+        if (q.s.y > f.floor) {
+          q.s.y = f.floor
+          f.vy *= -0.32
+          f.vx *= 0.55
+          f.vr *= 0.5
+          if (Math.abs(f.vy) < 40) q.fall = null
+        }
+      }
+    }
+    function rigRise(a) {
+      const R = a.rig
+      R.fallen = false
+      for (const q of R.parts) {
+        q.fx = q.s.x
+        q.fy = q.s.y
+        q.fr = q.s.rotation
+        q.fall = null
+        q.r = q.v = 0
+      }
+      tween(650, p => (R.back = 1 - ease(p)))
+      R.back = 1
     }
 
     // ----- effects -----
@@ -7100,14 +7246,21 @@ void main(){
       setPose(a, "dead")
       drawHp(a)
       a.label.visible = false
-      if (!opt.dissolve) return tween(900, p => (a.mesh.alpha = 1 - p), 300)
-      tween(1500, p => (a.uni.uDis = ease(p)), 250)
+      if (a.rig) rigCrumble(a)
+      const body = a.rig ? a.rig.root : a.mesh
+      const wait = a.rig ? 900 : 250
+      if (!opt.dissolve) return tween(900, p => (body.alpha = 1 - p), wait)
+      tween(1500, p => (a.uni.uDis = ease(p)), wait)
       for (let k = 0; k < 6; k++) later(250 + k * 180, () => sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
     }
     function revive(a, tg) {
       a.dead = false
       a.hp = tg.hp
       a.mesh.alpha = 1
+      if (a.rig) {
+        a.rig.root.alpha = 1
+        rigRise(a)
+      }
       a.label.visible = true
       setPose(a, "idle")
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.9, 900)
@@ -7264,7 +7417,7 @@ void main(){
           a.jig *= Math.pow(0.02, dt)
           if (a.jig < 0.01) a.jig = 0
           a.cont.x = a.x0 + (a.dash || 0)
-          deform(a, t)
+          deform(a, t, dt)
         }
       // camera: shake and a short zoom punch toward the middle
       shake *= Math.pow(0.004, dt)
@@ -7476,5 +7629,5 @@ void main(){
   }
   for (const msg of earlyWs.splice(0)) onWsMessage(msg)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life } // #dev
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life, PixiLab } // #dev
 })()
