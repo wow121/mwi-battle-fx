@@ -66,7 +66,8 @@ async function start(){
  await step(2,'/actions/cheesesmithing/cheese_sword',1,[inv('cheese_sword',1),inv('cheese',20)],[sk('cheesesmithing',15,3050)]);
  say('8 back inside');
  document.querySelector('.bfxl-out').click();
- await sleep(3000);
+ await sleep(1000); for(const n of ['Inside1','Inside2','Inside3','Inside4','Inside5'])chat(n);
+ await sleep(2000);
  say('9 queue empty: button gone');
  await sw('',[act(2,'/actions/cheesesmithing/cheese_sword',1,{isDone:true})]);
  await sleep(3000);

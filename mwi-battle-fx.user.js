@@ -5155,7 +5155,6 @@
       el.querySelector(".bfxl-town").style.background = bg ? `${bg} 0 ${-TOWN_BG_Y}px / ${TOWN_BG_W}px auto no-repeat` : ""
       const strip = el.querySelector(".bfxl-strip")
       strip.innerHTML = ""
-      visitors.length = 0
       strip.style.width = townW + "px"
       const street = document.createElement("div")
       street.className = "bfxl-street"
@@ -5190,6 +5189,8 @@
       hero.className = "bfxl-thero"
       hero.appendChild(document.createElement("div")).appendChild(heroBody(me))
       strip.appendChild(hero)
+      // the visitors stay through a rebuild
+      for (const v of visitors) strip.appendChild(v.el)
       strip.insertAdjacentHTML("beforeend", '<div class="bfxl-tfx"></div>')
     }
     // the title bar and the bar under the picture while the town is shown
@@ -5235,19 +5236,18 @@
       if (gains.some(g => ["sage", "legend", "meteor", "crate"].includes(rarity(g.id))))
         b.animate([{ filter: "none" }, { filter: "brightness(1.7) drop-shadow(0 0 8px #ffd75a)", transform: "translateX(-50%) scale(1.08)" }, { filter: "none" }], { duration: 1400 })
     }
-    // someone talking in a chat channel strolls through the town while it is on screen (what they said is not
-    // shown): their own look when known (a guild member, a profile seen), else a plain avatar picked by their name
-    const visitors = [] // { name, el, x, stop, wait, dir, at }
-    let visitAt = 0
+    // someone talking in a chat channel comes to town and stays ten minutes (what they said is not shown; talking
+    // again keeps them longer): their own look when known (a guild member, a profile seen), else a plain avatar and
+    // outfit picked by their name. With the town on screen they walk in from the edge of the view
+    const STAY_MS = 600000
+    const visitors = [] // { name, el, x, to, dir, until, next }
     function townVisitor(m) {
       const name = m?.sName
-      if (!name || m.gm || name === Looks.me.name || !inTown() || !visible()) return
-      const strip = el.querySelector(".bfxl-strip")
-      const seen = visitors.find(v => v.name === name)
-      if (seen) return (seen.wait = Math.max(seen.wait, 2500))
+      const strip = el?.querySelector(".bfxl-strip")
+      if (!name || m.gm || name === Looks.me.name || !strip || !cfg.lifeTown) return
       const now = performance.now()
-      if (visitors.length >= 4 || now - visitAt < 1500) return
-      visitAt = now
+      const seen = visitors.find(v => v.name === name)
+      if (seen) return (seen.until = now + STAY_MS)
       const g = Object.values(guildChars).find(c => c?.name === name)
       const prof = Looks.profileOf(name)
       let look = g?.avatarHrid ? { avatar: shortId(g.avatarHrid), outfit: shortId(g.avatarOutfitHrid) } : prof?.avatar ? prof : null
@@ -5265,26 +5265,36 @@
       e.insertAdjacentHTML("beforeend", "<b></b>")
       e.lastChild.textContent = name
       strip.appendChild(e)
-      // in at one edge of the view, a stop somewhere in it, out at the other edge
-      const dir = Math.random() < 0.5 ? 1 : -1
-      const x = dir > 0 ? town.cam - 40 : town.cam + 380
-      visitors.push({ name, el: e, x, dir, stop: town.cam + 60 + Math.random() * 220, wait: 1500 + Math.random() * 2500, at: now })
+      const v = { name, el: e, until: now + STAY_MS, next: now + 8000 + Math.random() * 20000 }
+      if (inTown() && visible()) {
+        v.dir = Math.random() < 0.5 ? 1 : -1
+        v.x = v.dir > 0 ? town.cam - 40 : town.cam + 380
+        v.to = town.cam + 40 + Math.random() * 260
+      } else {
+        v.x = v.to = 20 + Math.random() * (townW - 40)
+        v.dir = Math.random() < 0.5 ? 1 : -1
+      }
+      e.style.left = v.x + "px"
+      visitors.push(v)
     }
     function moveVisitors(now, dt) {
       for (let i = visitors.length - 1; i >= 0; i--) {
         const v = visitors[i]
-        const before = v.dir > 0 ? v.x < v.stop : v.x > v.stop
-        let walking = true
-        if (before) v.x += v.dir * 55 * dt
-        else if (v.wait > 0) {
-          v.wait -= dt * 1000
-          walking = false
-        } else v.x += v.dir * 55 * dt
-        // gone past the view's far edge (or left alone a long while): away
-        if ((!before && v.wait <= 0 && (v.dir > 0 ? v.x > town.cam + 400 : v.x < town.cam - 60)) || now - v.at > 40000) {
-          v.el.remove()
+        if (now > v.until) {
+          v.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 800 }).onfinish = () => v.el.remove()
           visitors.splice(i, 1)
           continue
+        }
+        // now and then a few steps along the street
+        if (now > v.next && Math.abs(v.to - v.x) < 1) {
+          v.next = now + 8000 + Math.random() * 20000
+          v.to = Math.max(20, Math.min(townW - 20, v.x + (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random() * 60)))
+        }
+        const d = v.to - v.x
+        const walking = Math.abs(d) >= 1
+        if (walking) {
+          v.dir = d > 0 ? 1 : -1
+          v.x += v.dir * Math.min(Math.abs(d), 55 * dt)
         }
         v.el.style.left = v.x + "px"
         const bob = walking ? -2 * Math.abs(Math.sin((now / 1000) * Math.PI * 3)) : 0
