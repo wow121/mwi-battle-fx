@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.8
+// @version      0.21.9
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6263,12 +6263,50 @@
   const MONSTER_SKILLS = {"abyssal_imp":["quick_aid","firestorm","fireball"],"acrobat":["speed_aura","elusiveness","precision","smack","stunning_blow"],"alligator":["scratch"],"anchor_shark":["invincible","toughness","berserk","stunning_blow","shield_bash"],"aquahorse":["aqua_arrow"],"black_bear":["frenzy"],"brine_marksman":["critical_aura","rain_of_arrows","aqua_arrow","penetrating_shot","quick_shot"],"butterjerry":["fierce_aura","frenzy","poke","impale"],"captain_fishhook":["fierce_aura","frenzy","cleave","maim","fracturing_impact"],"centaur_archer":["elusiveness","rain_of_arrows","quick_shot"],"chronofrost_sorcerer":["mystic_aura","heal","elemental_affinity","frost_surge","ice_spear"],"crab":["smack"],"crystal_colossus":["invincible","toughness","spike_shell","puncture","impale"],"cyclops":["guardian_aura","toughness","sweep","stunning_blow","fracturing_impact"],"demonic_overlord":["mystic_aura","toughness","firestorm","flame_blast","fireball"],"deranged_jester":["insanity","vampirism","smoke_burst","sweep","stunning_blow"],"dodocamel":["invincible","toughness","berserk","sweep","shield_bash"],"dryad":["guardian_aura","toxic_pollen","natures_veil","life_drain","entangle"],"dusk_revenant":["critical_aura","vampirism","steady_shot","silencing_shot","rain_of_arrows"],"elementalist":["revive","elemental_affinity","ice_spear","flame_blast"],"enchanted_bishop":["revive","retribution","rejuvenate","heal","natures_veil"],"enchanted_king":["invincible","toughness","elusiveness","crippling_slash","cleave"],"enchanted_knight":["fierce_aura","toughness","frenzy","crippling_slash","maim"],"enchanted_pawn":["promote","elusiveness","precision","stunning_blow"],"enchanted_queen":["speed_aura","toxic_pollen","mana_spring","flame_blast","water_strike"],"enchanted_rook":["critical_aura","precision","rain_of_arrows","silencing_shot","penetrating_shot"],"eye":["precision"],"eyes":["precision"],"flame_sorcerer":["flame_blast","fireball"],"frog":["smack"],"frost_sniper":["critical_aura","silencing_shot","rain_of_arrows","aqua_arrow","quick_shot"],"giant_mantis":["fierce_aura","precision","cleave","maim","crippling_slash"],"giant_scorpion":["fierce_aura","berserk","impale","puncture","penetrating_strike"],"giant_shoebill":["speed_aura","elusiveness","sweep","smack"],"gobo_boomy":["revive","fireball"],"gobo_chieftain":["fierce_aura","berserk","puncture","impale","poke"],"gobo_shooty":["flame_arrow"],"gobo_slashy":["cleave"],"gobo_smashy":["berserk"],"gobo_stabby":["impale"],"granite_golem":["invincible","provoke","stunning_blow","sweep"],"griffin":["fierce_aura","berserk","frenzy","rain_of_arrows","crippling_slash"],"grizzly_bear":["frenzy"],"gummy_bear":["frenzy"],"ice_sorcerer":["ice_spear","water_strike"],"infernal_warlock":["mystic_aura","firestorm","flame_blast"],"jackalope":["guardian_aura","heal","natures_veil","entangle"],"juggler":["critical_aura","precision","frenzy","pestilent_shot","steady_shot"],"jungle_sprite":["rejuvenate","heal","entangle"],"luna_empress":["guardian_aura","rejuvenate","elusiveness","natures_veil","toxic_pollen"],"magician":["mystic_aura","elemental_affinity","rejuvenate","firestorm","fireball"],"magnetic_golem":["stunning_blow"],"manticore":["critical_aura","precision","pestilent_shot","steady_shot","rain_of_arrows"],"marine_huntress":["mystic_aura","silencing_shot","aqua_arrow","rain_of_arrows"],"mimic":["speed_aura","frenzy","elusiveness","impale","penetrating_strike"],"myconid":["toxic_pollen"],"nom_nom":["impale"],"novice_sorcerer":["quick_aid","water_strike"],"panda":["toughness"],"polar_bear":["fierce_aura","frenzy"],"porcupine":["quick_shot"],"pyre_hunter":["critical_aura","precision","steady_shot","rain_of_arrows","flame_arrow"],"rabid_rabbit":["insanity","berserk","frenzy","scratch"],"rat":["poke"],"red_panda":["insanity","berserk","frenzy","maim","cleave"],"salamander":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"sea_snail":["toughness"],"shadow_archer":["critical_aura","elusiveness","rain_of_arrows","penetrating_shot","steady_shot"],"siren":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"skunk":["scratch"],"slimy":["minor_heal","water_strike"],"snake":["poke"],"soul_hunter":["critical_aura","silencing_shot","flame_arrow"],"squawker":["guardian_aura","life_drain","natures_veil","entangle"],"stalactite_golem":["guardian_aura","spike_shell","toughness"],"swampy":["sweep"],"the_kraken":["critical_aura","frenzy","aqua_arrow","penetrating_shot","fracturing_impact"],"the_watcher":["speed_aura","precision","steady_shot","aqua_arrow","flame_arrow"],"tidal_conjuror":["mystic_aura","elemental_affinity","frost_surge","ice_spear","water_strike"],"treant":["guardian_aura","toxic_pollen","entangle"],"trial_badger":["fierce_aura","berserk","maim","cleave","scratch"],"trial_beetle":["invincible","toughness","fracturing_impact","stunning_blow","sweep"],"trial_chameleon":["critical_aura","precision","penetrating_shot","rain_of_arrows","steady_shot"],"trial_dragonfly":["critical_aura","precision","steady_shot","rain_of_arrows","pestilent_shot"],"trial_firefly":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"trial_hedgehog":["guardian_aura","toughness","spike_shell","natures_veil","fracturing_impact"],"trial_jellyfish":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"trial_wasp":["fierce_aura","frenzy","penetrating_strike","puncture","impale"],"turtle":["taunt","toughness"],"vampire":["fierce_aura","vampirism","puncture"],"veyes":["precision"],"werewolf":["insanity","berserk","maim"],"zombie":["toughness","maim","natures_veil"],"zombie_bear":["fierce_aura","berserk","puncture","penetrating_strike"]}
   // abilities that can stun: [chance, duration ms] (game data: abilityEffects stunChance / stunDuration)
   const STUNS = {"entangle":[0.1,2000],"stunning_blow":[0.7,3000]}
+  // each held weapon piece's long axis [butt x, y, head x, y] in piece pixels (tools/rig-weapon-geom.py)
+  const WEAPON_AXIS = {"arcane_bow":[16,257,52,2],"arcane_crossbow":[5,88,128,88],"arcane_fire_staff":[12,379,60,8],"arcane_nature_staff":[26,270,26,2],"arcane_water_staff":[12,349,71,7],"azure_bulwark":[75,210,75,8],"azure_mace":[7,189,147,24],"azure_spear":[19,399,20,9],"azure_sword":[9,235,183,5],"birch_bow":[13,304,58,1],"birch_crossbow":[58,172,58,7],"birch_fire_staff":[15,397,35,9],"birch_nature_staff":[10,266,29,2],"birch_water_staff":[9,332,61,9],"blazing_trident":[19,403,60,13],"blooming_trident":[30,438,63,12],"burble_bulwark":[58,164,61,6],"burble_mace":[7,186,152,22],"burble_spear":[20,400,25,9],"burble_sword":[7,200,148,3],"cedar_bow":[10,269,60,1],"cedar_crossbow":[10,176,54,9],"cedar_fire_staff":[6,309,74,8],"cedar_nature_staff":[4,259,57,2],"cedar_water_staff":[6,336,69,5],"chaotic_flail":[-11,160,164,37],"cheese_bulwark":[65,178,65,7],"cheese_mace":[6,203,161,23],"cheese_spear":[24,378,25,9],"cheese_sword":[12,213,153,4],"crimson_bulwark":[65,180,65,7],"crimson_mace":[6,190,153,22],"crimson_spear":[18,371,18,9],"crimson_sword":[12,261,175,5],"cursed_bow":[24,337,65,10],"frost_staff":[13,360,61,2],"furious_spear":[41,436,40,12],"ginkgo_bow":[6,307,44,2],"ginkgo_crossbow":[46,203,46,8],"ginkgo_fire_staff":[8,295,69,9],"ginkgo_nature_staff":[13,353,44,3],"ginkgo_water_staff":[13,358,58,10],"gobo_boomstick":[8,279,79,12],"gobo_defender":[144,240,6,8],"gobo_shooter":[68,129,111,11],"gobo_slasher":[6,203,159,-6],"gobo_smasher":[1,214,163,4],"gobo_stabber":[6,183,139,3],"granite_bludgeon":[6,192,161,7],"griffin_bulwark":[75,211,75,11],"holy_bulwark":[73,196,75,8],"holy_mace":[7,208,156,21],"holy_spear":[24,390,25,10],"holy_sword":[8,222,176,6],"infernal_battlestaff":[0,387,100,0],"jackalope_staff":[1,351,85,6],"purpleheart_bow":[21,311,54,3],"purpleheart_crossbow":[10,99,126,99],"purpleheart_fire_staff":[16,406,36,8],"purpleheart_nature_staff":[25,271,28,2],"purpleheart_water_staff":[10,305,62,8],"rainbow_bulwark":[32,230,32,8],"rainbow_mace":[21,288,74,12],"rainbow_spear":[7,372,23,9],"rainbow_sword":[35,299,38,6],"redwood_bow":[13,309,100,1],"redwood_crossbow":[-1,169,72,13],"redwood_fire_staff":[8,288,35,8],"redwood_nature_staff":[12,304,47,2],"redwood_water_staff":[10,341,64,6],"regal_sword":[6,241,177,6],"rippling_trident":[18,376,66,10],"snake_fang_dirk":[4,14,184,62],"soul_hunter_crossbow":[21,168,56,5],"spiked_bulwark":[69,223,87,9],"stalactite_spear":[6,378,23,9],"sundering_crossbow":[44,237,44,8],"vampire_fang_dirk":[2,6,171,34],"vampiric_bow":[28,386,42,4],"verdant_bulwark":[70,195,72,8],"verdant_mace":[6,194,155,23],"verdant_spear":[6,374,25,8],"verdant_sword":[7,247,178,5],"werewolf_slasher":[15,273,205,35],"wooden_bow":[15,297,39,3],"wooden_crossbow":[23,186,71,8],"wooden_fire_staff":[5,319,69,8],"wooden_nature_staff":[27,251,27,2],"wooden_water_staff":[7,330,64,5]}
+  // grip styles of the rigged player: at = where the hand holds the weapon (0 butt … 1 head), aim = its angle at rest
+  // (degrees from straight down, 90 level forward, 180 straight up), hand = the hand it is in (hm back / ho front),
+  // two = where the front hand takes the shaft too when nothing is in the off hand; each style has its actions
+  // (ACTIONS["player:<style>"], the sword's set where it has none yet). A crossbow's axis is its bolt.
+  const GRIPS = {
+    sword: { at: 0.12, aim: 172 },
+    mace: { at: 0.12, aim: 172 },
+    spear: { at: 0.3, aim: 96, two: 0.56 },
+    staff: { at: 0.36, aim: 166 },
+    bow: { at: 0.5, aim: 180, hand: "ho" },
+    crossbow: { at: 0.3, aim: 90, two: 0.62 },
+    bulwark: { at: 0.5, aim: 180, hand: "ho" },
+    great: { at: 0.1, aim: 172, two: 0.24 },
+  }
+  function gripOf(items) {
+    const id = String(items?.main_hand || items?.two_hand || "").split("/").pop().replace(/_refined$/, "")
+    if (/crossbow/.test(id)) return "crossbow"
+    if (/_bow$/.test(id) || id === "gobo_shooter") return "bow"
+    if (/staff|trident|boomstick/.test(id)) return "staff"
+    if (/spear|stabber/.test(id)) return "spear"
+    if (/bulwark/.test(id)) return "bulwark"
+    if (/slasher|smasher/.test(id)) return "great"
+    if (/mace|flail|bludgeon/.test(id)) return "mace"
+    return "sword"
+  }
   // Only units that have a rig take part: 1号 is the drawn player pilot (blue hair, warrior outfit, holy sword +
   // knight's aegis, sword skills), the monsters are every rigged monster. The DOM stage still hangs in a hidden slot
   // (Stage.attach(Lab.render(), "test")) but gets no events.
   const Lab = (() => {
-    const PILOT = { name: "1号 剑士", style: "slash", skills: ["cleave", "maim", "berserk", "fierce_aura"], avatar: "blue_person_1", outfit: "warrior_1", items: { main_hand: "holy_sword", off_hand: "knights_aegis" } }
-    const st = { loc: "golem_cave", tier: 0, ...GM_getValue("battle_fx_lab_v2", {}) }
+    // 1号's grip styles to try (the look stays the pilot's: avatar blue_person_1, outfit warrior_1)
+    const PILOTS = [
+      { name: "1号 剑盾", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk", "fierce_aura"], items: { main_hand: "holy_sword", off_hand: "knights_aegis" } },
+      { name: "1号 长枪", style: "stab", element: "physical", skills: ["puncture", "impale", "frenzy", "fierce_aura"], items: { main_hand: "holy_spear", off_hand: "holy_buckler" } },
+      { name: "1号 锤盾", style: "smash", element: "physical", skills: ["stunning_blow", "sweep", "shield_bash", "toughness"], items: { main_hand: "holy_mace", off_hand: "arcane_shield" } },
+      { name: "1号 弩", style: "ranged", element: "physical", skills: ["steady_shot", "rain_of_arrows", "aqua_arrow", "precision"], items: { main_hand: "arcane_crossbow" } },
+      { name: "1号 法杖", style: "magic", element: "fire", skills: ["fireball", "flame_blast", "heal", "mystic_aura"], items: { main_hand: "blazing_trident", off_hand: "tome_of_the_elements" } },
+      { name: "1号 弓", style: "ranged", element: "physical", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "critical_aura"], items: { two_hand: "cursed_bow" } },
+      { name: "1号 重盾", style: "smash", element: "physical", skills: ["stunning_blow", "fracturing_impact", "shield_bash", "guardian_aura"], items: { two_hand: "holy_bulwark" } },
+      { name: "1号 双手斩", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk"], items: { two_hand: "werewolf_slasher" } },
+    ]
+    const st = { loc: "golem_cave", tier: 0, pilot: 0, ...GM_getValue("battle_fx_lab_v2", {}) }
+    const PILOT = () => ({ avatar: "blue_person_1", outfit: "warrior_1", ...(PILOTS[st.pilot] || PILOTS[0]) })
     const save = () => GM_setValue("battle_fx_lab_v2", st)
     const lab = { p: [], m: [] }
     let root = null
@@ -6279,7 +6317,7 @@
     const alive = side => lab[side].map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
     const rigged = () => Assets.list("rig").filter(id => MONSTERS[id])
 
-    const unitP = () => ({ ...structuredClone(PILOT), hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000, element: "physical", lab: true, counters: {} })
+    const unitP = () => ({ element: "physical", ...structuredClone(PILOT()), hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000, lab: true, counters: {} })
     function unitM(id) {
       const [name, style, element] = MONSTERS[id] || [id, "smash", "physical"]
       return { name, hrid: "/monsters/" + id, hp: 4000, mp: 1000, maxHp: 4000, maxMp: 1000, style, element, counters: {} }
@@ -6388,6 +6426,8 @@
       row("战场").append(
         select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => ((st.loc = v), save(), Arena.background())),
         select([0, 1, 2, 3, 4, 5].map(t => [t, "T" + t]), st.tier, v => ((st.tier = +v), save(), Arena.background())),
+        // 1号's weapon (grip style)
+        select(PILOTS.map((p, k) => [k, p.name]), st.pilot, v => ((st.pilot = +v), save(), reset(), draw())),
       )
       row("操作").append(
         button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
@@ -6605,6 +6645,604 @@ void main(){
           ],
         },
       },
+      // ----- bow (after Lost Castle's bow_*): the bow in the front hand (ho), upright at rest; the back hand (hm) draws
+      // the string. Hand degrees + lean the bow's top back (its arrow points up), - forward. Idle: held low and slanted.
+      "player:bow": {
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } }, { t: 700, a: { body: 2, hm: [0.04, 0, 2], ho: [-0.09, -0.095, -118] }, y: -0.01 }, { t: 1400, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } }] },
+        // 普攻 1: the bow up in front, a full draw, the release snaps the hand back
+        attack: {
+          dur: 700, shot: 330, hit: 520, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 120, e: "out", a: { body: -3, hm: [0.5, 0.12, 0], ho: [0.09, 0.07, 0] } },
+            { t: 300, a: { body: -6, hm: [0.24, 0.14, 0], ho: [0.1, 0.08, 0] } },
+            { t: 330, e: "out", a: { body: -8, hm: [0.16, 0.17, 10], ho: [0.07, 0.09, 6] }, x: -0.01 },
+            { t: 520, a: { body: -7, hm: [0.17, 0.16, 8], ho: [0.08, 0.085, 4] }, x: -0.01 },
+            { t: 700, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 普攻 2: a quick shot from the hip, the bow canted forward
+        attack2: {
+          dur: 520, shot: 200, hit: 360, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 90, e: "out", a: { body: 2, hm: [0.46, 0.08, 0], ho: [0.07, 0.01, -35] } },
+            { t: 180, a: { body: -4, hm: [0.28, 0.11, 0], ho: [0.07, 0.01, -35] } },
+            { t: 200, e: "out", a: { body: -5, hm: [0.2, 0.13, 15], ho: [0.05, 0.02, -30] } },
+            { t: 360, a: { body: -4, hm: [0.21, 0.12, 12], ho: [0.05, 0.02, -31] } },
+            { t: 520, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 普攻 3: a hop back, shooting in the air
+        attack3: {
+          dur: 760, shot: 360, hit: 540, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 140, e: "out", a: { body: -8, hm: [0.5, 0.14, 0], ho: [0.09, 0.1, 10] }, x: -0.12, y: 0.18 },
+            { t: 320, a: { body: -10, hm: [0.22, 0.16, 0], ho: [0.09, 0.1, 10] }, x: -0.15, y: 0.22 },
+            { t: 360, e: "out", a: { body: -12, hm: [0.12, 0.2, 20], ho: [0.06, 0.12, 14] }, x: -0.16, y: 0.2 },
+            { t: 560, e: "in", a: { body: 4, hm: [0.1, 0.05, 10], ho: [0.02, 0.02, -40] }, x: -0.1 },
+            { t: 760, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // any other ranged skill: a long, deep draw held while it charges, a heavy release that rocks the body back
+        skill: {
+          dur: 1250, shot: 900, hit: 1080, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 200, e: "out", a: { body: -2, hm: [0.5, 0.12, 0], ho: [0.1, 0.08, 0] } },
+            { t: 520, a: { body: -10, hm: [0.12, 0.16, 0], ho: [0.12, 0.08, 0] }, x: -0.03 },
+            { t: 860, a: { body: -11, hm: [0.11, 0.165, 0], ho: [0.12, 0.08, 0] }, x: -0.03 },
+            { t: 900, e: "out", a: { body: -16, hm: [0.02, 0.22, 30], ho: [0.06, 0.1, 10] }, x: -0.07 },
+            { t: 1080, a: { body: -14, hm: [0.03, 0.21, 26], ho: [0.07, 0.095, 8] }, x: -0.065 },
+            { t: 1250, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 箭雨: the bow tilted back, a volley shot up out of sight, raining down on every foe
+        "skill:rain_of_arrows": {
+          dur: 1300, shot: 700, hit: 1150, from: "ho", rain: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 220, e: "out", a: { body: -6, hm: [0.44, 0.19, 0], ho: [0.03, 0.21, 45] } },
+            { t: 600, a: { body: -12, hm: [0.29, 0.06, 0], ho: [0.03, 0.21, 45] }, x: -0.02 },
+            { t: 700, e: "out", a: { body: -14, hm: [0.2, 0.02, 20], ho: [0.02, 0.23, 50] }, x: -0.03 },
+            { t: 1150, a: { body: -12, hm: [0.21, 0.03, 18], ho: [0.02, 0.22, 48] }, x: -0.03 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        hurt: {
+          dur: 400,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 70, e: "out", a: { body: -12, hm: [0.05, 0, 10], ho: [-0.05, 0.02, -20] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [0.05, 0, 8], ho: [-0.05, 0.01, -25] }, x: -0.04 },
+            { t: 400, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // the bow raised upright overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 280, e: "out", a: { hm: [0.1, 0.1, 0], ho: [-0.05, 0.54, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.1, 0.1, 0], ho: [-0.05, 0.55, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // falls on the back, the bow left lying flat beside the body
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 200, a: { body: -25, hm: [-0.05, 0.1, 10], ho: [-0.1, 0, -100] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.25, -0.25, 30], ho: [-0.1, -0.66, -90] } },
+          ],
+        },
+      },
+      // ----- mace (one hand, smash): rests on the shoulder, comes down hard; a shield in the front hand. + swings the
+      // head back over the shoulder, - forward and down.
+      "player:mace": {
+        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } }, { t: 800, a: { body: 2, hm: [0.1, 0.135, 62], ho: [0.06, -0.035, 2] }, y: -0.01 }, { t: 1600, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } }] },
+        // 普攻 1: off the shoulder, up behind the head and straight down
+        attack: {
+          dur: 620, hit: 260, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 140, e: "out", a: { body: -10, hm: [0.05, 0.5, 95], ho: [0.04, 0.02, 0] }, x: -0.02 },
+            { t: 260, e: "in", a: { body: 18, hm: [0.45, 0.05, -115], ho: [-0.04, 0, 0] }, x: 0.06 },
+            { t: 460, a: { body: 16, hm: [0.44, 0.05, -116], ho: [-0.04, 0, 0] }, x: 0.055 },
+            { t: 620, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 2: a flat swing from behind
+        attack2: {
+          dur: 600, hit: 250, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 140, e: "out", a: { body: -12, hm: [-0.1, 0.2, 90], ho: [0.04, 0, 0] }, x: -0.02 },
+            { t: 250, e: "in", a: { body: 14, hm: [0.42, 0.22, -80], ho: [-0.04, 0, 0] }, x: 0.05 },
+            { t: 450, a: { body: 12, hm: [0.41, 0.21, -81], ho: [-0.04, 0, 0] }, x: 0.045 },
+            { t: 600, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 3: dropped low, an uppercut
+        attack3: {
+          dur: 600, hit: 250, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 140, e: "out", a: { body: 8, hm: [0.2, -0.1, -150], ho: [0.04, -0.03, 0] } },
+            { t: 250, e: "in", a: { body: -12, hm: [0.35, 0.45, 20], ho: [-0.02, 0.02, 0] }, x: 0.04, y: 0.05 },
+            { t: 450, a: { body: -10, hm: [0.34, 0.44, 21], ho: [-0.02, 0.02, 0] }, x: 0.04, y: 0.03 },
+            { t: 600, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 4: a shield bash, the mace kept on the shoulder
+        attack4: {
+          dur: 600, hit: 220, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 120, e: "out", a: { body: -6, hm: [0.05, 0.12, 70], ho: [-0.1, 0, 0] }, x: -0.03 },
+            { t: 220, e: "in", a: { body: 18, hm: [0.1, 0.14, 60], ho: [0.25, 0.03, 0] }, x: 0.1 },
+            { t: 420, a: { body: 16, hm: [0.1, 0.14, 60], ho: [0.24, 0.03, 0] }, x: 0.095 },
+            { t: 600, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 重锤: wound far back and held, then hammered down on the foe's head
+        "skill:stunning_blow": {
+          dur: 1300, hit: 800, ring: 800, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 300, e: "out", a: { body: -14, hm: [0, 0.6, 120], ho: [0.03, 0.03, 0] }, y: 0.05 },
+            { t: 700, a: { body: -15, hm: [0, 0.62, 122], ho: [0.03, 0.03, 0] }, y: 0.05 },
+            { t: 800, e: "in", a: { body: 24, hm: [0.5, 0, -125], ho: [-0.05, 0, 0] }, x: 0.1 },
+            { t: 1050, a: { body: 22, hm: [0.49, 0, -126], ho: [-0.05, 0, 0] }, x: 0.095 },
+            { t: 1300, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 盾击: the shield driven into the foe with the whole body
+        "skill:shield_bash": {
+          dur: 1000, hit: 560, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 300, e: "out", a: { body: -10, hm: [0.02, 0.12, 75], ho: [-0.12, 0.03, 0] }, x: -0.06 },
+            { t: 480, a: { body: -11, hm: [0.02, 0.12, 76], ho: [-0.13, 0.03, 0] }, x: -0.065 },
+            { t: 560, e: "in", a: { body: 22, hm: [0.12, 0.14, 60], ho: [0.32, 0.05, -10] }, x: 0.14 },
+            { t: 800, a: { body: 20, hm: [0.12, 0.14, 60], ho: [0.31, 0.05, -10] }, x: 0.13 },
+            { t: 1000, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // a blow on every foe: a leap, the mace raised, and a slam into the ground
+        "skill:all": {
+          dur: 1100, hit: 620, ring: 620,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 250, e: "out", a: { body: -10, hm: [0.05, 0.55, 95], ho: [0.03, 0.05, 0] }, y: 0.3 },
+            { t: 500, a: { body: -12, hm: [0.05, 0.57, 98], ho: [0.03, 0.05, 0] }, y: 0.3 },
+            { t: 620, e: "in", a: { body: 26, hm: [0.42, -0.05, -125], ho: [-0.04, -0.02, 0] }, x: 0.08 },
+            { t: 880, a: { body: 24, hm: [0.41, -0.05, -126], ho: [-0.04, -0.02, 0] }, x: 0.075 },
+            { t: 1100, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // any other skill: two whirls with the mace held out, then a slam
+        skill: {
+          dur: 1250, hit: 760, ring: 760, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -10, hm: [0.4, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: -0.02 },
+            { t: 300, a: { body: -6, hm: [0.45, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: 0.04 },
+            { t: 760, e: "linear", a: { body: -6, hm: [0.45, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: 0.06, r: 720 },
+            { t: 820, e: "out", a: { body: 18, hm: [0.45, 0.05, -115], ho: [0, 0, 0] }, x: 0.04, r: 720 },
+            { t: 1000, a: { body: 16, hm: [0.44, 0.05, -116], ho: [0, 0, 0] }, x: 0.04, r: 720 },
+            { t: 1250, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] }, r: 720 },
+          ],
+        },
+        hurt: {
+          dur: 400,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [0.02, 0.12, 70], ho: [0.1, 0.08, 10] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [0.04, 0.12, 66], ho: [0.09, 0.07, 8] }, x: -0.04 },
+            { t: 400, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // the mace raised straight up overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 280, e: "out", a: { hm: [0.1, 0.62, 8], ho: [0, 0.02, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.1, 0.63, 8], ho: [0, 0.02, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 200, a: { body: -25, hm: [0, 0.15, 40], ho: [-0.05, 0.05, 20] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.1, -0.6, -82], ho: [-0.55, -0.2, -90] } },
+          ],
+        },
+      },
+      // ----- bulwark (two hands, smash): the great shield upright in front, in the front hand (ho); it bashes, crushes
+      // from above and charges. + leans its top back, - forward.
+      "player:bulwark": {
+        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } }, { t: 800, a: { body: 2, hm: [0.04, 0, 0], ho: [0.02, -0.045, 1] }, y: -0.01 }, { t: 1600, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } }] },
+        // 普攻 1: drawn in, then rammed forward
+        attack: {
+          dur: 600, hit: 220, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 120, e: "out", a: { body: -6, hm: [0.02, 0, 0], ho: [-0.06, -0.04, 8] }, x: -0.03 },
+            { t: 220, e: "in", a: { body: 16, hm: [0.2, 0.02, 0], ho: [0.25, 0, -6] }, x: 0.1 },
+            { t: 420, a: { body: 14, hm: [0.2, 0.02, 0], ho: [0.24, 0, -6] }, x: 0.095 },
+            { t: 600, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 普攻 2: lifted overhead and brought down on the foe
+        attack2: {
+          dur: 720, hit: 300, ring: 300, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 180, e: "out", a: { body: -10, hm: [0.1, 0.3, 0], ho: [0, 0.45, 30] }, y: 0.05 },
+            { t: 300, e: "in", a: { body: 20, hm: [0.2, 0.05, 0], ho: [0.25, -0.05, -40] }, x: 0.07 },
+            { t: 520, a: { body: 18, hm: [0.2, 0.05, 0], ho: [0.24, -0.05, -41] }, x: 0.065 },
+            { t: 720, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 普攻 3: a full turn and a bash with the momentum
+        attack3: {
+          dur: 720, hit: 380, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 100, e: "out", a: { body: -4, hm: [0.04, 0, 0], ho: [0, -0.04, 0] } },
+            { t: 340, e: "linear", a: { body: 0, hm: [0.1, 0, 0], ho: [0.15, 0, 0] }, x: 0.04, r: 360 },
+            { t: 380, e: "in", a: { body: 14, hm: [0.15, 0.02, 0], ho: [0.3, 0, -10] }, x: 0.08, r: 360 },
+            { t: 560, a: { body: 12, hm: [0.15, 0.02, 0], ho: [0.29, 0, -10] }, x: 0.075, r: 360 },
+            { t: 720, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] }, r: 360 },
+          ],
+        },
+        // any other skill: braced behind the shield, then a charge straight through the foe
+        skill: {
+          dur: 1150, hit: 780, lunge: true, through: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 300, e: "out", a: { body: 10, hm: [0.1, 0, 0], ho: [0.05, 0, -5] }, x: -0.05 },
+            { t: 700, a: { body: 11, hm: [0.1, 0, 0], ho: [0.05, 0, -5] }, x: -0.055 },
+            { t: 780, e: "in", a: { body: 20, hm: [0.25, 0.02, 0], ho: [0.3, 0.02, -8] }, x: 0.14 },
+            { t: 950, a: { body: 18, hm: [0.25, 0.02, 0], ho: [0.29, 0.02, -8] }, x: 0.13 },
+            { t: 1150, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // a blow on every foe: a leap and the shield slammed into the ground
+        "skill:all": {
+          dur: 1100, hit: 650, ring: 650,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 260, e: "out", a: { body: -10, hm: [0.1, 0.35, 0], ho: [0, 0.5, 20] }, y: 0.3 },
+            { t: 520, a: { body: -12, hm: [0.1, 0.36, 0], ho: [0, 0.52, 22] }, y: 0.3 },
+            { t: 650, e: "in", a: { body: 18, hm: [0.2, 0, 0], ho: [0.25, -0.1, -20] }, x: 0.06 },
+            { t: 900, a: { body: 16, hm: [0.2, 0, 0], ho: [0.24, -0.1, -20] }, x: 0.055 },
+            { t: 1100, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // braced: the shield takes it, barely a step back
+        hurt: {
+          dur: 400,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 70, e: "out", a: { body: -6, hm: [0.04, 0, 0], ho: [0.06, 0.04, 4] }, x: -0.03 },
+            { t: 230, a: { body: -4, hm: [0.04, 0, 0], ho: [0.05, 0.03, 3] }, x: -0.025 },
+            { t: 400, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // the shield raised overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 280, e: "out", a: { hm: [0.1, 0.4, 0], ho: [-0.05, 0.55, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.1, 0.41, 0], ho: [-0.05, 0.56, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 200, a: { body: -25, hm: [-0.05, 0.1, 10], ho: [-0.05, 0.02, -20] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.25, -0.25, 30], ho: [-0.1, -0.66, -90] } },
+          ],
+        },
+      },
+      // ----- crossbow (Lost Castle's gun_* timing: a snap shot and a kick of recoil): level in the back hand (hm), the
+      // front hand under its bolt when free; the bolt flies from its tip. + raises the bolt, - drops it.
+      "player:crossbow": {
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } }, { t: 700, a: { body: 2, hm: [0.36, -0.105, -10], ho: [0.06, -0.035, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } }] },
+        // 普攻 1: up to the shoulder, aimed, a shot that kicks
+        attack: {
+          dur: 620, shot: 260, hit: 420,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 140, e: "out", a: { body: -2, hm: [0.42, 0.06, 0], ho: [0.06, 0.05, 0] } },
+            { t: 255, a: { body: -2, hm: [0.42, 0.06, 0], ho: [0.06, 0.05, 0] } },
+            { t: 275, e: "out", a: { body: -6, hm: [0.36, 0.08, 14], ho: [0.04, 0.06, 0] }, x: -0.02 },
+            { t: 420, a: { body: -4, hm: [0.38, 0.07, 8], ho: [0.05, 0.055, 0] }, x: -0.015 },
+            { t: 620, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 2: a snap shot from the hip
+        attack2: {
+          dur: 480, shot: 150, hit: 300,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 100, e: "out", a: { body: 2, hm: [0.4, -0.08, -2], ho: [0.06, -0.03, 0] } },
+            { t: 165, e: "out", a: { body: -4, hm: [0.34, -0.06, 12], ho: [0.04, -0.02, 0] }, x: -0.015 },
+            { t: 300, a: { body: -3, hm: [0.35, -0.07, 8], ho: [0.05, -0.025, 0] }, x: -0.01 },
+            { t: 480, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 3: a step back to aim, then a shot that rocks the body
+        attack3: {
+          dur: 800, shot: 400, hit: 560,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 180, e: "out", a: { body: -2, hm: [0.44, 0.04, 0], ho: [0.06, 0.04, 0] }, x: -0.08 },
+            { t: 395, a: { body: -3, hm: [0.44, 0.045, 0], ho: [0.06, 0.04, 0] }, x: -0.08 },
+            { t: 415, e: "out", a: { body: -8, hm: [0.38, 0.07, 16], ho: [0.04, 0.05, 0] }, x: -0.1 },
+            { t: 560, a: { body: -6, hm: [0.39, 0.06, 10], ho: [0.05, 0.045, 0] }, x: -0.09 },
+            { t: 800, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // any other ranged skill: a long, steady aim while it charges, a heavy recoil that throws the body back
+        skill: {
+          dur: 1200, shot: 860, hit: 1040,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 240, e: "out", a: { body: -3, hm: [0.44, 0.06, 0], ho: [0.06, 0.05, 0] } },
+            { t: 820, a: { body: -4, hm: [0.445, 0.06, 0], ho: [0.06, 0.05, 0] } },
+            { t: 860, e: "out", a: { body: -14, hm: [0.28, 0.14, 28], ho: [0.02, 0.08, 0] }, x: -0.08 },
+            { t: 1040, a: { body: -11, hm: [0.3, 0.12, 22], ho: [0.03, 0.07, 0] }, x: -0.07 },
+            { t: 1200, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 箭雨: aimed high, a volley up out of sight that rains down on every foe
+        "skill:rain_of_arrows": {
+          dur: 1300, shot: 640, hit: 1150, rain: true,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.36, 0.18, 45], ho: [0.04, 0.1, 0] } },
+            { t: 635, a: { body: -9, hm: [0.36, 0.18, 46], ho: [0.04, 0.1, 0] } },
+            { t: 655, e: "out", a: { body: -12, hm: [0.31, 0.22, 60], ho: [0.02, 0.12, 0] }, x: -0.03 },
+            { t: 1150, a: { body: -10, hm: [0.32, 0.21, 55], ho: [0.03, 0.11, 0] }, x: -0.025 },
+            { t: 1300, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        hurt: {
+          dur: 400,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [0.26, -0.07, 25], ho: [0.08, 0.06, 8] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [0.27, -0.08, 20], ho: [0.07, 0.05, 6] }, x: -0.04 },
+            { t: 400, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // the crossbow raised upright overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 280, e: "out", a: { hm: [0.25, 0.45, 90], ho: [0.02, 0.1, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.25, 0.46, 90], ho: [0.02, 0.1, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // falls on the back, the crossbow left lying on the ground
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 200, a: { body: -25, hm: [0.1, 0.08, 10], ho: [-0.05, 0.05, 20] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.05, -0.62, 0], ho: [-0.55, -0.2, -90] } },
+          ],
+        },
+      },
+      // ----- staff (after Lost Castle's staff_*): upright in the back hand (hm) like a walking staff, a book / relic in
+      // the front hand; magic flies from the staff's head as an orb. + leans the staff back, - points it forward.
+      "player:staff": {
+        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } }, { t: 800, a: { body: 2, hm: [0.02, 0.02, 3], ho: [0.06, -0.03, 2] }, y: -0.01 }, { t: 1600, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } }] },
+        // 普攻 1: the staff drawn back, then thrust out level at the foe
+        attack: {
+          dur: 640, shot: 260, hit: 520, missile: "orb",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 120, e: "out", a: { body: -6, hm: [-0.02, 0.12, 40], ho: [0.04, 0, 0] } },
+            { t: 240, e: "in", a: { body: 10, hm: [0.49, 0.14, -70], ho: [-0.05, 0.03, 0] }, x: 0.03 },
+            { t: 440, a: { body: 9, hm: [0.48, 0.14, -71], ho: [-0.05, 0.03, 0] }, x: 0.03 },
+            { t: 640, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 2: swung from behind over the head, its head brought down toward the foe
+        attack2: {
+          dur: 720, shot: 330, hit: 560, missile: "orb",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 150, e: "out", a: { body: -8, hm: [0.1, 0.3, 80], ho: [0.03, 0.02, 0] } },
+            { t: 310, e: "in", a: { body: 14, hm: [0.4, 0.2, -100], ho: [-0.04, 0, 0] }, x: 0.04 },
+            { t: 520, a: { body: 12, hm: [0.39, 0.19, -101], ho: [-0.04, 0, 0] }, x: 0.04 },
+            { t: 720, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 3: a twirl in the hand, then pointed
+        attack3: {
+          dur: 820, shot: 480, hit: 700, missile: "orb",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 100, e: "out", a: { hm: [0.2, 0.15, 0], ho: [0.04, 0, 0] } },
+            { t: 380, e: "linear", a: { body: -4, hm: [0.25, 0.18, -360], ho: [0.04, 0.02, 0] } },
+            { t: 460, e: "out", a: { body: 8, hm: [0.45, 0.14, -430], ho: [-0.03, 0.02, 0] }, x: 0.02 },
+            { t: 680, a: { body: 7, hm: [0.44, 0.14, -431], ho: [-0.03, 0.02, 0] }, x: 0.02 },
+            { t: 820, a: { hm: [0.02, 0, -360], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // any other single-target spell: the staff raised overhead and the book lifted while it charges, then thrust
+        skill: {
+          dur: 1200, shot: 820, hit: 1050, missile: "orb",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -5, hm: [0.19, 0.44, 0], ho: [0.05, 0.15, 0] }, y: 0.03 },
+            { t: 740, a: { body: -6, hm: [0.19, 0.46, 4], ho: [0.05, 0.16, 0] }, y: 0.03 },
+            { t: 800, e: "in", a: { body: 12, hm: [0.5, 0.2, -75], ho: [0, 0.05, 0] }, x: 0.04 },
+            { t: 1000, a: { body: 11, hm: [0.49, 0.2, -76], ho: [0, 0.05, 0] }, x: 0.04 },
+            { t: 1200, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // a spell on every foe: the staff raised high, then its butt slammed on the ground
+        "skill:all": {
+          dur: 1300, hit: 900, ring: 900,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 280, e: "out", a: { body: -6, hm: [0.2, 0.45, 0], ho: [0.05, 0.18, 0] }, y: 0.05 },
+            { t: 820, a: { body: -7, hm: [0.2, 0.47, 2], ho: [0.05, 0.19, 0] }, y: 0.06 },
+            { t: 900, e: "in", a: { body: 10, hm: [0.3, 0.05, -15], ho: [0.02, 0, 0] } },
+            { t: 1100, a: { body: 9, hm: [0.3, 0.05, -15], ho: [0.02, 0, 0] } },
+            { t: 1300, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        hurt: {
+          dur: 400,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [-0.05, 0.04, 25], ho: [0.06, 0.06, 10] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [-0.04, 0.04, 20], ho: [0.06, 0.05, 8] }, x: -0.04 },
+            { t: 400, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // the staff held straight up overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 280, e: "out", a: { hm: [0.12, 0.5, 14], ho: [0.02, 0.12, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.12, 0.51, 14], ho: [0.02, 0.12, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 200, a: { body: -25, hm: [-0.05, 0.1, 30], ho: [-0.05, 0.05, 20] } },
+            { t: 650, e: "in", a: { body: -84, hm: [0.14, -0.6, 104], ho: [-0.55, -0.2, -90] } },
+          ],
+        },
+      },
+      // ----- spear (after Lost Castle's spear_*): held low and level in the back hand (hm), the front hand on the shaft
+      // when it is free, else holding the off-hand (a buckler up front). + raises the point, - drops it.
+      "player:spear": {
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } }, { t: 700, a: { body: 2, hm: [0.06, 0.015, -2], ho: [0.06, -0.035, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } }] },
+        // 普攻 1: a short draw back and a straight thrust
+        attack: {
+          dur: 460, hit: 170, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 90, e: "out", a: { body: -6, hm: [-0.06, 0.03, -2], ho: [0.04, -0.02, 0] }, x: -0.03 },
+            { t: 170, e: "in", a: { body: 12, hm: [0.42, 0.05, -4], ho: [-0.04, 0, 0] }, x: 0.06 },
+            { t: 330, a: { body: 11, hm: [0.41, 0.05, -4], ho: [-0.04, 0, 0] }, x: 0.055 },
+            { t: 460, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 2: two quick thrusts
+        attack2: {
+          dur: 640, hit: 380, hits: [190], lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 100, e: "out", a: { body: -4, hm: [-0.04, 0.06, 0], ho: [0.04, -0.02, 0] }, x: -0.02 },
+            { t: 190, e: "in", a: { body: 10, hm: [0.4, 0.08, -2], ho: [-0.03, 0, 0] }, x: 0.05 },
+            { t: 280, a: { body: 4, hm: [0.05, 0.05, -2], ho: [0, -0.01, 0] }, x: 0.05 },
+            { t: 380, e: "in", a: { body: 14, hm: [0.48, 0.03, -8], ho: [-0.05, 0, 0] }, x: 0.08 },
+            { t: 520, a: { body: 13, hm: [0.47, 0.03, -8], ho: [-0.05, 0, 0] }, x: 0.075 },
+            { t: 640, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 3: raised high and driven down at the foe
+        attack3: {
+          dur: 620, hit: 260, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 130, e: "out", a: { body: -8, hm: [0, 0.42, 40], ho: [0.04, 0.04, 0] }, y: 0.04 },
+            { t: 260, e: "in", a: { body: 18, hm: [0.35, 0.18, -40], ho: [-0.04, 0, 0] }, x: 0.07 },
+            { t: 440, a: { body: 16, hm: [0.34, 0.18, -41], ho: [-0.04, 0, 0] }, x: 0.065 },
+            { t: 620, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 普攻 4: the point dropped low, then swept up through the foe
+        attack4: {
+          dur: 600, hit: 240, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 120, e: "out", a: { body: 6, hm: [0.1, -0.12, -50], ho: [0.04, -0.04, 0] }, y: -0.03 },
+            { t: 240, e: "in", a: { body: -10, hm: [0.3, 0.3, 70], ho: [-0.02, 0.03, 0] }, x: 0.05 },
+            { t: 420, a: { body: -9, hm: [0.29, 0.29, 71], ho: [-0.02, 0.03, 0] }, x: 0.045 },
+            { t: 600, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 破甲之刺: three thrusts, the last one the hardest
+        "skill:puncture": {
+          dur: 1000, hit: 640, hits: [340, 480], lunge: true, color: 0xffb03b,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 240, e: "out", a: { body: -8, hm: [-0.1, 0.05, 0], ho: [0.03, -0.02, 0] }, x: -0.04 },
+            { t: 340, e: "in", a: { body: 12, hm: [0.45, 0.1, 2], ho: [-0.04, 0, 0] }, x: 0.06 },
+            { t: 410, a: { body: 6, hm: [0.1, 0.06, 0], ho: [0, 0, 0] }, x: 0.06 },
+            { t: 480, e: "in", a: { body: 12, hm: [0.46, 0.02, -8], ho: [-0.04, 0, 0] }, x: 0.07 },
+            { t: 560, a: { body: 4, hm: [0.05, 0.05, -2], ho: [0, 0, 0] }, x: 0.07 },
+            { t: 640, e: "in", a: { body: 18, hm: [0.58, 0.06, -4], ho: [-0.06, 0, 0] }, x: 0.1 },
+            { t: 840, a: { body: 16, hm: [0.57, 0.06, -4], ho: [-0.06, 0, 0] }, x: 0.095 },
+            { t: 1000, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // any other stab skill: crouched and coiled back, then a charge that runs the spear through the foe
+        skill: {
+          dur: 1100, hit: 700, lunge: true, through: true,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -12, hm: [-0.15, 0.05, 0], ho: [0.02, -0.03, 0] }, x: -0.06, y: -0.03 },
+            { t: 620, a: { body: -13, hm: [-0.16, 0.05, 0], ho: [0.02, -0.03, 0] }, x: -0.065, y: -0.03 },
+            { t: 700, e: "in", a: { body: 18, hm: [0.55, 0.05, -4], ho: [-0.06, 0, 0] }, x: 0.12 },
+            { t: 900, a: { body: 16, hm: [0.54, 0.05, -4], ho: [-0.06, 0, 0] }, x: 0.11 },
+            { t: 1100, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // the off hand (the buckler) thrust up against the blow
+        hurt: {
+          dur: 400,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [-0.06, 0.04, 20], ho: [0.1, 0.1, 10] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [-0.05, 0.04, 16], ho: [0.09, 0.09, 8] }, x: -0.04 },
+            { t: 400, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // the spear raised straight up overhead
+        cast: {
+          dur: 1100,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 280, e: "out", a: { hm: [0.12, 0.45, 84], ho: [0, 0.03, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.12, 0.46, 84], ho: [0, 0.03, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 200, a: { body: -25, hm: [-0.05, 0.08, 10], ho: [-0.05, 0.05, 20] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.2, -0.6, -6], ho: [-0.55, -0.2, -90] } },
+          ],
+        },
+      },
       // a heavy monster after Lost Castle's granite giant: a slow wind-up, a fast blow, a long hold
       magnetic_golem: {
         idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
@@ -6649,7 +7287,16 @@ void main(){
         cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
       },
     }
+    // two-handed slashers / smashers (werewolf, goblin): the sword's moves, heavier (both hands on the haft)
+    const slowed = (set, k) =>
+      Object.fromEntries(Object.entries(set).map(([n, a]) => [n, { ...a, dur: a.dur * k, hit: a.hit && a.hit * k, ring: a.ring && a.ring * k, hits: a.hits?.map(t => t * k), keys: a.keys.map(x => ({ ...x, t: x.t * k })) }]))
+    ACTIONS["player:great"] = slowed(ACTIONS.player, 1.3)
     const actionOf = (kind, name) => ACTIONS[kind]?.[name] || null
+    // a player's actions are its grip style's set ("player:bow" …), the sword's ("player") for styles without one yet
+    const playerKind = u => {
+      const g = gripOf(u.items?.main_hand || u.items?.two_hand ? u.items : null)
+      return ACTIONS["player:" + g] ? "player:" + g : "player"
+    }
     const EASE = {
       linear: p => p,
       in: p => p * p * p,
@@ -6677,7 +7324,7 @@ void main(){
       return { a: { ...z.a }, x: z.x || 0, y: z.y || 0, r: z.r || 0 }
     }
 
-    let P, F, app, host, world, bg, lights, unitsLayer, fxLayer, partLayer, textLayer, bloom
+    let P, F, app, host, world, bg, lights, unitsLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
     let dot, glow
@@ -6750,6 +7397,7 @@ void main(){
       lights = new P.Container()
       unitsLayer = new P.Container()
       unitsLayer.sortableChildren = true
+      shotLayer = new P.Container()
       fxLayer = new P.Container()
       partLayer = new P.Container()
       textLayer = new P.Container()
@@ -6758,7 +7406,7 @@ void main(){
       bloom.blendMode = "add"
       fxLayer.filters = [bloom]
       partLayer.filters = [bloom]
-      world.addChild(bg, lights, unitsLayer, fxLayer, partLayer, textLayer)
+      world.addChild(bg, lights, unitsLayer, shotLayer, fxLayer, partLayer, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
@@ -6794,7 +7442,7 @@ void main(){
         }
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, u, kind: side === "p" ? "player" : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
+      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       a.filter = P.Filter.from({
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
@@ -6886,16 +7534,26 @@ void main(){
         const h = id && Doll.held(id)
         if (!h) return null
         const t = await P.Assets.load(h.url)
-        return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip }
+        return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip, axis: WEAPON_AXIS[String(id).replace(/_refined$/, "")] }
       }
-      const w = await piece(u.items?.main_hand || u.items?.two_hand || "holy_sword")
+      // a point along the weapon's axis (0 butt … 1 head) and the axis's angle (degrees from straight down, + forward)
+      const along = (ax, f) => [ax[0] + (ax[2] - ax[0]) * f, ax[1] + (ax[3] - ax[1]) * f]
+      const angle = ax => (Math.atan2(ax[2] - ax[0], ax[3] - ax[1]) * 180) / Math.PI
+      const items = u.items?.main_hand || u.items?.two_hand ? u.items : { main_hand: "holy_sword" }
+      const G = GRIPS[gripOf(items)]
+      const w = await piece(items.main_hand || items.two_hand)
       if (w) {
         tex.weapon = w.tex
-        // the main weapon in the back hand (the character's left); with floating hands it sits just under the fist,
-        // at rest pointing up and forward
-        def.parts.weapon = base.parts.hm
-          ? { pivot: w.grip, at: base.back, parent: "hm", z: 2.9, rot: -30, scale: base.scale }
-          : base.parts.bfore
+        // the main weapon in its grip style's hand (the back hand, a bow in the front one), held at the style's point
+        // and turned to its angle; a free front hand takes the shaft of a weapon held in both hands
+        if (base.parts.hm) {
+          const ax = G.at != null && w.axis
+          const ho = G.hand === "ho"
+          def.parts.weapon = { pivot: ax ? along(ax, G.at) : w.grip, at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: ho ? 3.95 : 2.9, rot: ax ? angle(ax) - G.aim : -30, scale: base.scale }
+          if (ax && G.two && !u.items?.off_hand) def.two = along(ax, G.two)
+          // a bow's string runs between its two ends (pulled back by the drawing hand)
+          if (ax && G === GRIPS.bow) def.string = [ax.slice(0, 2), ax.slice(2)]
+        } else def.parts.weapon = base.parts.bfore
           ? // at rest the blade points up and forward from the back hand
             { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: -60, scale: base.scale }
           : { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
@@ -6913,9 +7571,10 @@ void main(){
       const off = await piece(u.items?.off_hand)
       if (off) {
         tex.off = off.tex
-        // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm)
+        // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm); a dagger by
+        // its hilt, a shield / book / relic in the middle
         def.parts.off = base.parts.ho
-          ? { pivot: off.grip, at: base.fist, parent: "ho", z: 4.1, scale: base.scale }
+          ? { pivot: off.axis ? along(off.axis, 0.08) : off.grip, at: base.fist, parent: "ho", z: 4.1, scale: base.scale }
           : base.parts.bfore
           ? { pivot: off.grip, at: base.fist, parent: "fore", z: 4.5, upright: true, scale: base.scale }
           : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
@@ -6978,9 +7637,15 @@ void main(){
         }
         return { name, arm, g, up: seg("up"), lo: seg("lo") }
       })
+      let str = null
+      if (def.string) {
+        str = new P.Graphics()
+        str.zIndex = 3.92
+        root.addChild(str)
+      }
       root.filters = [a.filter]
       a.cont.addChildAt(root, 1)
-      a.rig = { root, parts: list, by, order, def, arms, fallen: false, back: 0, crumble: def.face !== "right" }
+      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.face !== "right" }
       rigScale(a)
       if (a.dead) {
         if (a.rig.crumble) rigCrumble(a, true)
@@ -7008,7 +7673,7 @@ void main(){
       const R = a.rig
       if (R.fallen) return rigDebris(a)
       // a.still = [action, ms]: held on one frame (Arena.still, for checking poses)
-      const A = a.still ? { name: a.still[0], def: actionOf(a.kind, a.still[0]), t0: t - a.still[1] } : a.act
+      const A = a.still ? { name: a.still[0], def: actionOf(a.kind, a.still[0]) || actionOf(a.kind, "idle"), t0: t - a.still[1] } : a.act
       let at = A ? t - A.t0 : 0
       if (A && at >= A.def.dur) {
         if (A.def.loop) at %= A.def.dur
@@ -7074,6 +7739,38 @@ void main(){
         const b = R.back
         q.s.position.set(b ? lerp(q.x, q.fx, b) : q.x, b ? lerp(q.y, q.fy, b) : q.y)
         q.s.rotation = b ? lerp(q.wr, q.fr, b) : q.wr
+      }
+      // a bow's string: drawn from its two ends to the back hand while that hand is pulling it (close behind the bow)
+      if (R.str) {
+        R.str.clear()
+        const q = R.by.weapon
+        const hm = R.by.hm
+        const k = q.p.scale || 1
+        const c = Math.cos(q.wr)
+        const s = Math.sin(q.wr)
+        const [E, F2] = R.def.string.map(([px, py]) => {
+          const dx = (px - q.p.pivot[0]) * k
+          const dy = (py - q.p.pivot[1]) * k
+          return { x: q.x + dx * c - dy * s, y: q.y + dx * s + dy * c }
+        })
+        // the hand's distance behind the bow's line (+ = on the string side, away from the foe)
+        const L = Math.hypot(F2.x - E.x, F2.y - E.y) || 1
+        const behind = ((F2.y - E.y) * (hm.x - E.x) - (F2.x - E.x) * (hm.y - E.y)) / L
+        if (!R.back && A?.name !== "dead" && behind > 4 && behind < h * 0.7) R.str.moveTo(E.x, E.y).lineTo(hm.x, hm.y).lineTo(F2.x, F2.y).stroke({ width: 3, color: 0xf4efe0, alpha: 0.95 })
+      }
+      // a weapon held in both hands: the front hand on its shaft (def.two, piece pixels), turned with the back hand
+      const w = R.def.two && R.by.weapon
+      if (w && R.by.ho && !R.back) {
+        const k = w.p.scale || 1
+        const dx = (R.def.two[0] - w.p.pivot[0]) * k
+        const dy = (R.def.two[1] - w.p.pivot[1]) * k
+        const c = Math.cos(w.wr)
+        const s = Math.sin(w.wr)
+        const ho = R.by.ho
+        ho.x = w.x + dx * c - dy * s
+        ho.y = w.y + dx * s + dy * c
+        ho.s.position.set(ho.x, ho.y)
+        ho.s.rotation = ho.wr = R.by.hm.wr
       }
     }
     // an arm from the shoulder (riding on the body) to the hand: two segments of the drawn lengths bending at the
@@ -7289,6 +7986,43 @@ void main(){
       const g = sp.toGlobal(new P.Point(q.p.pivot[0] + (q.tip[0] - q.p.pivot[0]) * inner, q.p.pivot[1] + (q.tip[1] - q.p.pivot[1]) * inner))
       return world.toLocal(g)
     }
+    // a hand's place in world coordinates (a bow's grip: where its arrows leave from)
+    function handOf(a, name) {
+      const q = a.rig?.by[name]
+      if (!q || a.rig.fallen) return null
+      return world.toLocal(q.s.toGlobal(new P.Point(0, 0)))
+    }
+    // a missile from A to B over dur ms along an arc (arc: the rise as a share of the distance): "arrow" (a drawn shaft,
+    // coloured head and fletching), "orb" (a glowing ball trailing sparks); big for a skill
+    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100 } = {}) {
+      const dist = Math.hypot(B.x - A.x, B.y - A.y)
+      let s
+      if (kind === "arrow") {
+        s = new P.Graphics()
+        const L = h * (big ? 0.42 : 0.32)
+        const wd = h * (big ? 0.022 : 0.016)
+        s.moveTo(-L, 0).lineTo(0, 0).stroke({ width: wd, color: 0x8a5a2b, cap: "round" })
+        s.poly([0, -wd * 2.6, L * 0.2, 0, 0, wd * 2.6]).fill(big ? color : 0xdfe6f0)
+        s.poly([-L, 0, -L * 0.82, -wd * 2.4, -L * 0.7, -wd * 2.4, -L * 0.86, 0, -L * 0.7, wd * 2.4, -L * 0.82, wd * 2.4]).fill(big ? color : 0xf2f2f2)
+        shotLayer.addChild(s)
+      } else {
+        s = new P.Sprite(glow)
+        s.anchor.set(0.5)
+        s.tint = color
+        s.width = s.height = h * (big ? 0.5 : 0.32)
+        partLayer.addChild(s)
+      }
+      s.position.set(A.x, A.y)
+      const at = p => ({ x: lerp(A.x, B.x, p), y: lerp(A.y, B.y, p) - arc * dist * 4 * p * (1 - p) })
+      tween(dur, p => {
+        const q = at(p)
+        const n = at(Math.min(1, p + 0.02))
+        s.position.set(q.x, q.y)
+        if (kind === "arrow") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
+        else if (Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
+        if (p >= 1) s.destroy()
+      })
+    }
     function banner(a, text, color) {
       if (!text) return
       const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 }, dropShadow: { color: "#000", blur: 6, distance: 0, alpha: 0.9 } } })
@@ -7467,7 +8201,8 @@ void main(){
         // a skill plays its own action ("skill:<key>") when it has one, else the generic skill; a plain attack picks
         // one of its sets at random (attack, attack2, …)
         const sets = ["attack", "attack2", "attack3", "attack4"].filter(n => actionOf(src.kind, n))
-        const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
+        // (a skill on every foe: "skill:all" where the set has one)
+        const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : e.ab.target === "allEnemies" && actionOf(src.kind, "skill:all") ? "skill:all" : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
         const act = play1(src, name)
         const at = act?.hit ?? 300
         // earlier blows of a multi-blow action (hits: [ms, …]): a slash and a flinch, the damage lands at hit
@@ -7483,8 +8218,11 @@ void main(){
             )
         // the blade leaves a light trail while it swings: thin and white for an attack, broad and coloured for a skill
         const tcol = act?.color != null ? act.color : isSkill ? (e.element && e.element !== "physical" ? color : 0xffd84a) : 0xeef4ff
-        src.trail = { on: true, color: tcol, w: isSkill ? 0.6 : 0.4, life: isSkill ? 220 : 150, pts: src.trail?.pts || [] }
-        later(act?.dur || 800, () => src.trail && (src.trail.on = false))
+        // (a shot leaves none: its missile carries the light)
+        if (act?.shot == null) {
+          src.trail = { on: true, color: tcol, w: isSkill ? 0.6 : 0.4, life: isSkill ? 220 : 150, pts: src.trail?.pts || [] }
+          later(act?.dur || 800, () => src.trail && (src.trail.on = false))
+        }
         if (isSkill) {
           // the skill's name pops up, the blade gathers light before the release
           banner(src, e.ab.name || "", tcol)
@@ -7500,6 +8238,26 @@ void main(){
           light(src.x0, src.y0 - src.h * 0.4, color, src.h * 1.2, Math.max(500, at))
         }
         if (act?.ring != null) later(act.ring, () => ring(src, tcol))
+        // a shot (act.shot: the release, ms): a missile from the bow hand (from: "ho") or the weapon's tip to each target,
+        // landing at act.hit; a volley (rain) goes up out of sight and comes down on every target
+        if (act?.shot != null) {
+          const flight = Math.max(80, at - act.shot)
+          const kind = act.missile || "arrow"
+          const opt = { color: kind === "orb" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h }
+          later(act.shot, () => {
+            const from = (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
+            if (!act.rain) return tgs.forEach(([a]) => shoot(kind, from, mid(a), flight, opt))
+            for (let n = 0; n < 3; n++) shoot(kind, from, { x: from.x + src.dir * src.h * (0.3 + n * 0.15), y: from.y - src.h * 2.5 }, flight * 0.4, { ...opt, arc: 0 })
+            tgs.forEach(([a]) => {
+              for (let n = 0; n < 4; n++)
+                later(flight * 0.5 - n * 70, () => {
+                  const m = mid(a)
+                  const x = m.x + (Math.random() - 0.5) * a.h * 0.4
+                  shoot(kind, { x: x - src.dir * a.h * 0.5, y: m.y - a.h * 2.4 }, { x, y: m.y + a.h * 0.1 }, flight * 0.5, { ...opt, arc: 0 })
+                })
+            })
+          })
+        }
         const tgt = tgs[0]?.[0]
         if (act?.lunge && tgt) {
           // reach: stop in front of the target, or (act.through) run past it
