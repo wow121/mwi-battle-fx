@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.14
+// @version      0.21.15
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "9f24a56ca4"
+  const ASSET_REV = "168b1ccdf0"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7321,7 +7321,7 @@ void main(){
       // held open at the chest; pushed out at the foe with each blow; raised high on a buff
       book: {
         idle: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.5, ho: [0.02, 0.055, -6] }, { t: 1, ho: [0.02, 0.04, -8] }],
-        attack: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: "pre", ho: [0.08, 0.1, -12] }, { t: "hit", ho: [0.16, 0.14, -20] }, { t: "hold", ho: [0.15, 0.13, -18] }, { t: 1, ho: [0.02, 0.04, -8] }],
+        attack: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: "pre", ho: [0.08, 0.05, -10] }, { t: "hit", ho: [0.18, 0.06, -14] }, { t: "hold", ho: [0.17, 0.06, -12] }, { t: 1, ho: [0.02, 0.04, -8] }],
         hurt: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.2, ho: [-0.02, 0.08, 10] }, { t: 1, ho: [0.02, 0.04, -8] }],
         cast: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.25, ho: [0, 0.42, 0] }, { t: 0.75, ho: [0, 0.43, 0] }, { t: 1, ho: [0.02, 0.04, -8] }],
         dead: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.3, ho: [-0.05, 0.05, 20] }, { t: 1, ho: [0.05, -0.62, -80] }],
@@ -7625,12 +7625,12 @@ void main(){
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
         // an item redrawn for the rig (assets/rig/weapons: side-view crossbows, their axes in WEAPON_AXIS too; books
-        // seen from the side, held by the bottom of the spine)
+        // lying open on the palm, held from below)
         const k = String(id || "").replace(/_refined$/, "")
         if (k && Assets.list("weapons").includes(k)) {
           const t = await P.Assets.load(Assets.url(`rig/weapons/${k}.webp`))
           const axis = WEAPON_AXIS["rig:" + k]
-          return { tex: t, grip: axis ? [t.width / 2, t.height / 2] : [t.width * 0.5, t.height * 0.8], axis }
+          return { tex: t, grip: axis ? [t.width / 2, t.height / 2] : [t.width * 0.5, t.height * 0.95], axis }
         }
         const h = id && Doll.held(id)
         if (!h) return null
