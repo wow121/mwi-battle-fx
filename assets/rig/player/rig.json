@@ -65,10 +65,20 @@
  "armAngle": 73,
  "scale": 1.16,
  "avatars": [
-  "blue_person_1"
+  "blue_person_1",
+  "cat_1",
+  "bunny_1",
+  "frog_1",
+  "red_person_1",
+  "custom_auspiciousdragon"
  ],
  "outfits": [
-  "warrior_1"
+  "warrior_1",
+  "mage_1",
+  "ranger_1",
+  "dress_1",
+  "pirate_1",
+  "cow_suit"
  ],
  "hands": true,
  "arms": {
@@ -122,14 +132,134 @@
   },
   "o_warrior_1": {
    "armf": {
-    "fill": "#a19f9f",
-    "line": "#585757",
+    "fill": "#a1a09f",
+    "line": "#585857",
+    "cover": 0.85
+   },
+   "armb": {
+    "fill": "#bfbcbc",
+    "line": "#696767",
+    "cover": 0.6
+   }
+  },
+  "a_cat_1": {
+   "armf": {
+    "fill": "#fcfcfb",
+    "line": "#8a8a8a",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fcfcfb",
+    "line": "#8a8a8a",
+    "cover": 0.93
+   }
+  },
+  "a_bunny_1": {
+   "armf": {
+    "fill": "#fee1a4",
+    "line": "#8b7b5a",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#fee0a3",
+    "line": "#8b7b59",
+    "cover": 0.9
+   }
+  },
+  "a_frog_1": {
+   "armf": {
+    "fill": "#4adbd1",
+    "line": "#287872",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#49dbd1",
+    "line": "#287872",
+    "cover": 0.91
+   }
+  },
+  "a_red_person_1": {
+   "armf": {
+    "fill": "#f9c5c6",
+    "line": "#886c6c",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#f8c4c6",
+    "line": "#886b6c",
+    "cover": 0.92
+   }
+  },
+  "a_custom_auspiciousdragon": {
+   "armf": {
+    "fill": "#fdb943",
+    "line": "#8b6524",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#fdb843",
+    "line": "#8b6524",
+    "cover": 0.89
+   }
+  },
+  "o_mage_1": {
+   "armf": {
+    "fill": "#996ccd",
+    "line": "#543b70",
+    "cover": 0.88
+   },
+   "armb": {
+    "fill": "#996ccd",
+    "line": "#543b70",
+    "cover": 0.8
+   }
+  },
+  "o_ranger_1": {
+   "armf": {
+    "fill": "#209ef8",
+    "line": "#115688",
+    "cover": 0.48
+   },
+   "armb": {
+    "fill": "#0752f0",
+    "line": "#032d84",
+    "cover": 0.45
+   }
+  },
+  "o_dress_1": {
+   "armf": {
+    "fill": "#fcdaa3",
+    "line": "#8a7759",
+    "cover": 0.27
+   },
+   "armb": {
+    "fill": "#fdd99c",
+    "line": "#8b7755",
+    "cover": 0.09
+   }
+  },
+  "o_pirate_1": {
+   "armf": {
+    "fill": "#faefe5",
+    "line": "#89837d",
+    "cover": 0.79
+   },
+   "armb": {
+    "fill": "#fdf8f0",
+    "line": "#8b8884",
+    "cover": 0.62
+   }
+  },
+  "o_cow_suit": {
+   "armf": {
+    "fill": "#f4dce3",
+    "line": "#86797c",
     "cover": 0.86
    },
    "armb": {
-    "fill": "#bda4bb",
-    "line": "#675a66",
-    "cover": 0.62
+    "fill": "#ddd2d2",
+    "line": "#797373",
+    "cover": 0.73
    }
   }
  }
