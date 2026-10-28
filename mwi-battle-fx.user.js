@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.20.2
+// @version      0.20.3
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6901,8 +6901,8 @@ void main(){
         tex.weapon = w.tex
         // the main weapon in the back hand (the character's left), drawn between the body and the front arm
         def.parts.weapon = base.parts.bfore
-          ? // the back forearm is drawn pointing ~135° round from the front one: the grip turns with it
-            { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: 58 - base.armAngle - 40 + 135, scale: base.scale }
+          ? // at rest the blade points up and forward from the back hand
+            { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: -60, scale: base.scale }
           : { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
       }
       const off = await piece(u.items?.off_hand)
@@ -7008,6 +7008,8 @@ void main(){
       const h = R.def.h
       for (const q of R.order) {
         let deg = pose.a[q.name] || 0
+        // lying flat is as far as a body goes (a clip's fall can tip past it, head below the feet)
+        if (q.name === "body") deg = Math.max(-88, Math.min(88, deg))
         if (q.name === "body" || q.name === "torso" || q.name === "head") deg -= wob
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
@@ -7024,7 +7026,9 @@ void main(){
           // forward is -x in the art for a left-facing rig
           const fwd = R.def.face === "right" ? 1 : -1
           q.x = q.p.at[0] - R.def.foot[0] + pose.x * h * fwd
-          q.y = q.p.at[1] - R.def.foot[1] - pose.y * h
+          // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead
+          const tip = Math.max(0, Math.min(1, (Math.abs(pose.a.body || pose.a.torso || 0) - 30) / 58))
+          q.y = q.p.at[1] - R.def.foot[1] - (Math.max(0, pose.y) + 0.3 * tip) * h
           q.wr = r + q.rest
         }
         // getting back up: fly from where the piece lay into place

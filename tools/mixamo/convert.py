@@ -2,7 +2,9 @@
 # usage: convert.py <dump.json> <out actions.json> [preview dir]
 # Side view: screen x = the character's forward, screen y = down. The main weapon is held in the back hand (barm /
 # bfore, the clip's sword hand) and the off-hand in the front hand (arm / fore, the clip's shield hand). Angles follow
-# the rig: + raises an arm / turns a forearm up, body + leans forward (from the idle stance's lean, so standing is upright).
+# the rig: + raises an arm / turns a forearm up, body + leans forward. Every angle is taken from the idle stance
+# (its mean): the clip's motion is laid over the drawn pose, which stays the resting pose (a clip's own stance would
+# put the hands where the 3/4 drawing has no room for them, e.g. the back hand across the face).
 import json, math, sys, os
 
 dump, out = sys.argv[1], sys.argv[2]
@@ -80,7 +82,7 @@ def convert(name, clip):
     keys = []
     for i in list(range(0, len(rows), STEP)) + ([len(rows) - 1] if (len(rows) - 1) % STEP else []):
         r = rows[i]
-        keys.append({"t": round(i * 1000 / fps), "e": "linear", "a": {k: round(r[k]) for k in ("body", "arm", "fore", "barm", "bfore")}, "x": round(r["x"], 3), "y": round(r["y"], 3)})
+        keys.append({"t": round(i * 1000 / fps), "e": "linear", "a": {k: round(r[k] - BASE.get(k, 0)) for k in ("body", "arm", "fore", "barm", "bfore")}, "x": round(r["x"], 3), "y": round(r["y"], 3)})
     return {"dur": keys[-1]["t"], "hit": hit, "keys": keys}, rows, F, sx, sy, H
 
 
@@ -102,6 +104,11 @@ def _lean():
 
 LEAN = _lean()
 print("idle lean", round(LEAN, 1))
+BASE = {}
+_rows = convert(IDLE, D[IDLE])[1]
+for k in ("arm", "fore", "barm", "bfore"):
+    BASE[k] = sum(r[k] for r in _rows) / len(_rows)
+print("idle base", {k: round(v) for k, v in BASE.items()})
 lib = {}
 for name, clip in D.items():
     if name == "X Bot": continue
