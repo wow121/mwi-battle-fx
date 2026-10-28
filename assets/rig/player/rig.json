@@ -58,5 +58,65 @@
  "outfits": [
   "warrior_1"
  ],
- "hands": true
+ "hands": true,
+ "arms": {
+  "armf": {
+   "shoulder": [
+    352.5,
+    356.0
+   ],
+   "len": [
+    44.3,
+    28.2
+   ],
+   "hand": "ho",
+   "z": 3.5,
+   "width": [
+    36.1,
+    30.4
+   ]
+  },
+  "armb": {
+   "shoulder": [
+    292.5,
+    336.0
+   ],
+   "len": [
+    63.9,
+    22.3
+   ],
+   "hand": "hm",
+   "z": 0.5,
+   "width": [
+    36.1,
+    30.4
+   ]
+  }
+ },
+ "armColors": {
+  "a_blue_person_1": {
+   "armf": {
+    "fill": "#a9d3f7",
+    "line": "#5c7487",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#a9d2f7",
+    "line": "#5c7387",
+    "cover": 0.97
+   }
+  },
+  "o_warrior_1": {
+   "armf": {
+    "fill": "#a19f9f",
+    "line": "#585757",
+    "cover": 0.86
+   },
+   "armb": {
+    "fill": "#bda4bb",
+    "line": "#675a66",
+    "cover": 0.62
+   }
+  }
+ }
 }

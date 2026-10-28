@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.0
+// @version      0.21.1
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6393,6 +6393,12 @@
         }),
         button(autoTimer ? "停止自动战斗" : "自动战斗", () => setAuto(!autoTimer), autoTimer ? "on" : ""),
         button("重置", reset),
+        button(Arena.armsOn() ? "胳膊：开" : "胳膊：关", () => {
+          st.arms = !Arena.armsOn()
+          save()
+          Arena.setArms(st.arms)
+          draw()
+        }, Arena.armsOn() ? "on" : ""),
       )
       lab.p.forEach((u, i) => row(u.name).append(button("普攻", () => act("p", i, null)), ...u.skills.map(k => button(zh(k), () => act("p", i, k), "skill"))))
     }
@@ -6862,6 +6868,12 @@ void main(){
             { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: -60, scale: base.scale }
           : { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
       }
+      // arm colours: the outfit's sleeve where it has one, else the avatar's skin; the far arm a shade darker
+      if (base.arms) {
+        const C = base.armColors || {}
+        const sleeve = outfit && C["o_" + outfit]?.armf?.cover > 0.5 ? C["o_" + outfit].armf : C["a_" + avatar]?.armf
+        def.armColor = sleeve || { fill: "#c8c8c8", line: "#6e6e6e" }
+      }
       const off = await piece(u.items?.off_hand)
       if (off) {
         tex.off = off.tex
@@ -6907,9 +6919,18 @@ void main(){
         order.push(q)
       }
       list.forEach(add)
+      // arms (floating-hand rigs): a tube drawn each frame from the shoulder to the hand, between the parts by z
+      root.sortableChildren = true
+      list.forEach(q => (q.s.zIndex = q.p.z))
+      const arms = Object.entries(def.arms || {}).map(([name, arm]) => {
+        const g = new P.Graphics()
+        g.zIndex = arm.z
+        root.addChild(g)
+        return { name, arm, g }
+      })
       root.filters = [a.filter]
       a.cont.addChildAt(root, 1)
-      a.rig = { root, parts: list, by, order, def, fallen: false, back: 0, crumble: def.face !== "right" }
+      a.rig = { root, parts: list, by, order, def, arms, fallen: false, back: 0, crumble: def.face !== "right" }
       rigScale(a)
       if (a.dead) {
         if (a.rig.crumble) rigCrumble(a, true)
@@ -7003,6 +7024,54 @@ void main(){
         q.s.rotation = b ? lerp(q.wr, q.fr, b) : q.wr
       }
     }
+    // an arm from the shoulder (riding on the body) to the hand: two segments of the drawn lengths bending at the
+    // elbow (downward), straight and stretched when the hand is farther away; outline first, then the sleeve colour
+    function rigArms(a) {
+      const R = a.rig
+      const body = R.by.body
+      for (const { arm, g } of R.arms) {
+        g.visible = armsOn
+        if (!armsOn) continue
+        const hand = R.by[arm.hand]
+        const dx0 = arm.shoulder[0] - body.p.at[0]
+        const dy0 = arm.shoulder[1] - body.p.at[1]
+        const c = Math.cos(body.s.rotation)
+        const s = Math.sin(body.s.rotation)
+        const S = { x: body.s.x + dx0 * c - dy0 * s, y: body.s.y + dx0 * s + dy0 * c }
+        const Hx = hand.s.x
+        const Hy = hand.s.y
+        // the wrist: the fist's edge toward the shoulder
+        const fr = hand.w * 0.32
+        const dH = Math.hypot(S.x - Hx, S.y - Hy) || 1
+        const W = { x: Hx + ((S.x - Hx) / dH) * fr, y: Hy + ((S.y - Hy) / dH) * fr }
+        const d = Math.hypot(W.x - S.x, W.y - S.y) || 1
+        // a hand close to its shoulder shortens the arm (a rubber-hose arm) instead of throwing the elbow out
+        const k = Math.max(0.35, Math.min(1, d / (0.75 * (arm.len[0] + arm.len[1]) * 1.15)))
+        const [L1, L2] = arm.len.map(l => l * 1.15 * k)
+        let E
+        if (d >= L1 + L2 - 0.5) E = { x: S.x + ((W.x - S.x) * L1) / (L1 + L2), y: S.y + ((W.y - S.y) * L1) / (L1 + L2) }
+        else {
+          const along = Math.max(-L1, Math.min(L1, (d * d + L1 * L1 - L2 * L2) / (2 * d)))
+          const off = Math.sqrt(Math.max(0, L1 * L1 - along * along))
+          const ux = (W.x - S.x) / d
+          const uy = (W.y - S.y) / d
+          // the elbow on the lower side of the shoulder-wrist line
+          const side = ux >= 0 ? 1 : -1
+          E = { x: S.x + ux * along - uy * off * side, y: S.y + uy * along + ux * off * side }
+        }
+        const col = R.def.armColor
+        const dark = arm.z < 1
+        const w = arm.width[0]
+        g.clear()
+        g.moveTo(S.x, S.y).lineTo(E.x, E.y).lineTo(W.x, W.y).stroke({ width: w + 5, color: col.line, cap: "round", join: "round" })
+        g.moveTo(S.x, S.y).lineTo(E.x, E.y).lineTo(W.x, W.y).stroke({ width: w, color: dark ? new P.Color(col.fill).multiply(0xd8d8d8).toNumber() : col.fill, cap: "round", join: "round" })
+      }
+    }
+    let armsOn = GM_getValue("battle_fx_lab_v2", {}).arms !== false
+    function setArms(on) {
+      armsOn = on
+    }
+
     // a monster's death: it falls apart, pieces tumble backward, bounce and settle
     function rigCrumble(a, instant) {
       const R = a.rig
@@ -7389,7 +7458,10 @@ void main(){
           a.jig *= Math.pow(0.02, dt)
           if (a.jig < 0.01) a.jig = 0
           a.cont.x = a.x0 + (a.dash || 0)
-          if (a.rig) rigFrame(a, t)
+          if (a.rig) {
+            rigFrame(a, t)
+            if (a.rig.arms.length) rigArms(a)
+          }
         }
       trails(t)
       // camera: shake and a short zoom punch toward the middle
@@ -7414,7 +7486,7 @@ void main(){
     }
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
-    return { open, sync, play, background, units: () => units, still }
+    return { open, sync, play, background, units: () => units, still, setArms, armsOn: () => armsOn }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
