@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.9
+// @version      0.21.10
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6267,16 +6267,17 @@
   const WEAPON_AXIS = {"arcane_bow":[16,257,52,2],"arcane_crossbow":[5,88,128,88],"arcane_fire_staff":[12,379,60,8],"arcane_nature_staff":[26,270,26,2],"arcane_water_staff":[12,349,71,7],"azure_bulwark":[75,210,75,8],"azure_mace":[7,189,147,24],"azure_spear":[19,399,20,9],"azure_sword":[9,235,183,5],"birch_bow":[13,304,58,1],"birch_crossbow":[58,172,58,7],"birch_fire_staff":[15,397,35,9],"birch_nature_staff":[10,266,29,2],"birch_water_staff":[9,332,61,9],"blazing_trident":[19,403,60,13],"blooming_trident":[30,438,63,12],"burble_bulwark":[58,164,61,6],"burble_mace":[7,186,152,22],"burble_spear":[20,400,25,9],"burble_sword":[7,200,148,3],"cedar_bow":[10,269,60,1],"cedar_crossbow":[10,176,54,9],"cedar_fire_staff":[6,309,74,8],"cedar_nature_staff":[4,259,57,2],"cedar_water_staff":[6,336,69,5],"chaotic_flail":[-11,160,164,37],"cheese_bulwark":[65,178,65,7],"cheese_mace":[6,203,161,23],"cheese_spear":[24,378,25,9],"cheese_sword":[12,213,153,4],"crimson_bulwark":[65,180,65,7],"crimson_mace":[6,190,153,22],"crimson_spear":[18,371,18,9],"crimson_sword":[12,261,175,5],"cursed_bow":[24,337,65,10],"frost_staff":[13,360,61,2],"furious_spear":[41,436,40,12],"ginkgo_bow":[6,307,44,2],"ginkgo_crossbow":[46,203,46,8],"ginkgo_fire_staff":[8,295,69,9],"ginkgo_nature_staff":[13,353,44,3],"ginkgo_water_staff":[13,358,58,10],"gobo_boomstick":[8,279,79,12],"gobo_defender":[144,240,6,8],"gobo_shooter":[68,129,111,11],"gobo_slasher":[6,203,159,-6],"gobo_smasher":[1,214,163,4],"gobo_stabber":[6,183,139,3],"granite_bludgeon":[6,192,161,7],"griffin_bulwark":[75,211,75,11],"holy_bulwark":[73,196,75,8],"holy_mace":[7,208,156,21],"holy_spear":[24,390,25,10],"holy_sword":[8,222,176,6],"infernal_battlestaff":[0,387,100,0],"jackalope_staff":[1,351,85,6],"purpleheart_bow":[21,311,54,3],"purpleheart_crossbow":[10,99,126,99],"purpleheart_fire_staff":[16,406,36,8],"purpleheart_nature_staff":[25,271,28,2],"purpleheart_water_staff":[10,305,62,8],"rainbow_bulwark":[32,230,32,8],"rainbow_mace":[21,288,74,12],"rainbow_spear":[7,372,23,9],"rainbow_sword":[35,299,38,6],"redwood_bow":[13,309,100,1],"redwood_crossbow":[-1,169,72,13],"redwood_fire_staff":[8,288,35,8],"redwood_nature_staff":[12,304,47,2],"redwood_water_staff":[10,341,64,6],"regal_sword":[6,241,177,6],"rippling_trident":[18,376,66,10],"snake_fang_dirk":[4,14,184,62],"soul_hunter_crossbow":[21,168,56,5],"spiked_bulwark":[69,223,87,9],"stalactite_spear":[6,378,23,9],"sundering_crossbow":[44,237,44,8],"vampire_fang_dirk":[2,6,171,34],"vampiric_bow":[28,386,42,4],"verdant_bulwark":[70,195,72,8],"verdant_mace":[6,194,155,23],"verdant_spear":[6,374,25,8],"verdant_sword":[7,247,178,5],"werewolf_slasher":[15,273,205,35],"wooden_bow":[15,297,39,3],"wooden_crossbow":[23,186,71,8],"wooden_fire_staff":[5,319,69,8],"wooden_nature_staff":[27,251,27,2],"wooden_water_staff":[7,330,64,5]}
   // grip styles of the rigged player: at = where the hand holds the weapon (0 butt … 1 head), aim = its angle at rest
   // (degrees from straight down, 90 level forward, 180 straight up), hand = the hand it is in (hm back / ho front),
-  // two = where the front hand takes the shaft too when nothing is in the off hand; each style has its actions
+  // two = where the other hand takes the weapon too when nothing is in the off hand, scale = drawn bigger (the paper-doll
+  // crossbows are tiny), z = drawn over both hands (a great shield held from behind); each style has its actions
   // (ACTIONS["player:<style>"], the sword's set where it has none yet). A crossbow's axis is its bolt.
   const GRIPS = {
     sword: { at: 0.12, aim: 172 },
     mace: { at: 0.12, aim: 172 },
     spear: { at: 0.3, aim: 96, two: 0.56 },
-    staff: { at: 0.36, aim: 166 },
+    staff: { at: 0.24, aim: 166 },
     bow: { at: 0.5, aim: 180, hand: "ho" },
-    crossbow: { at: 0.3, aim: 90, two: 0.62 },
-    bulwark: { at: 0.5, aim: 180, hand: "ho" },
+    crossbow: { at: 0.3, aim: 90, two: 0.62, scale: 1.9 },
+    bulwark: { at: 0.5, aim: 180, hand: "ho", two: 0.38, scale: 1.35, z: 4.3 },
     great: { at: 0.1, aim: 172, two: 0.24 },
   }
   function gripOf(items) {
@@ -7140,98 +7141,98 @@ void main(){
       // ----- spear (after Lost Castle's spear_*): held low and level in the back hand (hm), the front hand on the shaft
       // when it is free, else holding the off-hand (a buckler up front). + raises the point, - drops it.
       "player:spear": {
-        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } }, { t: 700, a: { body: 2, hm: [0.06, 0.015, -2], ho: [0.06, -0.035, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } }] },
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } }, { t: 700, a: { body: 2, hm: [0.06, -0.065, -2], ho: [0.1, 0.115, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } }] },
         // 普攻 1: a short draw back and a straight thrust
         attack: {
           dur: 460, hit: 170, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 90, e: "out", a: { body: -6, hm: [-0.06, 0.03, -2], ho: [0.04, -0.02, 0] }, x: -0.03 },
-            { t: 170, e: "in", a: { body: 12, hm: [0.42, 0.05, -4], ho: [-0.04, 0, 0] }, x: 0.06 },
-            { t: 330, a: { body: 11, hm: [0.41, 0.05, -4], ho: [-0.04, 0, 0] }, x: 0.055 },
-            { t: 460, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 90, e: "out", a: { body: -6, hm: [-0.06, -0.05, -2], ho: [0.08, 0.13, 0] }, x: -0.03 },
+            { t: 170, e: "in", a: { body: 12, hm: [0.42, -0.03, -4], ho: [0, 0.15, 0] }, x: 0.06 },
+            { t: 330, a: { body: 11, hm: [0.41, -0.03, -4], ho: [0, 0.15, 0] }, x: 0.055 },
+            { t: 460, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // 普攻 2: two quick thrusts
         attack2: {
           dur: 640, hit: 380, hits: [190], lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 100, e: "out", a: { body: -4, hm: [-0.04, 0.06, 0], ho: [0.04, -0.02, 0] }, x: -0.02 },
-            { t: 190, e: "in", a: { body: 10, hm: [0.4, 0.08, -2], ho: [-0.03, 0, 0] }, x: 0.05 },
-            { t: 280, a: { body: 4, hm: [0.05, 0.05, -2], ho: [0, -0.01, 0] }, x: 0.05 },
-            { t: 380, e: "in", a: { body: 14, hm: [0.48, 0.03, -8], ho: [-0.05, 0, 0] }, x: 0.08 },
-            { t: 520, a: { body: 13, hm: [0.47, 0.03, -8], ho: [-0.05, 0, 0] }, x: 0.075 },
-            { t: 640, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 100, e: "out", a: { body: -4, hm: [-0.04, -0.02, 0], ho: [0.08, 0.13, 0] }, x: -0.02 },
+            { t: 190, e: "in", a: { body: 10, hm: [0.4, 0, -2], ho: [0.01, 0.15, 0] }, x: 0.05 },
+            { t: 280, a: { body: 4, hm: [0.05, -0.03, -2], ho: [0.04, 0.14, 0] }, x: 0.05 },
+            { t: 380, e: "in", a: { body: 14, hm: [0.48, -0.05, -8], ho: [-0.01, 0.15, 0] }, x: 0.08 },
+            { t: 520, a: { body: 13, hm: [0.47, -0.05, -8], ho: [-0.01, 0.15, 0] }, x: 0.075 },
+            { t: 640, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // 普攻 3: raised high and driven down at the foe
         attack3: {
           dur: 620, hit: 260, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 130, e: "out", a: { body: -8, hm: [0, 0.42, 40], ho: [0.04, 0.04, 0] }, y: 0.04 },
-            { t: 260, e: "in", a: { body: 18, hm: [0.35, 0.18, -40], ho: [-0.04, 0, 0] }, x: 0.07 },
-            { t: 440, a: { body: 16, hm: [0.34, 0.18, -41], ho: [-0.04, 0, 0] }, x: 0.065 },
-            { t: 620, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 130, e: "out", a: { body: -8, hm: [0, 0.34, 40], ho: [0.08, 0.19, 0] }, y: 0.04 },
+            { t: 260, e: "in", a: { body: 18, hm: [0.35, 0.1, -40], ho: [0, 0.15, 0] }, x: 0.07 },
+            { t: 440, a: { body: 16, hm: [0.34, 0.1, -41], ho: [0, 0.15, 0] }, x: 0.065 },
+            { t: 620, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // 普攻 4: the point dropped low, then swept up through the foe
         attack4: {
           dur: 600, hit: 240, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 120, e: "out", a: { body: 6, hm: [0.1, -0.12, -50], ho: [0.04, -0.04, 0] }, y: -0.03 },
-            { t: 240, e: "in", a: { body: -10, hm: [0.3, 0.3, 70], ho: [-0.02, 0.03, 0] }, x: 0.05 },
-            { t: 420, a: { body: -9, hm: [0.29, 0.29, 71], ho: [-0.02, 0.03, 0] }, x: 0.045 },
-            { t: 600, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 120, e: "out", a: { body: 6, hm: [0.1, -0.2, -50], ho: [0.08, 0.11, 0] }, y: -0.03 },
+            { t: 240, e: "in", a: { body: -10, hm: [0.3, 0.22, 70], ho: [0.02, 0.18, 0] }, x: 0.05 },
+            { t: 420, a: { body: -9, hm: [0.29, 0.21, 71], ho: [0.02, 0.18, 0] }, x: 0.045 },
+            { t: 600, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // 破甲之刺: three thrusts, the last one the hardest
         "skill:puncture": {
           dur: 1000, hit: 640, hits: [340, 480], lunge: true, color: 0xffb03b,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 240, e: "out", a: { body: -8, hm: [-0.1, 0.05, 0], ho: [0.03, -0.02, 0] }, x: -0.04 },
-            { t: 340, e: "in", a: { body: 12, hm: [0.45, 0.1, 2], ho: [-0.04, 0, 0] }, x: 0.06 },
-            { t: 410, a: { body: 6, hm: [0.1, 0.06, 0], ho: [0, 0, 0] }, x: 0.06 },
-            { t: 480, e: "in", a: { body: 12, hm: [0.46, 0.02, -8], ho: [-0.04, 0, 0] }, x: 0.07 },
-            { t: 560, a: { body: 4, hm: [0.05, 0.05, -2], ho: [0, 0, 0] }, x: 0.07 },
-            { t: 640, e: "in", a: { body: 18, hm: [0.58, 0.06, -4], ho: [-0.06, 0, 0] }, x: 0.1 },
-            { t: 840, a: { body: 16, hm: [0.57, 0.06, -4], ho: [-0.06, 0, 0] }, x: 0.095 },
-            { t: 1000, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 240, e: "out", a: { body: -8, hm: [-0.1, -0.03, 0], ho: [0.07, 0.13, 0] }, x: -0.04 },
+            { t: 340, e: "in", a: { body: 12, hm: [0.45, 0.02, 2], ho: [0, 0.15, 0] }, x: 0.06 },
+            { t: 410, a: { body: 6, hm: [0.1, -0.02, 0], ho: [0.04, 0.15, 0] }, x: 0.06 },
+            { t: 480, e: "in", a: { body: 12, hm: [0.46, -0.06, -8], ho: [0, 0.15, 0] }, x: 0.07 },
+            { t: 560, a: { body: 4, hm: [0.05, -0.03, -2], ho: [0.04, 0.15, 0] }, x: 0.07 },
+            { t: 640, e: "in", a: { body: 18, hm: [0.58, -0.02, -4], ho: [-0.02, 0.15, 0] }, x: 0.1 },
+            { t: 840, a: { body: 16, hm: [0.57, -0.02, -4], ho: [-0.02, 0.15, 0] }, x: 0.095 },
+            { t: 1000, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // any other stab skill: crouched and coiled back, then a charge that runs the spear through the foe
         skill: {
           dur: 1100, hit: 700, lunge: true, through: true,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 260, e: "out", a: { body: -12, hm: [-0.15, 0.05, 0], ho: [0.02, -0.03, 0] }, x: -0.06, y: -0.03 },
-            { t: 620, a: { body: -13, hm: [-0.16, 0.05, 0], ho: [0.02, -0.03, 0] }, x: -0.065, y: -0.03 },
-            { t: 700, e: "in", a: { body: 18, hm: [0.55, 0.05, -4], ho: [-0.06, 0, 0] }, x: 0.12 },
-            { t: 900, a: { body: 16, hm: [0.54, 0.05, -4], ho: [-0.06, 0, 0] }, x: 0.11 },
-            { t: 1100, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 260, e: "out", a: { body: -12, hm: [-0.15, -0.03, 0], ho: [0.06, 0.12, 0] }, x: -0.06, y: -0.03 },
+            { t: 620, a: { body: -13, hm: [-0.16, -0.03, 0], ho: [0.06, 0.12, 0] }, x: -0.065, y: -0.03 },
+            { t: 700, e: "in", a: { body: 18, hm: [0.55, -0.03, -4], ho: [-0.02, 0.15, 0] }, x: 0.12 },
+            { t: 900, a: { body: 16, hm: [0.54, -0.03, -4], ho: [-0.02, 0.15, 0] }, x: 0.11 },
+            { t: 1100, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // the off hand (the buckler) thrust up against the blow
         hurt: {
           dur: 400,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 70, e: "out", a: { body: -12, hm: [-0.06, 0.04, 20], ho: [0.1, 0.1, 10] }, x: -0.05 },
-            { t: 230, a: { body: -8, hm: [-0.05, 0.04, 16], ho: [0.09, 0.09, 8] }, x: -0.04 },
-            { t: 400, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [-0.06, -0.04, 20], ho: [0.14, 0.25, 10] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [-0.05, -0.04, 16], ho: [0.13, 0.24, 8] }, x: -0.04 },
+            { t: 400, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
         // the spear raised straight up overhead
         cast: {
           dur: 1100,
           keys: [
-            { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
-            { t: 280, e: "out", a: { hm: [0.12, 0.45, 84], ho: [0, 0.03, 0] }, y: 0.03 },
-            { t: 800, a: { hm: [0.12, 0.46, 84], ho: [0, 0.03, 0] }, y: 0.03 },
-            { t: 1100, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 280, e: "out", a: { hm: [0.12, 0.45, 84], ho: [0, 0.08, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.12, 0.46, 84], ho: [0, 0.08, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.06, 0, -4], ho: [0.06, 0, 0] } },
           ],
         },
         dead: {
@@ -7549,7 +7550,7 @@ void main(){
         if (base.parts.hm) {
           const ax = G.at != null && w.axis
           const ho = G.hand === "ho"
-          def.parts.weapon = { pivot: ax ? along(ax, G.at) : w.grip, at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: ho ? 3.95 : 2.9, rot: ax ? angle(ax) - G.aim : -30, scale: base.scale }
+          def.parts.weapon = { pivot: ax ? along(ax, G.at) : w.grip, at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: G.z || (ho ? 3.95 : 2.9), rot: ax ? angle(ax) - G.aim : -30, scale: base.scale * (G.scale || 1) }
           if (ax && G.two && !u.items?.off_hand) def.two = along(ax, G.two)
           // a bow's string runs between its two ends (pulled back by the drawing hand)
           if (ax && G === GRIPS.bow) def.string = [ax.slice(0, 2), ax.slice(2)]
@@ -7756,21 +7757,22 @@ void main(){
         // the hand's distance behind the bow's line (+ = on the string side, away from the foe)
         const L = Math.hypot(F2.x - E.x, F2.y - E.y) || 1
         const behind = ((F2.y - E.y) * (hm.x - E.x) - (F2.x - E.x) * (hm.y - E.y)) / L
-        if (!R.back && A?.name !== "dead" && behind > 4 && behind < h * 0.7) R.str.moveTo(E.x, E.y).lineTo(hm.x, hm.y).lineTo(F2.x, F2.y).stroke({ width: 3, color: 0xf4efe0, alpha: 0.95 })
+        if (!R.back && A?.def.shot != null && behind > 4 && behind < h * 0.7) R.str.moveTo(E.x, E.y).lineTo(hm.x, hm.y).lineTo(F2.x, F2.y).stroke({ width: 3, color: 0xf4efe0, alpha: 0.95 })
       }
-      // a weapon held in both hands: the front hand on its shaft (def.two, piece pixels), turned with the back hand
+      // a weapon held in both hands: the other hand on it too (def.two, piece pixels), turned with the holding hand
       const w = R.def.two && R.by.weapon
       if (w && R.by.ho && !R.back) {
+        const lead = R.by[w.p.parent]
+        const ho = lead === R.by.ho ? R.by.hm : R.by.ho
         const k = w.p.scale || 1
         const dx = (R.def.two[0] - w.p.pivot[0]) * k
         const dy = (R.def.two[1] - w.p.pivot[1]) * k
         const c = Math.cos(w.wr)
         const s = Math.sin(w.wr)
-        const ho = R.by.ho
         ho.x = w.x + dx * c - dy * s
         ho.y = w.y + dx * s + dy * c
         ho.s.position.set(ho.x, ho.y)
-        ho.s.rotation = ho.wr = R.by.hm.wr
+        ho.s.rotation = ho.wr = lead.wr
       }
     }
     // an arm from the shoulder (riding on the body) to the hand: two segments of the drawn lengths bending at the
