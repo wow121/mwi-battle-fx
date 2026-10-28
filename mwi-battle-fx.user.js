@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.20.3
+// @version      0.21.0
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6425,8 +6425,8 @@
   })()
 
   // ---------- Arena: rigged units in WebGL (PixiJS + pixi-filters) ----------
-  // Bodies are cutout rigs (assets/rig/): parts on joints, moved by keyframed actions (Mixamo clips via MOCAP, hand-made
-  // ACTIONS). Effects: bloom on effect sheets and sparks, a per-body shader that flashes on
+  // Bodies are cutout rigs (assets/rig/): parts on joints (a player: a body and two floating hands), moved by keyframed
+  // ACTIONS. Effects: bloom on effect sheets and sparks, a per-body shader that flashes on
   // a hit and burns the body away on death, shockwave + camera punch on crits, lights that dim the scene around a cast.
   const Arena = (() => {
     const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
@@ -6459,120 +6459,128 @@ void main(){
     // keys: [{ t (ms), e? ("inout" | "in" | "out" | "linear", easing into this key), a: { part: degrees }, x?, y? }] }.
     // Degrees turn a part toward the foe from its drawn rest (a part not named in a key is at rest); x / y move the
     // whole body forward / up, in body heights. Kinds: "player" (sword pilot), or a monster id.
-    const NAMES = { idle: "待机", attack: "普攻", skill: "技能", hurt: "受击", cast: "增益", dead: "倒下" }
     const ACTIONS = {
-      // the sword pilot: one-handed sword in the front hand, the off-hand (shield) in the back hand. The front arm rests
-      // held forward (3/4 battle stance): + raises it, - lowers it; the back arm (barm): + swings the off-hand forward
       player: {
-        // the sword held out forward, clear of the face
-        idle: { dur: 1600, loop: true, keys: [{ t: 0, a: { arm: 4, fore: -52, barm: 30 } }, { t: 800, a: { body: 2, arm: 8, fore: -50, barm: 34 }, y: -0.012 }, { t: 1600, a: { arm: 4, fore: -52, barm: 30 } }] },
-        // Attacks are quick and small (≈ 0.7 s, short wind-up); skills are big (a long wind-up with a charge, a jump or
-        // a dash, a hit-stop, a slow recovery). 普攻 1: a short step and a chop
+        // Floating hands (Lost Castle style): hm = the main hand (sword, back), ho = the off hand (shield, front), each
+        // [forward, up, degrees] from where it is drawn. The sword rests pointing up and forward; + turns it back
+        // (+30 straight up, +80 back over the head), - forward and down (-60 level, -110 down-forward).
+        // Timing after the 2D brawlers: a very short wind-up, the blow lands in one frame, a held follow-through.
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } }, { t: 700, a: { body: 2, hm: [0.05, 0.1, 4], ho: [0, 0.015, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } }] },
+        // 普攻 1: the sword snaps up behind the head and chops down in front
         attack: {
-          dur: 640, hit: 250, lunge: true,
+          dur: 430, hit: 150, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 160, e: "out", a: { body: -8, arm: 90, fore: -50, barm: 50 }, x: -0.02 },
-            { t: 250, e: "in", a: { body: 12, arm: -35, fore: -85, barm: -10 }, x: 0.04 },
-            { t: 380, a: { body: 10, arm: -42, fore: -88, barm: -5 }, x: 0.035 },
-            { t: 640, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 90, e: "out", a: { body: -8, hm: [0.1, 0.5, 80], ho: [0.04, 0.02, 0] }, x: -0.02 },
+            { t: 150, e: "in", a: { body: 12, hm: [0.45, 0.12, -110], ho: [-0.04, 0, 0] }, x: 0.05 },
+            { t: 330, a: { body: 10, hm: [0.44, 0.1, -112], ho: [-0.04, 0, 0] }, x: 0.045 },
+            { t: 430, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // 普攻 2: a deep lunge, body low and forward, the blade level
+        // 普攻 2: low in front, then a rising cut
         attack2: {
-          dur: 720, hit: 290, lunge: true,
+          dur: 520, hit: 220, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 200, e: "out", a: { body: -10, arm: 10, fore: -75, barm: 55 }, x: -0.07 },
-            { t: 290, e: "in", a: { body: 28, arm: -5, fore: -22, barm: -20 }, x: 0.2, y: -0.05 },
-            { t: 430, a: { body: 26, arm: -3, fore: -24, barm: -15 }, x: 0.19, y: -0.05 },
-            { t: 720, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 140, e: "out", a: { body: 8, hm: [0.3, -0.05, -175], ho: [0.02, -0.02, 0] }, y: -0.03 },
+            { t: 220, e: "in", a: { body: -10, hm: [0.4, 0.5, 20], ho: [-0.03, 0.03, 0] }, x: 0.05, y: 0.03 },
+            { t: 400, a: { body: -9, hm: [0.4, 0.48, 22], ho: [-0.03, 0.03, 0] }, x: 0.045, y: 0.02 },
+            { t: 520, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // 普攻 3: crouch, then a hopping rising cut
+        // 普攻 3: a hop and a smash down, the shield thrown forward
         attack3: {
-          dur: 820, hit: 300, lunge: true,
+          dur: 560, hit: 200, ring: 200, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 180, e: "out", a: { body: 10, arm: -45, fore: -150, barm: 40 }, y: -0.05 },
-            { t: 300, e: "in", a: { body: -12, arm: 100, fore: -50, barm: 15 }, x: 0.05, y: 0.14 },
-            { t: 430, e: "out", a: { body: -10, arm: 98, fore: -48, barm: 20 }, x: 0.05, y: 0.1 },
-            { t: 560, e: "in", a: { body: 4, arm: 40, fore: -50, barm: 30 }, x: 0.03 },
-            { t: 820, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 100, e: "out", a: { body: -10, hm: [0.1, 0.55, 80], ho: [0.05, 0.1, 0] }, y: 0.25 },
+            { t: 200, e: "in", a: { body: 22, hm: [0.5, 0.05, -120], ho: [0.1, 0, 0] }, x: 0.08 },
+            { t: 420, a: { body: 20, hm: [0.49, 0.04, -121], ho: [0.1, 0, 0] }, x: 0.075 },
+            { t: 560, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // 普攻 4: shoulder down, a shield charge
+        // 普攻 4: a shield bash, the sword held back
         attack4: {
-          dur: 760, hit: 300, lunge: true,
+          dur: 600, hit: 220, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 150, e: "out", a: { body: 18, arm: -10, fore: -60, barm: 70 }, x: -0.02, y: -0.02 },
-            { t: 300, e: "in", a: { body: 24, arm: -12, fore: -62, barm: 88 }, x: 0.16, y: -0.02 },
-            { t: 420, a: { body: 20, arm: -8, fore: -60, barm: 80 }, x: 0.12 },
-            { t: 760, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 120, e: "out", a: { body: -6, hm: [-0.05, 0.05, 40], ho: [-0.1, 0, 0] }, x: -0.03 },
+            { t: 220, e: "in", a: { body: 18, hm: [0, 0.05, 30], ho: [0.25, 0.03, 0] }, x: 0.1 },
+            { t: 420, a: { body: 16, hm: [0, 0.05, 30], ho: [0.24, 0.03, 0] }, x: 0.095 },
+            { t: 600, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // 分裂斩: a crouch, a leap with a full spin, the blade drawing a whole circle, a landing slam with a shock ring
+        // 分裂斩: the blade held out level, two whole spins, a slam with a shock ring
         "skill:cleave": {
-          dur: 1350, hit: 780, ring: 780, lunge: true,
+          dur: 1250, hit: 760, ring: 760, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 260, e: "out", a: { body: 10, arm: 20, fore: -40, barm: 40 }, y: -0.06 },
-            { t: 400, e: "out", a: { body: 0, arm: 40, fore: -30, barm: 30 }, y: 0.3 },
-            { t: 720, e: "linear", a: { body: 0, arm: 40, fore: -30, barm: 30 }, y: 0.32, r: 360 },
-            { t: 780, e: "in", a: { body: 20, arm: -40, fore: -85, barm: -10 }, x: 0.08, r: 360 },
-            { t: 980, a: { body: 18, arm: -42, fore: -88, barm: -5 }, x: 0.07, r: 360 },
-            { t: 1350, a: { arm: 4, fore: -52, barm: 30 }, r: 360 },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 220, e: "out", a: { body: -10, hm: [0.4, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: -0.02 },
+            { t: 300, a: { body: -6, hm: [0.45, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: 0.04 },
+            { t: 760, e: "linear", a: { body: -6, hm: [0.45, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: 0.06, r: 720 },
+            { t: 820, e: "out", a: { body: 15, hm: [0.45, 0.1, -100], ho: [0, 0, 0] }, x: 0.04, r: 720 },
+            { t: 1000, a: { body: 14, hm: [0.44, 0.1, -102], ho: [0, 0, 0] }, x: 0.04, r: 720 },
+            { t: 1250, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] }, r: 720 },
           ],
         },
-        // 血刃斩: a dash straight through the enemy, cutting on the way in and again with a backhand on the far side
+        // 血刃斩: a storm of stabs, the last one driving through
         "skill:maim": {
-          dur: 1250, hit: 600, hits: [380], through: true, lunge: true, color: 0xff3b3b,
+          dur: 1200, hit: 800, hits: [380, 520, 660], lunge: true, color: 0xff3b3b,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 240, e: "out", a: { body: 18, arm: 80, fore: -50, barm: 40 }, x: -0.04, y: -0.04 },
-            { t: 380, e: "in", a: { body: 24, arm: -40, fore: -85, barm: -10 }, x: 0.12, y: -0.03 },
-            { t: 480, e: "out", a: { body: 6, arm: -45, fore: -150, barm: 10 }, x: 0.14 },
-            { t: 600, e: "in", a: { body: -14, arm: 100, fore: -40, barm: 20 }, x: 0.14, y: 0.06 },
-            { t: 820, a: { body: -12, arm: 98, fore: -42, barm: 25 }, x: 0.12, y: 0.03 },
-            { t: 1250, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 220, e: "out", a: { body: -8, hm: [0.15, 0.25, -60], ho: [-0.05, 0.03, 0] }, x: -0.03 },
+            { t: 380, e: "in", a: { body: 14, hm: [0.6, 0.25, -60], ho: [-0.05, 0, 0] }, x: 0.06 },
+            { t: 450, a: { body: 10, hm: [0.3, 0.27, -60], ho: [-0.05, 0, 0] }, x: 0.06 },
+            { t: 520, e: "in", a: { body: 14, hm: [0.62, 0.22, -60], ho: [-0.05, 0, 0] }, x: 0.07 },
+            { t: 590, a: { body: 10, hm: [0.3, 0.25, -60], ho: [-0.05, 0, 0] }, x: 0.07 },
+            { t: 660, e: "in", a: { body: 14, hm: [0.63, 0.27, -60], ho: [-0.05, 0, 0] }, x: 0.08 },
+            { t: 730, a: { body: 8, hm: [0.3, 0.25, -60], ho: [-0.05, 0, 0] }, x: 0.08 },
+            { t: 800, e: "in", a: { body: 18, hm: [0.7, 0.25, -60], ho: [-0.08, 0, 0] }, x: 0.12 },
+            { t: 1000, a: { body: 16, hm: [0.68, 0.25, -61], ho: [-0.08, 0, 0] }, x: 0.11 },
+            { t: 1200, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // any other damage skill: a high leap and an overhead cut
+        // any other damage skill: the sword raised high, held (charging), then a slam
         skill: {
-          dur: 1250, hit: 700, lunge: true,
+          dur: 1100, hit: 650, ring: 650, lunge: true,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 260, e: "out", a: { body: 10, arm: 20, fore: -40, barm: 50 }, y: -0.06 },
-            { t: 420, e: "out", a: { body: -16, arm: 100, fore: -55, barm: 65 }, x: -0.02, y: 0.3 },
-            { t: 560, a: { body: -18, arm: 104, fore: -58, barm: 65 }, y: 0.34 },
-            { t: 700, e: "in", a: { body: 22, arm: -45, fore: -88, barm: -20 }, x: 0.08 },
-            { t: 900, a: { body: 18, arm: -50, fore: -90, barm: -15 }, x: 0.07 },
-            { t: 1250, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.1, 0.6, 30], ho: [0, 0.03, 0] }, y: 0.02 },
+            { t: 560, a: { body: -9, hm: [0.1, 0.62, 32], ho: [0, 0.03, 0] }, y: 0.02 },
+            { t: 650, e: "in", a: { body: 22, hm: [0.5, 0.05, -120], ho: [0.05, 0, 0] }, x: 0.08 },
+            { t: 900, a: { body: 20, hm: [0.49, 0.04, -121], ho: [0.05, 0, 0] }, x: 0.075 },
+            { t: 1100, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // the shield punches out to take the blow, the body is knocked back a step
+        // the shield thrust out against the blow, knocked back a step
         hurt: {
-          dur: 560,
+          dur: 400,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 80, e: "out", a: { body: -6, arm: 20, fore: -45, barm: 58 }, x: -0.05 },
-            { t: 240, a: { body: -4, arm: 15, fore: -42, barm: 55 }, x: -0.035 },
-            { t: 560, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [-0.08, 0.05, 30], ho: [0.1, 0.08, 10] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [-0.06, 0.06, 25], ho: [0.09, 0.07, 8] }, x: -0.04 },
+            { t: 400, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
         // the sword raised straight up overhead
         cast: {
           dur: 1100,
           keys: [
-            { t: 0, a: { arm: 4, fore: -52, barm: 30 } },
-            { t: 300, e: "out", a: { body: -4, arm: 100, fore: -100, barm: 15 }, y: 0.03 },
-            { t: 800, a: { body: -4, arm: 102, fore: -100, barm: 15 }, y: 0.03 },
-            { t: 1100, a: { arm: 4, fore: -52, barm: 30 } },
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 280, e: "out", a: { hm: [0.1, 0.62, 30], ho: [0, 0.02, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.1, 0.63, 30], ho: [0, 0.02, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
           ],
         },
-        // falls on the back, the shield on the chest, the sword (back hand) lying along the body
-        dead: { dur: 650, keys: [{ t: 0, a: {} }, { t: 180, a: { body: -20, arm: 20, fore: 10, barm: 10, bfore: 20 } }, { t: 650, e: "in", a: { body: -84, arm: 40, fore: 20, barm: 0, bfore: -60 } }] },
+        // falls on the back; the sword ends planted upright beside the body, the shield on the ground
+        dead: {
+          dur: 650,
+          keys: [
+            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 200, a: { body: -25, hm: [-0.1, 0.1, 20], ho: [-0.05, 0.05, 20] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.25, -0.25, 30], ho: [-0.55, -0.2, -90] } },
+          ],
+        },
       },
       magnetic_golem: {
         idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
@@ -6603,70 +6611,17 @@ void main(){
         cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
       },
     }
-    // ----- motion library: Mixamo clips converted to this rig (tools/mixamo: dump.py in Blender, convert.py), kept in
-    // assets/rig/anims/<pack>.json. MOCAP picks the clip (and its speed-up) behind each action; the hand-made ACTIONS
-    // above still give the action's stage behaviour (lunge, run-through, trail colour, landing ring, looping) and
-    // stand in for an action without a clip or before the library has loaded.
-    const MOCAP = {
-      player: {
-        idle: ["sword and shield idle (4)", 1],
-        attack: ["sword and shield slash", 1.6],
-        attack2: ["sword and shield slash (3)", 1.6],
-        attack3: ["sword and shield attack (4)", 1.2],
-        attack4: ["sword and shield attack (2)", 1.5],
-        "skill:cleave": ["sword and shield slash (5)", 1.1],
-        "skill:maim": ["sword and shield attack (3)", 1.3],
-        skill: ["sword and shield slash (4)", 1.3],
-        hurt: ["sword and shield block", 1],
-        cast: ["sword and shield power up", 1.4],
-        // the clip ends with the sword standing up from the hand: turned so it lies along the body
-        dead: ["sword and shield death", 1.3, { bfore: 50 }],
-      },
-    }
-    let lib = null // clip name -> { dur, hit, keys }
-    function loadLib() {
-      if (lib) return
-      lib = {}
-      fetch(Assets.url("rig/anims/sword_shield.json"))
-        .then(r => r.json())
-        .then(j => {
-          lib = j
-          mocapCache.clear()
-        })
-        .catch(e => ((lib = null), console.warn("[动画测试] motion library", e)))
-    }
-    // a clip as an action: sped up by `speed`, every angle's swing from the first pose scaled by `amp`, `shift` added
-    // to a part throughout ({ fore: -30 })
-    function fromClip(clip, speed = 1, amp = 1, meta = {}, shift = {}) {
-      const k0 = clip.keys[0]
-      const act = {
-        ...meta,
-        dur: Math.round(clip.dur / speed),
-        hit: Math.round(clip.hit / speed),
-        keys: clip.keys.map(k => ({ t: Math.round(k.t / speed), e: "linear", a: Object.fromEntries(Object.entries(k.a).map(([n, v]) => [n, Math.round((k0.a[n] || 0) + (v - (k0.a[n] || 0)) * amp + (shift[n] || 0))])), x: k.x, y: k.y })),
-      }
-      delete act.hits
-      if (meta.ring != null) act.ring = act.hit
-      return act
-    }
-    const metaOf = act => Object.fromEntries(Object.entries(act || {}).filter(([k]) => ["lunge", "through", "color", "ring", "loop"].includes(k)))
-    const mocapCache = new Map()
-    function mocapAction(kind, name) {
-      const m = MOCAP[kind]?.[name]
-      const clip = m && lib?.[m[0]]
-      if (!clip) return null
-      const key = kind + "|" + name
-      if (!mocapCache.has(key)) mocapCache.set(key, fromClip(clip, m[1], 1, metaOf(ACTIONS[kind]?.[name]), m[2]))
-      return mocapCache.get(key)
-    }
-    const actionOf = (kind, name) => mocapAction(kind, name) || ACTIONS[kind]?.[name] || null
+    const actionOf = (kind, name) => ACTIONS[kind]?.[name] || null
     const EASE = {
       linear: p => p,
       in: p => p * p * p,
       out: p => 1 - Math.pow(1 - p, 3),
       inout: p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2),
     }
-    // the pose of an action at time t: { a: { part: degrees }, x, y }
+    // a part's value: degrees, or [forward, up, degrees] for a floating hand (its move from rest in body heights)
+    const vec = v => (Array.isArray(v) ? v : [0, 0, v || 0])
+    const mix = (a, b, p) => (Array.isArray(a) || Array.isArray(b) ? vec(a).map((x, i) => lerp(x, vec(b)[i], p)) : lerp(a || 0, b || 0, p))
+    // the pose of an action at time t: { a: { part: degrees | [forward, up, degrees] }, x, y, r }
     function sample(act, t) {
       const keys = act.keys
       if (!keys?.length) return { a: {}, x: 0, y: 0 }
@@ -6677,7 +6632,7 @@ void main(){
         const a = keys[k - 1]
         const p = (EASE[b.e] || EASE.inout)(b.t > a.t ? (t - a.t) / (b.t - a.t) : 1)
         const out = { a: {}, x: lerp(a.x || 0, b.x || 0, p), y: lerp(a.y || 0, b.y || 0, p), r: lerp(a.r || 0, b.r || 0, p) }
-        for (const n of new Set([...Object.keys(a.a), ...Object.keys(b.a)])) out.a[n] = lerp(a.a[n] || 0, b.a[n] || 0, p)
+        for (const n of new Set([...Object.keys(a.a), ...Object.keys(b.a)])) out.a[n] = mix(a.a[n], b.a[n], p)
         return out
       }
       const z = keys[keys.length - 1]
@@ -6770,7 +6725,6 @@ void main(){
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
       for (const n of Assets.list("fx")) sheet(n)
-      loadLib()
       sync()
     }
 
@@ -6899,8 +6853,11 @@ void main(){
       const w = await piece(u.items?.main_hand || u.items?.two_hand || "holy_sword")
       if (w) {
         tex.weapon = w.tex
-        // the main weapon in the back hand (the character's left), drawn between the body and the front arm
-        def.parts.weapon = base.parts.bfore
+        // the main weapon in the back hand (the character's left); with floating hands it sits just under the fist,
+        // at rest pointing up and forward
+        def.parts.weapon = base.parts.hm
+          ? { pivot: w.grip, at: base.back, parent: "hm", z: 2.9, rot: -30, scale: base.scale }
+          : base.parts.bfore
           ? // at rest the blade points up and forward from the back hand
             { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: -60, scale: base.scale }
           : { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
@@ -6908,8 +6865,10 @@ void main(){
       const off = await piece(u.items?.off_hand)
       if (off) {
         tex.off = off.tex
-        // the off-hand in the front hand, held upright (it follows the hand, not the forearm's turn), over everything
-        def.parts.off = base.parts.bfore
+        // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm)
+        def.parts.off = base.parts.ho
+          ? { pivot: off.grip, at: base.fist, parent: "ho", z: 4.1, scale: base.scale }
+          : base.parts.bfore
           ? { pivot: off.grip, at: base.fist, parent: "fore", z: 4.5, upright: true, scale: base.scale }
           : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
       }
@@ -6996,8 +6955,13 @@ void main(){
         pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p), r: lerp(short(a.from.r, b.r || 0), b.r || 0, p) }
         // the short way round: an action may end a whole turn (or more) away from where the next starts
         for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) {
-          const to = b.a[n] || 0
-          pose.a[n] = lerp(short(a.from.a[n], to), to, p)
+          const f = a.from.a[n]
+          const to = b.a[n]
+          if (Array.isArray(f) || Array.isArray(to)) {
+            const A = vec(f)
+            const B = vec(to)
+            pose.a[n] = [lerp(A[0], B[0], p), lerp(A[1], B[1], p), lerp(short(A[2], B[2]), B[2], p)]
+          } else pose.a[n] = lerp(short(f, to || 0), to || 0, p)
         }
       }
       a.pose = pose
@@ -7007,8 +6971,9 @@ void main(){
       const wob = a.jig * 10 * Math.sin(t / 30)
       const h = R.def.h
       for (const q of R.order) {
-        let deg = pose.a[q.name] || 0
-        // lying flat is as far as a body goes (a clip's fall can tip past it, head below the feet)
+        const v = vec(pose.a[q.name])
+        let deg = v[2]
+        // lying flat is as far as a body goes (a fall can tip past it, head below the feet)
         if (q.name === "body") deg = Math.max(-88, Math.min(88, deg))
         if (q.name === "body" || q.name === "torso" || q.name === "head") deg -= wob
         const r = deg * q.sign * D
@@ -7025,10 +6990,11 @@ void main(){
         } else {
           // forward is -x in the art for a left-facing rig
           const fwd = R.def.face === "right" ? 1 : -1
-          q.x = q.p.at[0] - R.def.foot[0] + pose.x * h * fwd
+          // a floating hand also moves by its own [forward, up]
+          q.x = q.p.at[0] - R.def.foot[0] + (pose.x + v[0]) * h * fwd
           // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead
           const tip = Math.max(0, Math.min(1, (Math.abs(pose.a.body || pose.a.torso || 0) - 30) / 58))
-          q.y = q.p.at[1] - R.def.foot[1] - (Math.max(0, pose.y) + 0.3 * tip) * h
+          q.y = q.p.at[1] - R.def.foot[1] - (Math.max(0, pose.y) + v[1] + 0.3 * tip) * h
           q.wr = r + q.rest
         }
         // getting back up: fly from where the piece lay into place
