@@ -109,16 +109,22 @@
 > 测试页加了 4 个哥布林试点。截图台：109 `bfx-rig\shot.cmd <out> <试点> "<动作:毫秒,…>"`（列表必须带引号，cmd 按逗号拆参数）。
 
 ### B. 头像和时装（玩家，量大）
-> **试跑（v0.21.32，5 头像 + 5 时装，待用户验收）**：
-> - 生成：`tools/make-rig-player-jobs.py ~/mwi-art-raw <名字…>`（或 `--all` = 所有还没画的）→ `~/mwi-art-raw/rig/pl2/jobs-layers.tsv`，
->   `tools/gen.sh ~/mwi-art-raw/rig/pl2 <jobs> 3`（本机 Codex，10 张约 10 分钟，0 失败）。
-> - 切图：`tools/rig-player-layers.py <sheets> <out> <名字…>`，在 109 跑（`C:\Users\ruixi\fs-mine\rigpl\`：sheets 里放 base_a.png + 各层；
->   out 里先放一份 rig.json；跑完 copy 到 Windows 仓库 assets\rig\player 并 scp 回本机）。每层独立、可重跑，rig.json 只合并。
->   出 `check-<第一个>.png`：叠基础小人轮廓 + 分数（拳头覆盖 hm/ho、身体覆盖、轮廓外溢出 spill）。试跑 10 张拳头全 1.0、身体 ≥0.98。
-> - 试跑修掉的：头按「下巴以上、与头相连」切（猫耳、胡须、龙角原来留在身体上，头一动就裂）；时装品红按色相抠 + 清掉品红与绿底的接缝灰边。
-> - 测试页「形象」两个下拉框换头像 / 时装；截图台 `bfx-rig\look.cmd <out> <试点> "<动作…>" <头像> <时装>`。
-> - **仍有的问题（都来自「从带手臂的画上抠手臂」）**：猫尾巴穿过后臂区域，被切掉中间一段，上半截悬空；法师袍宽袖口超出手臂轮廓的部分
->   留在躯干上。要根治就走下面说的「Codex 画无手臂身体 + 单独的大臂小臂」，等用户定。
+> **新画法（v0.21.33，用户定的：无手臂身体 + 圆头胳膊零件）**——每层两张 Codex 图，原始图在 `~/mwi-art-raw/rig/pl3/sheets/`：
+> - `<名字>.png`：对齐 `noarms_a.png`（Codex 画的无手臂基础小人，肩膀是圆的）画的无手臂身体。不用再抠手臂补色，尾巴 / 长袍不会被切断。
+> - `<名字>_parts.png`：照版式图 `guide_parts.png`（`tools/rig-player-guide.py`：四段胶囊 = 前 / 后 × 大臂 / 小臂，按 rig.json 骨长，
+>   2 倍尺寸；下排两个拳头取自基础小人）重画的胳膊和拳头；时装是袖子 / 护腕 / 手套，没覆盖的地方品红。生成时把画好的身体当参考 2。
+> - 流程：`tools/make-rig-player-jobs.py ~/mwi-art-raw body <名字…|--all>` → `tools/gen.sh ~/mwi-art-raw/rig/pl3 <jobs-body.tsv> 3`
+>   → 同样跑 `parts` 阶段 → 109 上 `C:\Users\ruixi\fs-mine\rigpl3\`：`python rig-player-layers.py sheets out <名字…>`
+>   （sheets 里要有 noarms_a.png 和两张图；out 里先放 rig.json；脚本旁要有 rig-player-guide.py）→ copy 到 Windows 仓库
+>   assets\rig\player、scp 回本机 → 提交素材 → pin → ASSET_REV。
+> - 胶囊左端圆心 = 关节，`arms.pad = [大臂, 小臂]`；头按「下巴以上与头相连」切；时装品红按色相抠 + 清接缝。
+> - 检查图 `check-<第一个>.png`：身体叠基础轮廓 + 零件，分数 body / spill / 各零件覆盖率。
+> - **Codex 时装零件会随机画错袖长**（海盗泡泡袖只画肩头、战士多画了护手、游侠护腕画到拳头上），同一提示词重画一次就对。
+>   全量时必须逐张看检查图，错的把旧图改名 `.vN.png` 再跑（gen.sh 跳过已有的）。头像零件 12 张全对。
+> - 提示词已写进去的教训：零件两端不许画深色端帽（否则肩肘出现「球关节」）；保留下侧阴影；袖子按「从肩往下延伸到哪」描述。
+> - 已画（新画法）：头像 blue_person_1、cat_1、bunny_1、frog_1、red_person_1、custom_auspiciousdragon；
+>   时装 warrior_1、mage_1、ranger_1、dress_1、pirate_1、cow_suit。
+
 - 101 个头像 + 125 件时装，每个都要 Codex 画一层（对齐 `base_a.png`），然后跑切图流水线。
 - 先写一个生成任务的脚本（参照 `tools/make-jobs.py` / `gen.sh` 的做法，`gen.sh <raw> <jobs.tsv> <并发>`，codex 在本机跑），
   分批生成、抽查对齐（`comp.py` 那种把基础小人轮廓叠上去看）。对不齐的重画。
