@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.19.2
+// @version      0.20.0
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6621,7 +6621,63 @@ void main(){
     // the viewer's edits (action editor) replace whole actions: { kind: { action: {...} } }
     const edits = GM_getValue("battle_fx_actions_v1", {})
     const saveEdits = () => GM_setValue("battle_fx_actions_v1", edits)
-    const actionOf = (kind, name) => edits[kind]?.[name] || ACTIONS[kind]?.[name] || null
+    // ----- motion library: Mixamo clips converted to this rig (tools/mixamo: dump.py in Blender, convert.py), kept in
+    // assets/rig/anims/<pack>.json. MOCAP picks the clip (and its speed-up) behind each action; the hand-made ACTIONS
+    // above still give the action's stage behaviour (lunge, run-through, trail colour, landing ring, looping) and
+    // stand in for an action without a clip or before the library has loaded.
+    const MOCAP = {
+      player: {
+        // the clip holds the sword upright in front of the face: tilt the blade forward
+        idle: ["sword and shield idle (4)", 1, { fore: -30 }],
+        attack: ["sword and shield slash", 1.6],
+        attack2: ["sword and shield slash (3)", 1.6],
+        attack3: ["sword and shield attack (4)", 1.2],
+        attack4: ["sword and shield attack (2)", 1.5],
+        "skill:cleave": ["sword and shield slash (5)", 1.1],
+        "skill:maim": ["sword and shield attack (3)", 1.3],
+        skill: ["sword and shield slash (4)", 1.3],
+        hurt: ["sword and shield block", 1],
+        cast: ["sword and shield power up", 1.4],
+        // dead stays hand-made: the clip ends with the sword standing up, it should lie along the body
+      },
+    }
+    let lib = null // clip name -> { dur, hit, keys }
+    function loadLib() {
+      if (lib) return
+      lib = {}
+      fetch(Assets.url("rig/anims/sword_shield.json"))
+        .then(r => r.json())
+        .then(j => {
+          lib = j
+          mocapCache.clear()
+        })
+        .catch(e => ((lib = null), console.warn("[动画测试] motion library", e)))
+    }
+    // a clip as an action: sped up by `speed`, every angle's swing from the first pose scaled by `amp`, `shift` added
+    // to a part throughout ({ fore: -30 })
+    function fromClip(clip, speed = 1, amp = 1, meta = {}, shift = {}) {
+      const k0 = clip.keys[0]
+      const act = {
+        ...meta,
+        dur: Math.round(clip.dur / speed),
+        hit: Math.round(clip.hit / speed),
+        keys: clip.keys.map(k => ({ t: Math.round(k.t / speed), e: "linear", a: Object.fromEntries(Object.entries(k.a).map(([n, v]) => [n, Math.round((k0.a[n] || 0) + (v - (k0.a[n] || 0)) * amp + (shift[n] || 0))])), x: k.x, y: k.y })),
+      }
+      delete act.hits
+      if (meta.ring != null) act.ring = act.hit
+      return act
+    }
+    const metaOf = act => Object.fromEntries(Object.entries(act || {}).filter(([k]) => ["lunge", "through", "color", "ring", "loop"].includes(k)))
+    const mocapCache = new Map()
+    function mocapAction(kind, name) {
+      const m = MOCAP[kind]?.[name]
+      const clip = m && lib?.[m[0]]
+      if (!clip) return null
+      const key = kind + "|" + name
+      if (!mocapCache.has(key)) mocapCache.set(key, fromClip(clip, m[1], 1, metaOf(ACTIONS[kind]?.[name]), m[2]))
+      return mocapCache.get(key)
+    }
+    const actionOf = (kind, name) => edits[kind]?.[name] || mocapAction(kind, name) || ACTIONS[kind]?.[name] || null
     const EASE = {
       linear: p => p,
       in: p => p * p * p,
@@ -6737,6 +6793,7 @@ void main(){
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
       for (const n of Assets.list("fx")) sheet(n)
+      loadLib()
       sync()
     }
 
@@ -7420,7 +7477,7 @@ void main(){
     function editAct() {
       const kind = kindOf()
       const own = edits[kind]?.[ed.name]
-      return own || structuredClone(ACTIONS[kind]?.[ed.name] || { dur: 800, keys: [{ t: 0, a: {} }] })
+      return own || structuredClone(actionOf(kind, ed.name) || { dur: 800, keys: [{ t: 0, a: {} }] })
     }
     // writes the action being edited into the viewer's edits
     function commit() {
@@ -7611,6 +7668,45 @@ void main(){
       panelEl.append(keyEl)
       drawKey()
 
+      // the motion library: put a Mixamo clip on this action (speed up, swing scaled), then adjust it here
+      if (lib && Object.keys(lib).length && (kindOf() === "player" || MOCAP[kindOf()])) {
+        const libRow = mk("div", "row")
+        const clipSel = mk("select")
+        const cur = MOCAP[kindOf()]?.[ed.name]
+        for (const n of Object.keys(lib).sort()) {
+          const o = mk("option", null, n.replace(/^sword and shield /, ""))
+          o.value = n
+          clipSel.append(o)
+        }
+        clipSel.value = ed.act.clip || cur?.[0] || clipSel.value
+        clipSel.style.maxWidth = "200px"
+        const speed = mk("input")
+        speed.type = "number"
+        speed.step = 0.1
+        speed.value = ed.act.speed || cur?.[1] || 1
+        speed.title = "播放速度倍率"
+        const amp = mk("input")
+        amp.type = "number"
+        amp.step = 0.1
+        amp.value = ed.act.amp || 1
+        amp.title = "动作幅度倍率（Q 版可以放大一些）"
+        libRow.append(
+          mk("span", "lbl", "动作库"),
+          clipSel,
+          mk("span", "lbl", "速度"),
+          speed,
+          mk("span", "lbl", "幅度"),
+          amp,
+          btn("套用到这个动作", () => {
+            ed.act = { ...fromClip(lib[clipSel.value], +speed.value || 1, +amp.value || 1, metaOf(ed.act)), clip: clipSel.value, speed: +speed.value || 1, amp: +amp.value || 1 }
+            ed.key = 0
+            ed.t = 0
+            commit()
+            drawPanel()
+          }),
+        )
+        panelEl.append(libRow)
+      }
       const io = mk("div", "row")
       io.append(
         mk("span", "lbl", "保存"),
