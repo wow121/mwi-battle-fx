@@ -1,30 +1,42 @@
-# A book held open by a reader facing right, in parallel projection (no perspective): the spine on the right toward the
-# foe, the covers opening to the left toward the reader's eyes, the hand at the bottom middle of the spine.
+# A book held open by a reader facing right, in parallel projection (no perspective), the hand at the bottom middle of
+# the spine.
 #   draw <out.png>                      the flat-colour layout guide Codex repaints (1024 px, green ground)
-#   cut <sheets dir> <out root> [h=131] the repainted books -> assets/rig/weapons/<id>.webp (h piece px tall); prints
+#   cut <sheets dir> <out root> [h=96]  the repainted books -> assets/rig/weapons/<id>.webp (h piece px tall); prints
 #                                       each one's grip (the bottom of the spine) for RIG_GRIP
 import json, os, sys
 import numpy as np
 from PIL import Image, ImageDraw
 
-SPINE = [(600, 300), (630, 300), (630, 700), (600, 700)]
-NEAR = [(600, 300), (600, 700), (470, 740), (470, 340)]  # the cover toward us (its outside, with the emblem)
-FAR = [(600, 300), (600, 700), (360, 590), (360, 190)]  # the cover away from us, opened wide
-# the open page block between them: its top fanning out of the spine, its page edges facing the reader
-PAGES = [(600, 300), (360, 190), (360, 590), (470, 740), (470, 340)]
-GRIP = (615, 700)
+# like a reader looking down into a book (screenshot/119845186.webp): the two covers spread in a wide V, their
+# outsides toward us, the opening (the page edges along the top) toward the reader's face, up and to the left; the
+# spine runs up from the hand into the book
+A, B = (512, 660), (580, 560)  # the bottom and the top of the spine
+L, R, D = (-230, -110), (170, -50), (-8, -24)  # the left cover, the right cover, the page block's thickness
+
+
+def add(p, *q):
+    return (p[0] + sum(v[0] for v in q), p[1] + sum(v[1] for v in q))
+
+
+SPINE = [add(A, (-6, 0)), add(B, (-6, 0)), add(B, (6, 0)), add(A, (6, 0))]
+LEFT = [A, B, add(B, L), add(A, L)]
+RIGHT = [A, B, add(B, R), add(A, R)]
+PAGES_L = [B, add(B, L), add(B, L, D), add(B, D)]
+PAGES_R = [B, add(B, R), add(B, R, D), add(B, D)]
+GRIP = A
 
 if sys.argv[1] == "draw":
     im = Image.new("RGB", (1024, 1024), (0, 255, 0))
     d = ImageDraw.Draw(im)
-    d.polygon(FAR, fill=(90, 60, 140), outline=(30, 20, 50), width=6)
-    d.polygon(PAGES, fill=(245, 235, 210), outline=(30, 20, 50), width=6)
-    d.polygon(NEAR, fill=(140, 100, 200), outline=(30, 20, 50), width=6)
-    d.polygon(SPINE, fill=(110, 75, 170), outline=(30, 20, 50), width=6)
+    for q in (PAGES_L, PAGES_R):
+        d.polygon(q, fill=(245, 235, 210), outline=(30, 20, 50), width=5)
+    d.polygon(LEFT, fill=(120, 85, 180), outline=(30, 20, 50), width=6)
+    d.polygon(RIGHT, fill=(150, 110, 210), outline=(30, 20, 50), width=6)
+    d.polygon(SPINE, fill=(95, 65, 150), outline=(30, 20, 50), width=4)
     im.save(sys.argv[2])
 else:
     src, root = sys.argv[2], sys.argv[3]
-    H = float(sys.argv[4]) if len(sys.argv) > 4 else 131
+    H = float(sys.argv[4]) if len(sys.argv) > 4 else 96
     out = os.path.join(root, "assets", "rig", "weapons")
     os.makedirs(out, exist_ok=True)
     grips = {}
