@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.24
+// @version      0.21.25
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -7663,18 +7663,28 @@ void main(){
       return { a: { ...z.a }, x: z.x || 0, y: z.y || 0, r: z.r || 0 }
     }
 
-    let P, F, app, host, world, bg, lights, unitsLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
+    let P, F, app, host, world, scene, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
-    let dot, glow
+    let dot, glow, smokeTex, streakTex, rayTex, hazeTex
     let shock = null
+    // filters on the whole scene (shockwave, heat haze, zoom blur), each running for a while; the numbers and names
+    // over it stay sharp
+    const worldFx = new Set()
+    const setWorldFx = () => scene && (scene.filters = worldFx.size ? [...worldFx] : null)
     let shake = 0
     let punch = 0
     let dim = 0
     const tweens = []
     const parts = []
     const sheets = {} // fx sheet name -> [8 textures] | "loading"
-    const now = () => performance.now()
+    // the arena's clock: real time, slowed for a slow-motion beat (slow()); everything animated reads it
+    let clock = performance.now()
+    let slowUntil = 0
+    let slowK = 1
+    const now = () => clock
+    // the camera leans in on a point for a moment (focusOn) on top of the punch
+    let focus = null
     const later = (ms, f) => tweens.push({ t0: now() + ms, dur: 0, f: () => f() })
     const tween = (dur, f, delay = 0) => tweens.push({ t0: now() + delay, dur, f })
     const lerp = (a, b, p) => a + (b - a) * p
@@ -7699,6 +7709,13 @@ void main(){
       const c = document.createElement("canvas")
       c.width = c.height = size
       paint(c.getContext("2d"), size)
+      return P.Texture.from(c)
+    }
+    function stripTex(w, h, paint) {
+      const c = document.createElement("canvas")
+      c.width = w
+      c.height = h
+      paint(c.getContext("2d"), w, h)
       return P.Texture.from(c)
     }
     const radial = (stops, size) =>
@@ -7731,6 +7748,59 @@ void main(){
       view.appendChild(app.canvas)
       dot = radial([[0, "rgba(255,255,255,1)"], [0.35, "rgba(255,255,255,.8)"], [1, "rgba(255,255,255,0)"]], 32)
       glow = radial([[0, "rgba(255,255,255,.9)"], [0.4, "rgba(255,255,255,.35)"], [1, "rgba(255,255,255,0)"]], 256)
+      // a soft lumpy puff (several overlapping blobs) for smoke and dust
+      smokeTex = canvasTex(96, (c, n) => {
+        for (let k = 0; k < 7; k++) {
+          const x = n * (0.3 + Math.random() * 0.4)
+          const y = n * (0.3 + Math.random() * 0.4)
+          const r = n * (0.18 + Math.random() * 0.14)
+          const g = c.createRadialGradient(x, y, 0, x, y, r)
+          g.addColorStop(0, "rgba(255,255,255,.55)")
+          g.addColorStop(1, "rgba(255,255,255,0)")
+          c.fillStyle = g
+          c.fillRect(0, 0, n, n)
+        }
+      })
+      // a spark streak (bright head on the right, long fading tail), and a light ray (a thin taper)
+      streakTex = stripTex(64, 8, (c, w, h) => {
+        const g = c.createLinearGradient(0, 0, w, 0)
+        g.addColorStop(0, "rgba(255,255,255,0)")
+        g.addColorStop(0.8, "rgba(255,255,255,.9)")
+        g.addColorStop(1, "rgba(255,255,255,1)")
+        c.fillStyle = g
+        c.beginPath()
+        c.moveTo(0, h / 2)
+        c.lineTo(w * 0.85, 0)
+        c.lineTo(w, h / 2)
+        c.lineTo(w * 0.85, h)
+        c.fill()
+      })
+      rayTex = stripTex(128, 16, (c, w, h) => {
+        const g = c.createLinearGradient(0, 0, w, 0)
+        g.addColorStop(0, "rgba(255,255,255,1)")
+        g.addColorStop(1, "rgba(255,255,255,0)")
+        c.fillStyle = g
+        c.beginPath()
+        c.moveTo(0, 0)
+        c.lineTo(w, h / 2)
+        c.lineTo(0, h)
+        c.fill()
+      })
+      // heat haze: a displacement map (grey = no shift) of wavy noise that fades to grey at the edges
+      hazeTex = canvasTex(128, (c, n) => {
+        const im = c.createImageData(n, n)
+        for (let y = 0; y < n; y++)
+          for (let x = 0; x < n; x++) {
+            const d = Math.min(1, Math.hypot(x - n / 2, y - n / 2) / (n / 2))
+            const fall = Math.max(0, 1 - d * d)
+            const i = (y * n + x) * 4
+            im.data[i] = 128 + 110 * fall * Math.sin(x * 0.35 + Math.sin(y * 0.21) * 2)
+            im.data[i + 1] = 128 + 110 * fall * Math.sin(y * 0.42 + Math.cos(x * 0.17) * 2)
+            im.data[i + 2] = 128
+            im.data[i + 3] = 255
+          }
+        c.putImageData(im, 0, 0)
+      })
       world = new P.Container()
       bg = new P.Sprite()
       lights = new P.Container()
@@ -7745,7 +7815,12 @@ void main(){
       bloom.blendMode = "add"
       fxLayer.filters = [bloom]
       partLayer.filters = [bloom]
-      world.addChild(bg, lights, unitsLayer, shotLayer, fxLayer, partLayer, textLayer)
+      // ground marks (scorches, cracks, spent arrows) under everyone; smoke over the bodies, not glowing
+      decalLayer = new P.Container()
+      smokeLayer = new P.Container()
+      scene = new P.Container()
+      scene.addChild(bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer)
+      world.addChild(scene, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
@@ -8434,6 +8509,177 @@ void main(){
         if (p >= 1) g.destroy()
       })
     }
+    // ----- effect toolkit -----
+    const mixColor = (a, b, p) => {
+      const c = sh => Math.round(lerp((a >> sh) & 255, (b >> sh) & 255, p)) << sh
+      return c(16) | c(8) | c(0)
+    }
+    const MAX_PARTS = 1600
+    // particles: n of them from (x, y); angle / spread in radians (0 = right, -PI/2 = up, none = all round); size /
+    // size1 and color / color1 change over the life; drag slows them (share of speed kept per second); to() pulls them
+    // toward a moving point; tex "streak" draws them as streaks along their flight, "smoke" as puffs that do not glow
+    function emit(x, y, o = {}) {
+      const n = Math.min(o.n ?? 10, MAX_PARTS - parts.length)
+      const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : dot
+      const layer = o.tex === "smoke" ? smokeLayer : partLayer
+      const cols = [].concat(o.color ?? 0xffffff)
+      for (let k = 0; k < n; k++) {
+        const s = new P.Sprite(tex)
+        s.anchor.set(o.tex === "streak" ? 1 : 0.5, 0.5)
+        const c0 = cols[Math.floor(Math.random() * cols.length)]
+        s.tint = c0
+        const j = o.jitter || 0
+        s.position.set(x + (Math.random() - 0.5) * j, y + (Math.random() - 0.5) * j * (o.flat ?? 1))
+        const ang = o.angle == null ? Math.random() * Math.PI * 2 : o.angle + (Math.random() - 0.5) * (o.spread ?? 0.6)
+        const v = (o.speed ?? 200) * (0.4 + Math.random() * 0.8)
+        const s0 = (o.size ?? 0.5) * (0.6 + Math.random() * 0.8)
+        s.scale.set(s0)
+        if (o.tex === "smoke") s.rotation = Math.random() * 6.3
+        layer.addChild(s)
+        parts.push({
+          s,
+          vx: Math.cos(ang) * v,
+          vy: Math.sin(ang) * v - (o.up || 0),
+          t0: now(),
+          life: (o.life ?? 600) * (0.6 + Math.random() * 0.6),
+          g: o.gravity ?? 0,
+          drag: o.drag,
+          s0,
+          s1: o.size1 != null ? (o.size1 * s0) / (o.size ?? 0.5) : null,
+          c0,
+          c1: o.color1 ?? null,
+          a0: o.alpha,
+          fadeIn: o.fadeIn,
+          to: o.to,
+          pull: o.pull || 0,
+          spin: o.tex === "smoke" ? (Math.random() - 0.5) * 1.2 : 0,
+          stretch: o.tex === "streak" ? (o.stretch ?? 0.004) : 0,
+        })
+      }
+    }
+    // energy drawn in to a point while a skill gathers: motes start on a ring round it and fall inward
+    function gather(at, color, h, ms) {
+      tween(ms, p => {
+        const T = at()
+        if (!T || p >= 1) return
+        for (let k = 0; k < 2; k++) {
+          const an = Math.random() * Math.PI * 2
+          const r = h * (0.35 + Math.random() * 0.3)
+          emit(T.x + Math.cos(an) * r, T.y + Math.sin(an) * r, { n: 1, color: [color, 0xffffff], size: 0.32, speed: 1, life: 320, to: at, pull: 38, drag: 0.02, fadeIn: 0.3 })
+        }
+      })
+    }
+    // light rays bursting out of a point
+    function rays(x, y, color, h, { n = 9, dur = 260 } = {}) {
+      for (let k = 0; k < n; k++) {
+        const s = new P.Sprite(rayTex)
+        s.anchor.set(0, 0.5)
+        s.tint = k % 3 ? color : 0xffffff
+        s.position.set(x, y)
+        s.rotation = (k / n) * Math.PI * 2 + Math.random() * 0.5
+        const len = h * (0.5 + Math.random() * 0.5)
+        fxLayer.addChild(s)
+        tween(dur, p => {
+          s.scale.set((len / 128) * ease(p), (0.25 + 0.5 * (1 - p)) * (h / 160))
+          s.alpha = 1 - p
+          if (p >= 1) s.destroy()
+        })
+      }
+    }
+    // a slow-motion beat: k of real speed for ms of real time
+    function slow(ms, k) {
+      slowUntil = Math.max(slowUntil, performance.now() + ms)
+      slowK = k
+    }
+    function focusOn(x, y, amt, ms) {
+      focus = { x, y, amt, t0: now(), until: now() + ms }
+    }
+    // the air shimmers over a hot area (a displacement filter on the scene, its map drifting) for dur ms
+    function haze(x, y, w, h, dur, amp = 14) {
+      const map = new P.Sprite(hazeTex)
+      map.anchor.set(0.5)
+      map.position.set(x, y)
+      map.width = w
+      map.height = h
+      map.alpha = 0
+      fxLayer.addChild(map)
+      const f = new P.DisplacementFilter({ sprite: map, scale: 0 })
+      worldFx.add(f)
+      setWorldFx()
+      tween(dur, p => {
+        const a = amp * Math.sin(Math.PI * Math.min(1, p * 1.4)) * (p > 0.7 ? (1 - p) / 0.3 : 1)
+        f.scale.x = a * (1 + 0.3 * Math.sin(p * dur * 0.02))
+        f.scale.y = a
+        map.position.set(x + Math.sin(p * dur * 0.006) * w * 0.06, y - p * h * 0.15)
+        if (p >= 1) {
+          worldFx.delete(f)
+          setWorldFx()
+          map.destroy()
+        }
+      })
+    }
+    // a radial blur punched out from a point (a heavy blow)
+    function zoomBlur(x, y, dur, strength = 0.05) {
+      if (!F.ZoomBlurFilter) return
+      const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90 })
+      worldFx.add(f)
+      setWorldFx()
+      tween(dur, p => {
+        f.strength = strength * (1 - p) * (1 - p)
+        if (p >= 1) {
+          worldFx.delete(f)
+          setWorldFx()
+        }
+      })
+    }
+    // a mark on the ground that fades out: a scorch (dark, its glowing rim cooling), a crack, a spent arrow
+    function decal(kind, x, y, r, { color = 0xff7a2a, dir = 1, dur = 2600 } = {}) {
+      const g = new P.Graphics()
+      g.position.set(x, y)
+      if (kind === "scorch") {
+        for (let k = 0; k < 4; k++) g.ellipse((Math.random() - 0.5) * r * 0.3, 0, r * (1 - k * 0.2), r * 0.24 * (1 - k * 0.2)).fill({ color: 0x140804, alpha: 0.22 })
+        const rim = new P.Graphics()
+        rim.ellipse(0, 0, r * 0.85, r * 0.2).stroke({ color, width: r * 0.08, alpha: 0.9 })
+        rim.blendMode = "add"
+        g.addChild(rim)
+        tween(900, p => (rim.alpha = 1 - p))
+      } else if (kind === "crack") {
+        for (let k = 0; k < 7; k++) {
+          const an = (k / 7) * Math.PI * 2 + Math.random() * 0.4
+          g.moveTo(0, 0)
+          for (let st = 1; st <= 3; st++) g.lineTo(Math.cos(an + (Math.random() - 0.5) * 0.5) * r * st * 0.33, Math.sin(an + (Math.random() - 0.5) * 0.5) * r * st * 0.33 * 0.25)
+        }
+        g.stroke({ color: 0x1a120c, width: r * 0.035, alpha: 0.75 })
+      } else if (kind === "arrow") {
+        // stuck in the ground at a slant, fletching up
+        const ex = -dir * r * 0.45
+        const ey = -r * 0.8
+        g.moveTo(0, 0).lineTo(ex, ey).stroke({ color: 0x8a5a2b, width: r * 0.05 })
+        g.moveTo(ex, ey).lineTo(ex - dir * r * 0.08, ey - r * 0.12).stroke({ color, width: r * 0.09 })
+      }
+      decalLayer.addChild(g)
+      tween(dur, p => {
+        g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
+        if (p >= 1) g.destroy({ children: true })
+      })
+    }
+    // a crescent of light (a blade's wave) thrown forward through the foes
+    function crescent(from, dir, color, h, dist, dur) {
+      const g = new P.Graphics()
+      const R = h * 0.6
+      g.arc(0, 0, R, -1.2, 1.2).arc(-R * 0.35, 0, R * 0.85, 1.05, -1.05, true).fill(color)
+      g.arc(0, 0, R * 0.92, -0.9, 0.9).arc(-R * 0.2, 0, R * 0.8, 0.8, -0.8, true).fill(0xffffff)
+      g.position.set(from.x, from.y)
+      g.scale.set(dir * 0.6, 0.6)
+      partLayer.addChild(g)
+      tween(dur, p => {
+        g.x = from.x + dir * dist * ease(p)
+        g.scale.set(dir * (0.6 + 0.7 * p), 0.6 + 0.7 * p)
+        g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
+        if (Math.random() < 0.7) emit(g.x, g.y + (Math.random() - 0.5) * R, { n: 1, tex: "streak", color, size: 0.4, speed: 120, angle: dir > 0 ? Math.PI : 0, spread: 0.4, life: 260 })
+        if (p >= 1) g.destroy()
+      })
+    }
     function sparks(x, y, color, n, { speed = 260, up = 0, life = 600, size = 0.5, gravity = 500 } = {}) {
       for (let k = 0; k < n; k++) {
         const s = new P.Sprite(dot)
@@ -8484,8 +8730,10 @@ void main(){
       shake = Math.max(shake, 1)
       punch = 1
       const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
+      if (shock) worldFx.delete(shock.f)
       shock = { f, t0: now() }
-      world.filters = [f]
+      worldFx.add(f)
+      setWorldFx()
     }
     const mid = a => ({ x: a.x0 + (a.dash || 0), y: a.y0 - a.h * 0.45 })
     // the weapon's tip and grip in world coordinates (null without a weapon)
@@ -8506,7 +8754,7 @@ void main(){
     // coloured head and fletching), "orb" (a glowing ball trailing sparks); big for a skill
     // art: an effect sheet flown along the path instead (a bolt, a skill arrow), looping its frames; arrows and art
     // leave a fading streak with sparks hanging in the air
-    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100, art = null } = {}) {
+    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100, art = null, onFly = null, onLand = null } = {}) {
       const dist = Math.hypot(B.x - A.x, B.y - A.y)
       const frames = art && sheet(art)
       let s
@@ -8562,9 +8810,11 @@ void main(){
             streak.moveTo(pts[k - 1].x, pts[k - 1].y).lineTo(pts[k].x, pts[k].y).stroke({ color: k > pts.length - 3 ? 0xffffff : color, width: (1 + (k / pts.length) * (big ? 5 : 3)) * (h / 100), alpha: (k / pts.length) * 0.85, cap: "round" })
           if (Math.random() < 0.5) sparks(q.x, q.y, color, 1, { speed: 40, gravity: 0, life: 300, size: 0.25 })
         }
+        onFly?.(q)
         if (p >= 1) {
           s.destroy()
           streak?.destroy()
+          onLand?.(B)
         }
       })
     }
@@ -8630,6 +8880,9 @@ void main(){
             const ii = { x: lerp(B.o.x, B.i.x, T.w), y: lerp(B.o.y, B.i.y, T.w) }
             const ia = { x: lerp(A.o.x, A.i.x, T.w), y: lerp(A.o.y, A.i.y, T.w) }
             trailG.poly([A.o.x, A.o.y, B.o.x, B.o.y, ii.x, ii.y, ia.x, ia.y]).fill({ color: T.color, alpha: 0.6 * age * age })
+            const ci = { x: lerp(B.o.x, B.i.x, T.w * 0.3), y: lerp(B.o.y, B.i.y, T.w * 0.3) }
+            const ca = { x: lerp(A.o.x, A.i.x, T.w * 0.3), y: lerp(A.o.y, A.i.y, T.w * 0.3) }
+            trailG.poly([A.o.x, A.o.y, B.o.x, B.o.y, ci.x, ci.y, ca.x, ca.y]).fill({ color: 0xffffff, alpha: 0.85 * age * age * age })
           }
         }
     }
@@ -8651,7 +8904,15 @@ void main(){
       flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
       a.jig = tg.crit ? 1.3 : 0.9
       number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
-      if (tg.crit) crit(a)
+      if (tg.crit) {
+        crit(a)
+        slow(160, 0.3)
+        focusOn(m.x, m.y, 0.06, 420)
+      }
+      if (tg.died) {
+        slow(280, 0.25)
+        focusOn(m.x, m.y, 0.08, 600)
+      }
       if (tg.stunned && !tg.died) stun(a, tg.stunned)
       drawHp(a)
       if (tg.died) die(a)
@@ -8718,6 +8979,64 @@ void main(){
       if (tg.dHP > 0) number(a, "+" + tg.dHP, "#6cff9a", false)
     }
 
+    // ----- skills with their own effects on top (fly: each frame of the missile; hit: as the blow lands) -----
+    const fireBurst = (a, big) => {
+      const m = mid(a)
+      emit(m.x, m.y, { n: big ? 40 : 26, color: [0xffe08a, 0xff9a3a, 0xff5a1a], color1: 0x601000, size: 0.4, size1: 0.08, speed: 300, up: 140, gravity: -160, drag: 0.25, life: 1200, jitter: a.h * 0.3 })
+      emit(m.x, m.y - a.h * 0.35, { n: big ? 8 : 5, tex: "smoke", color: [0x5a4a42, 0x6a5a50], alpha: 0.4, size: 0.6, size1: 1.7, speed: 40, up: 70, drag: 0.4, life: 1500, jitter: a.h * 0.4 })
+      decal("scorch", a.x0, a.y0, a.h * (big ? 0.75 : 0.55), { dur: 3200 })
+      rays(m.x, m.y, 0xff8a3a, a.h * (big ? 1.5 : 1.1), { n: 11, dur: 320 })
+    }
+    const span = list => {
+      const xs = list.map(a => a.x0)
+      const h = Math.max(...list.map(a => a.h))
+      return { cx: (Math.min(...xs) + Math.max(...xs)) / 2, w: Math.max(...xs) - Math.min(...xs) + h * 1.6, h, ground: Math.max(...list.map(a => a.y0)) }
+    }
+    // a blaze over the whole row: the air shimmers over it, embers keep rising, the ground left scorched
+    const blaze = ({ tgs }) => {
+      if (!tgs.length) return
+      const list = tgs.map(([a]) => a)
+      const S = span(list)
+      haze(S.cx, S.ground - S.h * 0.7, S.w, S.h * 2, 1600, 18)
+      zoomBlur(S.cx, S.ground - S.h * 0.5, 260, 0.06)
+      shake = Math.max(shake, 1)
+      list.forEach(a => fireBurst(a, true))
+      tween(1300, p => {
+        if (p < 1 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.3, { n: 1, color: [0xffb04a, 0xff6a2a], color1: 0x501000, size: 0.3, size1: 0.05, speed: 30, up: 160, gravity: -60, life: 1100 })
+      })
+    }
+    const SKILL_FX = {
+      // 火球: a smoking trail behind it; it bursts in flame, scorching the ground and heating the air
+      fireball: {
+        fly: (q, src) => {
+          if (Math.random() < 0.6) emit(q.x, q.y, { n: 1, tex: "smoke", color: 0x2e2420, alpha: 0.45, size: 0.3, size1: 0.9, speed: 15, up: 25, life: 650 })
+          if (Math.random() < 0.8) emit(q.x, q.y, { n: 1, color: [0xffd27a, 0xff7a2a], color1: 0x601000, size: 0.3, size1: 0.05, speed: 60, gravity: -40, life: 500, jitter: src.h * 0.1 })
+        },
+        hit: ({ tgs }) =>
+          tgs.forEach(([a]) => {
+            fireBurst(a, false)
+            haze(a.x0, a.y0 - a.h * 0.6, a.h * 1.4, a.h * 1.6, 1000, 12)
+          }),
+      },
+      flame_blast: { hit: blaze },
+      firestorm: { hit: blaze },
+      // 分裂斩: a crescent of light flung through the whole line; time slows on the blow, the camera leans in
+      cleave: {
+        hit: ({ src, tgs, color }) => {
+          if (!tgs.length) return
+          const list = tgs.map(([a]) => a)
+          const far = list.reduce((b, a) => (Math.abs(a.x0 - src.x0) > Math.abs(b.x0 - src.x0) ? a : b))
+          const from = mid(src)
+          crescent(from, src.dir, color, src.h * 1.3, Math.abs(far.x0 - from.x) + far.h * 0.8, 380)
+          const m = mid(list[0])
+          slow(240, 0.22)
+          focusOn(m.x, m.y, 0.1, 700)
+          zoomBlur(m.x, m.y, 240, 0.05)
+          decal("crack", src.x0 + (src.dash || 0), src.y0, src.h * 0.9)
+        },
+      },
+    }
+
     function play(evs) {
       if (!app) return
       for (const e of evs) {
@@ -8768,6 +9087,7 @@ void main(){
         const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : e.ab.target === "allEnemies" && actionOf(src.kind, "skill:all") ? "skill:all" : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
         const act = play1(src, name)
         const spec = isSkill ? Stage.fxSpec(e.ab) : null
+        const recipe = isSkill ? SKILL_FX[e.ab.key] : null
         // a spell: a magic circle turns under the caster while it gathers
         if (e.style === "magic") circle(src, e.element, (act?.hit ?? 300) + 300)
         // a relic in the off hand flares as the blow lands
@@ -8795,10 +9115,7 @@ void main(){
           // the skill's name pops up, the blade gathers light before the release
           banner(src, e.ab.name || "", tcol)
           const charge = Math.max(200, at * 0.6)
-          tween(charge, p => {
-            const tp = tipOf(src)
-            if (tp && Math.random() < 0.6) sparks(tp.x + (Math.random() - 0.5) * src.h * 0.5, tp.y + (Math.random() - 0.5) * src.h * 0.5, tcol, 1, { speed: 20, gravity: 0, life: 300, size: 0.35 })
-          })
+          gather(() => (act?.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src), tcol, src.h, charge)
           later(charge * 0.5, () => {
             const tp = tipOf(src)
             if (tp) light(tp.x, tp.y, tcol, src.h * 0.5, charge, 1.2)
@@ -8812,7 +9129,7 @@ void main(){
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
           // bolts and skill arrows fly as their own sheets (a plain spell as its element's orb)
-          const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, art: spec?.proj || (kind !== "arrow" && ORB[e.element]) || null }
+          const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, art: spec?.proj || (kind !== "arrow" && ORB[e.element]) || null, onFly: recipe?.fly && (q => recipe.fly(q, src)) }
           const fromOf = () => (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
           // earlier shots of a volley (shots: [ms, …]): each flies as long as the last, the foe flinches where it lands
           for (const t of act.shots || [])
@@ -8839,11 +9156,21 @@ void main(){
             if (!act.rain) return tgs.forEach(([a]) => shoot(kind, from, mid(a), flight, opt))
             for (let n = 0; n < 3; n++) shoot(kind, from, { x: from.x + src.dir * src.h * (0.3 + n * 0.15), y: from.y - src.h * 2.5 }, flight * 0.4, { ...opt, arc: 0 })
             tgs.forEach(([a]) => {
-              for (let n = 0; n < 4; n++)
-                later(flight * 0.5 - n * 70, () => {
-                  const m = mid(a)
-                  const x = m.x + (Math.random() - 0.5) * a.h * 0.4
-                  shoot(kind, { x: x - src.dir * a.h * 0.5, y: m.y - a.h * 2.4 }, { x, y: m.y + a.h * 0.1 }, flight * 0.5, { ...opt, arc: 0 })
+              for (let n = 0; n < 9; n++)
+                later(flight * 0.5 - n * 45, () => {
+                  // every other arrow into the ground round the foe's feet, where it stays standing
+                  const ground = n % 2 === 0
+                  const x = a.x0 + (Math.random() - 0.5) * a.h * (ground ? 1.3 : 0.6)
+                  const y = ground ? a.y0 + (Math.random() - 0.3) * a.h * 0.12 : a.y0 - a.h * (0.15 + Math.random() * 0.45)
+                  shoot(kind, { x: x - src.dir * a.h * 0.5, y: y - a.h * 2.4 }, { x, y }, flight * 0.5, {
+                    ...opt,
+                    arc: 0,
+                    onLand: B => {
+                      emit(B.x, a.y0, { n: 3, tex: "smoke", color: 0xb8a68a, alpha: 0.5, size: 0.25, size1: 0.6, speed: 50, angle: -Math.PI / 2, spread: 2.4, life: 700 })
+                      sparks(B.x, B.y, opt.color, 4, { speed: 160, up: 80, life: 300, size: 0.3 })
+                      if (ground) decal("arrow", B.x, B.y, a.h * 0.4, { color: opt.color, dir: src.dir, dur: 2800 })
+                    },
+                  })
                 })
             })
           })
@@ -8865,6 +9192,19 @@ void main(){
           // a skill on every foe: one big sheet over the whole row
           const shown = isSkill && !spec?.proj && (e.ab.target === "allEnemies" || tgs.length > 1) && groupAt(spec, tgs.map(([a]) => a), { flip: src.dir < 0 })
           tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
+          // a skill's blow: light rays and white-hot sparks out of each foe it lands on, dust and a crack under a smash
+          if (isSkill)
+            tgs.forEach(([a, tg]) => {
+              if (!tg.dHP) return
+              const m = mid(a)
+              rays(m.x, m.y, tcol, a.h * 1.1)
+              emit(m.x, m.y, { n: 16, tex: "streak", color: [tcol, 0xffffff], size: 0.5, speed: 520, angle: src.dir > 0 ? 0 : Math.PI, spread: 2.2, gravity: 700, drag: 0.08, life: 380 })
+              if (e.style === "smash") {
+                emit(a.x0, a.y0, { n: 8, tex: "smoke", color: 0xb8a68a, alpha: 0.55, size: 0.5, size1: 1.3, speed: 120, angle: -Math.PI / 2, spread: 2.6, drag: 0.1, life: 900, flat: 0.3, jitter: a.h * 0.4 })
+                decal("crack", a.x0, a.y0, a.h * 0.7)
+              }
+            })
+          recipe?.hit?.({ src, tgs: tgs.filter(([, tg]) => tg.dHP), color: tcol })
           // a skill's blow freezes both sides for a moment and punches the camera in
           if (isSkill) {
             for (const u of [src, ...tgs.map(([a]) => a)]) if (u.act) u.act.t0 += 90
@@ -8876,8 +9216,10 @@ void main(){
     }
 
     function frame() {
+      const k = performance.now() < slowUntil ? slowK : 1
+      clock += Math.min(50, app.ticker.deltaMS) * k
       const t = now()
-      dt = Math.min(0.05, app.ticker.deltaMS / 1000)
+      dt = Math.min(0.05, app.ticker.deltaMS / 1000) * k
       for (let k = 0; k < tweens.length; k++) {
         const w = tweens[k]
         if (t < w.t0) continue
@@ -8897,10 +9239,31 @@ void main(){
           parts.splice(k--, 1)
           continue
         }
+        // drawn toward a point (to: a function giving it), slowed by drag, sized / coloured over its life
+        if (q.to) {
+          const T = q.to()
+          if (T) {
+            q.vx += (T.x - q.s.x) * q.pull * dt
+            q.vy += (T.y - q.s.y) * q.pull * dt
+          }
+        }
+        if (q.drag) {
+          const f = Math.pow(q.drag, dt)
+          q.vx *= f
+          q.vy *= f
+        }
         q.vy += q.g * dt
         q.s.x += q.vx * dt
         q.s.y += q.vy * dt
-        q.s.alpha = 1 - age
+        if (q.s1 != null) q.s.scale.set(lerp(q.s0, q.s1, age))
+        if (q.c1 != null) q.s.tint = mixColor(q.c0, q.c1, age)
+        if (q.spin) q.s.rotation += q.spin * dt
+        if (q.stretch) {
+          // a streak lies along its flight, longer the faster it goes
+          q.s.rotation = Math.atan2(q.vy, q.vx)
+          q.s.scale.set(q.s0 * (1 + Math.hypot(q.vx, q.vy) * q.stretch), q.s0)
+        }
+        q.s.alpha = (q.a0 ?? 1) * (q.fadeIn && age < q.fadeIn ? age / q.fadeIn : 1) * (1 - age)
       }
       for (const side of ["p", "m"])
         for (const a of units[side]) {
@@ -8918,14 +9281,19 @@ void main(){
       punch *= Math.pow(0.01, dt)
       const W2 = app.screen.width
       const H = app.screen.height
-      const z = 1 + 0.05 * punch
+      // a focus leans the zoom in on its point (it stays put on screen while the rest grows around it)
+      const fz = focus && t < focus.until ? focus.amt * Math.sin(Math.PI * Math.min(1, (t - focus.t0) / (focus.until - focus.t0))) : 0
+      const z = 1 + 0.05 * punch + fz
+      const fx = fz ? focus.x : W2 / 2
+      const fy = fz ? focus.y : H / 2
       world.scale.set(z)
-      world.position.set((W2 - W2 * z) / 2 + (Math.random() - 0.5) * 14 * shake, (H - H * z) / 2 + (Math.random() - 0.5) * 10 * shake)
+      world.position.set(fx - fx * z + (Math.random() - 0.5) * 14 * shake, fy - fy * z + (Math.random() - 0.5) * 10 * shake)
       if (shock) {
         const age = (t - shock.t0) / 1000
         shock.f.time = age
         if (age > 0.9) {
-          world.filters = null
+          worldFx.delete(shock.f)
+          setWorldFx()
           shock = null
         }
       }
