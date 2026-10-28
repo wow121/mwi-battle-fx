@@ -1,0 +1,97 @@
+# 交接：骨骼动画补齐（长线任务）
+
+> 写于 2026-10-28，开发版 v0.21.8（`846b50e`）。用户已确认方向：**失落城堡式「身体 + 漂浮的手（带可开关的胳膊）」**，
+> 动作照失落城堡的参考图手工摆关键帧。任务：把所有玩家形象（头像 / 时装 / 武器握法）和所有怪物补齐，再接进真实战斗。
+> 所有回复用中文；本机（Linux 6 GB）不跑重活，图片处理、浏览器测试放 109（Windows）。
+
+## 0. 必读的规矩
+
+- **只提交开发版**：只改 `mwi-battle-fx.user.js`（升 `@version`），不跑 `tools/publish.sh`、不提交 `release/`。用户说「可以发了」才发正式版。
+  `build-release.py` 会改 `release/`，检查完 `git checkout release/`。
+- **素材改动要固定版本**：提交素材 → `python3 -I tools/pin-manifest.py <该提交>` → 脚本里 `const ASSET_REV` 设成同一个提交 →
+  再提交 → push → `curl https://purge.jsdelivr.net/gh/wow121/mwi-battle-fx@main/assets/manifest.json`。
+  （v0.21.5 起，从 `@ASSET_REV` 取到的清单会把所有文件都按这个提交加载；正式版还没有这个修复，下次发版带上。）
+- **每次提交后让 Syncthing 重扫**：文件夹 id 是 `9cdkn-uyw3k`（不是 config.xml 里的第一个），
+  `curl -X POST -H "X-API-Key: …" "http://127.0.0.1:8384/rest/db/scan?folder=9cdkn-uyw3k&sub=mwi-battle-fx"`。
+- **失落城堡只做参考**：它的解包数据和图片只在 109 的 `C:\Users\ruixi\fs-mine\lc-ref\`，**绝不能**把它的动画数据、图片放进仓库
+  （仓库是公开的）。做法是看它的逐帧参考图，在我们的骨骼上自己重新摆关键帧。
+- 用户只看效果，不想要编辑器；每做完一类，截定格图自查，再报给用户看。用户的反馈往往很具体（「从身后绕了一圈」「头裂开」），
+  照着修即可。
+
+## 1. 现状
+
+### 测试页（`动画测试` 标签，全部在 `#dev` 里）
+- `Lab`：1 号剑士（试点：头像 blue_person_1 + 时装 warrior_1 + 神圣剑 + 骑士盾，剑系技能）对**所有有骨骼的怪物**（目前只有磁力魔像），
+  自动战斗、各种按钮、「胳膊：开/关」。怪物按 `MONSTER_SKILLS`（游戏数据生成）放自己的技能；`STUNS` 是能眩晕的技能（几率、时长）。
+- `Arena`：PixiJS 8.14 + pixi-filters 6.1.5（jsDelivr 加载）。效果：泛光、剑光拖尾（普攻细白 / 技能粗彩）、技能名弹出、聚光、
+  命中顿帧、镜头推、冲击环（`ring`）、穿身冲刺（`through`）、多段（`hits`）、眩晕星星、受击闪白、死亡溶解 / 散架。
+- 动作：`ACTIONS[kind][name]` 关键帧。`kind` = `player` 或怪物 id。名字：`idle`、`attack`…`attack4`（普攻随机挑一套）、
+  `skill:<技能key>`（专属）、`skill`（通用）、`hurt`、`cast`（增益 / 治疗）、`dead`（玩家；怪物死亡是散架 `rigCrumble`）。
+  关键帧字段：`t`、`e`（缓动）、`a: { 部位: 角度 | [前, 上, 角度] }`、`x`/`y`（整体位移，身高为单位）、`r`（整体旋转）；
+  动作字段：`dur`、`hit`、`hits`、`lunge`、`through`、`ring`、`color`、`loop`。
+- 调试：`__mwiBattleFx.Arena.still('p'|'m', i, 动作名, 毫秒)` 定格某个姿势（`still(…, null)` 取消），`Arena.units()`、`Arena.play(events)`。
+
+### 玩家骨骼（`assets/rig/player/`）
+- 基础小人：明日方舟式四分之三侧身 Q 版，Codex 画的 `~/mwi-art-raw/rig/pl2/sheets/base_a.png`（光头、战斗站姿）。
+- 每个头像 / 时装都是**画在这个基础小人上、逐像素对齐的一层**（Codex，提示词模板 `~/mwi-art-raw/rig/pl2/p_a_*.txt`、`p_o_*.txt`，
+  参考图：`base_a.png` + 游戏里的正面头像 / 时装图 `~/mwi-art-raw/ref/lib/a_*.png`、`o_*.png`）。
+- 切图流水线（脚本在 `~/mwi-art-raw/rig/pl2/`，仓库里有副本 `tools/rig-*.py`），顺序：
+  1. `comp.py`：抠绿底、时装层去掉品红（未覆盖部分）→ `av.png` / `of.png`（复制成 `a_<头像>.png` / `o_<时装>.png`）
+  2. `cutp.py a_… o_…`：切出身体（手臂抠掉、背后补色），写 `rig.json`
+  3. `cuthands.py`：切出两只拳头 `hm`（后手 = 左手，主武器）、`ho`（前手 = 右手，副手）
+  4. `cutarms.py`：胳膊——大臂 / 小臂贴图（`*_armf_up/lo`、`*_armb_up/lo`）、肩膀位置、长度、颜色
+  5. `cuthead.py`：把头从身体层切出来（后臂从头和躯干之间穿过），身体层变为躯干
+- `rig.json` 的 `avatars` / `outfits` 列出已画好的；没画的头像 / 时装目前用第一个顶替（试点期的写法，补齐后要改成「缺哪层就不画哪层 / 用默认」）。
+- 武器：用纸娃娃现成的武器图（`Doll.held`，`assets/doll/`），挂在后手；副手挂前手。握持角度 `rot` 目前只为剑调过。
+
+### 怪物骨骼（`assets/rig/<怪物id>/`）
+- 磁力魔像：从它自己的待机立绘上切零件（`tools/rig-cut-magnetic-golem.py`），**不要让 Codex 重画**（用户说不像）。
+  被挡住的部分用旁边颜色补。动作照失落城堡的花岗岩巨人（慢蓄力、快出手、长定住），死亡分先后散架。
+- 怪物朝左；`face: "right"` 的是玩家。
+
+### 失落城堡参考（109：`C:\Users\ruixi\fs-mine\lc-ref\`）
+- `project\ExportedProject\Assets\`：AssetRipper 1.3.14 导出的工程（`AnimationClip\*.anim`、`Resources\*.prefab`、`Sprite`、`Texture2D`）。
+- 渲染：`venv\Scripts\python render_lc.py <Assets> <prefab> <输出目录> <步长ms> [部位=图片名…] [scale=N] 动画名…`
+  （副本：本机 `~/mwi-art-raw/rig/render_lc.py`，不进仓库）。
+- 玩家：`Resources\character.prefab`，剑盾 `SHW_*`、双手 `THW_*`、双持 `DB_*`、长枪 `spear_*`、弓 `bow_*`、火枪 `gun_*`、法杖 `staff_*`；
+  武器图用 `noumenon/Lhand/Lweapon=<图>`、`noumenon/Rhand/Rweapon=<图>` 装上（如 `SHW_imperialSword` / `SHW_imperialShield`）。
+- 怪物：**预制体和动画名常常对不上**，先看预制体的 `Animator` 用哪个 `AnimatorController` / `AnimatorOverrideController`，
+  再从 override 里的 clip guid 找动画名（花岗岩巨人 `GraniteGiant.prefab` 用的是 `rockGiant_*` + `attack2/attack3/dashAttack_0`）。
+  渲染出来是静止的一团 = 动画路径和预制体对不上。
+- 已有输出：`out\`（剑盾 23 个动作）、`out_gg\`（花岗岩巨人）。
+
+## 2. 任务清单
+
+### A. 武器握法与动作（玩家）
+1. 从游戏数据列出所有武器（主手 / 双手 / 副手）和它们的战斗风格，按握法分组：单手 + 副手（剑、锤…）、双手近战、刺击（枪 / 匕首）、
+   弓、弩、法杖 / 三叉戟、魔法副手（书…）等。每组对应失落城堡的一类（SHW / THW / DB / spear / bow / gun / staff）。
+2. 每组：渲染失落城堡参考 → 做一套动作（待机、普攻 3~4 套随机、通用技能、受击、增益 / 施法、倒下）→ 武器握持角度 `rot` / 握点。
+   用户的要求：单手武器都要考虑副手；握法参考明日方舟 Q 版小人；普攻多套随机；技能与普攻区分明显；受击用副手（盾）挡；
+   增益是把武器竖直举高；倒下时武器在身侧（剑盾按失落城堡是插在地上）。
+3. 技能：游戏里玩家技能按风格（`ABILITIES` 表），常用伤害技能做专属动作（`skill:<key>`），其余用该风格的通用技能动作。
+
+### B. 头像和时装（玩家，量大）
+- 101 个头像 + 125 件时装，每个都要 Codex 画一层（对齐 `base_a.png`），然后跑切图流水线。
+- 先写一个生成任务的脚本（参照 `tools/make-jobs.py` / `gen.sh` 的做法，`gen.sh <raw> <jobs.tsv> <并发>`，codex 在本机跑），
+  分批生成、抽查对齐（`comp.py` 那种把基础小人轮廓叠上去看）。对不齐的重画。
+- 切图脚本要从「单个试点」改成批量，每层独立（头像层、时装层各自切出 body / hm / ho / 胳膊 / head）。
+- 已知瑕疵（可顺手解决）：肩膀是平切的、胳膊贴图两头直切、手伸远时胳膊纹理被拉长。用户同意过「让 Codex 画没有手臂的身体 +
+  单独的圆头大臂小臂」这个方向，可以在批量前先试一个，效果好再定成标准。
+
+### C. 怪物（95 种）
+- 每只怪物：从它自己的 6 张姿势立绘（`assets/m/<id>/idle.webp` 等）里，从待机立绘切零件（不要重画），补被挡住的部分，写 `rig.json`。
+- 按体型做动作模板（人形、四足、软体、飞行、块状、鱼类…），同类共用，首领单独做；每个模板找失落城堡里体型相近的怪物当参考。
+- 技能按 `MONSTER_SKILLS`：伤害技能做攻击类动作，治疗 / 增益做施法动作；眩晕等状态按 `STUNS` 的几率（实战用消息里的状态）。
+- 切零件需要每只怪物单独定多边形和关节，工作量大：先挑一种体型做通、做出批量方法，再铺开。
+
+### D. 接进真实战斗
+- 现在只有测试页用 PixiJS。正式战斗舞台（`Stage`，DOM / CSS）还是旧的整张立绘。全部补齐后，把 `Arena` 接到真实战斗消息上
+  （`units` / `resolve` 产生的事件和测试页的 `play(evs)` 形状一致），替换旧舞台；眩晕用消息里的 `isStunned`。
+- 性能：一场战斗最多 5 对 5 + 公会战更多人，注意 PixiJS 的帧率（以前用户关心过卡顿）。
+
+## 3. 建议的顺序
+1. A 的武器分组 + 剑盾以外的 2~3 种握法（各自先用试点形象），给用户看。
+2. B 的批量流水线：先 5 个头像 + 5 件时装试跑，确认对齐和切图质量，再全量。
+3. C：先做通一种体型（人形，比如巫师 / 哥布林），再铺开。
+4. D：接实战。
+每完成一块就提交开发版、截图给用户确认；不要一次性做完再给用户看。
