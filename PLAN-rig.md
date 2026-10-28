@@ -93,6 +93,10 @@
 > 配方 `sheet: false` = 自己画了这个技能，不再播旧舞台的特效图（用户：箭雨新旧两套同时播，只要一个）。所有技能：蓄力汇聚 + 命中放射光 / 火花，打击类加尘土和地裂，暴击 / 击杀慢动作。
 > `SKILL_FX` 已覆盖所有玩家技能（v0.21.27）：元素小部件 `splash`（水）、`shatter`（冰）、`leaves` / 贴花 `vines`（自然）、`cloud`（孢子 / 烟）、
 > `debris`（碎石）、`through`（穿透喷溅）、`shockRing`、`ripple`、`bubble`；治疗 `healFx`、增益 `buffFx` + `BUFF_FX`（颜色 + 各自的小效果）。
+> **v0.21.28：新引擎不再用任何特效图**（用户要求「全部换成新引擎自己画」；旧 DOM 舞台还用它自己的）。程序绘制：`flameColumn` / `fireTornado` /
+> `fireExplosion`、`waterColumn`、`iceSpikes`、`vinesGrow`、`petalVortex`、`slashArc`、`thrust`、`impactStar`、`claws`、`pillar`（光柱）、
+> 法球（光晕 + 白芯 + 元素拖尾）、`circle`（符文魔法阵）。每个技能的主体在 `MAIN`，其余按元素 + 攻击类型走 `hitFx`。
+> 经验：叠加层的粒子太密太亮会被泛光烧成一团白（火、水都踩过），火要稀、半透明、橙红为主；水用普通混合画实体柱子才像水。
 > 下一步：等用户反馈；怪物技能还是走同一套（怪物没有握法动作，特效照样有）。
 > 截图台 `drive-live.mjs <out> <试点> <按钮序号,…> <毫秒,…>`；.cmd 里 `call` 的参数带逗号要加引号（`"0,2,3"` + `%~3`）。
 >
