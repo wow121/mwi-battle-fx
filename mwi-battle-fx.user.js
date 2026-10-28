@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.12
+// @version      0.21.13
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6305,6 +6305,9 @@
       { name: "1号 锤盾", style: "smash", element: "physical", skills: ["stunning_blow", "sweep", "shield_bash", "toughness"], items: { main_hand: "holy_mace", off_hand: "arcane_shield" } },
       { name: "1号 弩", style: "ranged", element: "physical", skills: ["steady_shot", "rain_of_arrows", "aqua_arrow", "precision"], items: { main_hand: "arcane_crossbow" } },
       { name: "1号 法杖", style: "magic", element: "fire", skills: ["fireball", "flame_blast", "heal", "mystic_aura"], items: { main_hand: "blazing_trident", off_hand: "tome_of_the_elements" } },
+      { name: "1号 剑+匕首", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk"], items: { main_hand: "holy_sword", off_hand: "vampire_fang_dirk" } },
+      { name: "1号 三叉戟+书", style: "magic", element: "water", skills: ["water_strike", "frost_surge", "heal"], items: { main_hand: "rippling_trident", off_hand: "bishops_codex" } },
+      { name: "1号 三叉戟+遗物", style: "magic", element: "nature", skills: ["entangle", "toxic_pollen", "rejuvenate"], items: { main_hand: "blooming_trident", off_hand: "watchful_relic" } },
       { name: "1号 弓", style: "ranged", element: "physical", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "critical_aura"], items: { two_hand: "cursed_bow" } },
       { name: "1号 重盾", style: "smash", element: "physical", skills: ["stunning_blow", "fracturing_impact", "shield_bash", "guardian_aura"], items: { two_hand: "holy_bulwark" } },
       { name: "1号 双手斩", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk"], items: { two_hand: "werewolf_slasher" } },
@@ -7295,7 +7298,81 @@ void main(){
     const slowed = (set, k) =>
       Object.fromEntries(Object.entries(set).map(([n, a]) => [n, { ...a, dur: a.dur * k, hit: a.hit && a.hit * k, ring: a.ring && a.ring * k, hits: a.hits?.map(t => t * k), keys: a.keys.map(x => ({ ...x, t: x.t * k })) }]))
     ACTIONS["player:great"] = slowed(ACTIONS.player, 1.3)
-    const actionOf = (kind, name) => ACTIONS[kind]?.[name] || null
+    // ----- off hands: shields keep each set's own front-hand moves; a book, a relic or a dagger replaces them with its
+    // own track (OFF_TRACKS, laid over whatever the back hand does), and a dagger adds its own strikes (OFF_ACTIONS).
+    // Track keys: t = a share of the action's length, or "pre" (the wind-up before the blow), "hit", "hold" (half way
+    // from the blow to the end); ho = [forward, up, degrees] like a floating hand (+ degrees tip it back).
+    const offOf = id => {
+      const k = String(id || "")
+      return !k ? "" : /dirk|defender/.test(k) ? "dagger" : /codex|tome/.test(k) ? "book" : /eye_watch|relic/.test(k) ? "relic" : "shield"
+    }
+    const OFF_TRACKS = {
+      // held open at the chest; pushed out at the foe with each blow; raised high on a buff
+      book: {
+        idle: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.5, ho: [0.02, 0.055, -6] }, { t: 1, ho: [0.02, 0.04, -8] }],
+        attack: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: "pre", ho: [0.08, 0.1, -12] }, { t: "hit", ho: [0.16, 0.14, -20] }, { t: "hold", ho: [0.15, 0.13, -18] }, { t: 1, ho: [0.02, 0.04, -8] }],
+        hurt: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.2, ho: [-0.02, 0.08, 10] }, { t: 1, ho: [0.02, 0.04, -8] }],
+        cast: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.25, ho: [0, 0.42, 0] }, { t: 0.75, ho: [0, 0.43, 0] }, { t: 1, ho: [0.02, 0.04, -8] }],
+        dead: [{ t: 0, ho: [0.02, 0.04, -8] }, { t: 0.3, ho: [-0.05, 0.05, 20] }, { t: 1, ho: [0.05, -0.62, -80] }],
+      },
+      // held up in front like a lantern; thrust high at the foe, raised overhead on a buff (it glows: see play)
+      relic: {
+        idle: [{ t: 0, ho: [0.04, 0.1, 0] }, { t: 0.5, ho: [0.04, 0.12, 0] }, { t: 1, ho: [0.04, 0.1, 0] }],
+        attack: [{ t: 0, ho: [0.04, 0.1, 0] }, { t: "pre", ho: [0.06, 0.16, 0] }, { t: "hit", ho: [0.16, 0.22, 0] }, { t: "hold", ho: [0.15, 0.21, 0] }, { t: 1, ho: [0.04, 0.1, 0] }],
+        hurt: [{ t: 0, ho: [0.04, 0.1, 0] }, { t: 0.2, ho: [-0.02, 0.12, 15] }, { t: 1, ho: [0.04, 0.1, 0] }],
+        cast: [{ t: 0, ho: [0.04, 0.1, 0] }, { t: 0.25, ho: [-0.02, 0.5, 0] }, { t: 0.75, ho: [-0.02, 0.52, 0] }, { t: 1, ho: [0.04, 0.1, 0] }],
+        dead: [{ t: 0, ho: [0.04, 0.1, 0] }, { t: 0.3, ho: [-0.05, 0.05, 20] }, { t: 1, ho: [0.08, -0.62, 0] }],
+      },
+      // held low, point forward; up on guard while the main weapon strikes
+      dagger: {
+        idle: [{ t: 0, ho: [0.05, -0.06, -15] }, { t: 0.5, ho: [0.05, -0.045, -13] }, { t: 1, ho: [0.05, -0.06, -15] }],
+        attack: [{ t: 0, ho: [0.05, -0.06, -15] }, { t: "pre", ho: [0.02, 0.04, 20] }, { t: "hold", ho: [0.02, 0.04, 20] }, { t: 1, ho: [0.05, -0.06, -15] }],
+        hurt: [{ t: 0, ho: [0.05, -0.06, -15] }, { t: 0.2, ho: [0.02, 0.06, 45] }, { t: 1, ho: [0.05, -0.06, -15] }],
+        cast: [{ t: 0, ho: [0.05, -0.06, -15] }, { t: 0.25, ho: [0, 0.4, 80] }, { t: 0.75, ho: [0, 0.41, 80] }, { t: 1, ho: [0.05, -0.06, -15] }],
+        dead: [{ t: 0, ho: [0.05, -0.06, -15] }, { t: 0.3, ho: [-0.05, 0.05, 20] }, { t: 1, ho: [0.1, -0.64, 0] }],
+      },
+    }
+    // a dagger's own strikes (after Lost Castle's DB_*): the back hand keeps its set's guard (filled in from idle)
+    const OFF_ACTIONS = {
+      // a quick stab from the front hand
+      "off:stab": {
+        dur: 420, hit: 150, lunge: true, tip: "off", own: true,
+        keys: [
+          { t: 0, a: { ho: [0.05, -0.06, -15] } },
+          { t: 80, e: "out", a: { body: -6, ho: [-0.04, 0.02, 5] }, x: -0.02 },
+          { t: 150, e: "in", a: { body: 12, ho: [0.38, 0.06, -5] }, x: 0.06 },
+          { t: 300, a: { body: 10, ho: [0.37, 0.06, -5] }, x: 0.055 },
+          { t: 420, a: { ho: [0.05, -0.06, -15] } },
+        ],
+      },
+      // a slash from high to low
+      "off:slash": {
+        dur: 480, hit: 200, lunge: true, tip: "off", own: true,
+        keys: [
+          { t: 0, a: { ho: [0.05, -0.06, -15] } },
+          { t: 110, e: "out", a: { body: -8, ho: [0.1, 0.3, 70] }, y: 0.02 },
+          { t: 200, e: "in", a: { body: 14, ho: [0.35, 0, -60] }, x: 0.05 },
+          { t: 360, a: { body: 12, ho: [0.34, 0, -61] }, x: 0.045 },
+          { t: 480, a: { ho: [0.05, -0.06, -15] } },
+        ],
+      },
+    }
+    // an off-hand track's keys in ms for one action (cached per action and off hand)
+    const trackCache = new WeakMap()
+    function offPose(off, name, act, at) {
+      const cls = name === "idle" ? "idle" : name === "hurt" ? "hurt" : name === "cast" ? "cast" : name === "dead" ? "dead" : "attack"
+      const tr = OFF_TRACKS[off]?.[cls]
+      if (!tr || act.own) return null
+      let per = trackCache.get(act)
+      if (!per) trackCache.set(act, (per = {}))
+      if (!per[off]) {
+        const hit = act.hit ?? act.dur * 0.5
+        const T = { pre: hit * 0.6, hit, hold: hit + (act.dur - hit) * 0.5 }
+        per[off] = { keys: tr.map(k => ({ t: typeof k.t === "string" ? T[k.t] : k.t * act.dur, a: { ho: k.ho } })) }
+      }
+      return sample(per[off], at).a.ho
+    }
+    const actionOf = (kind, name) => ACTIONS[kind]?.[name] || OFF_ACTIONS[name] || null
     // a player's actions are its grip style's set ("player:bow" …), the sword's ("player") for styles without one yet
     const playerKind = u => {
       const g = gripOf(u.items?.main_hand || u.items?.two_hand ? u.items : null)
@@ -7446,7 +7523,7 @@ void main(){
         }
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
+      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? offOf(u.items?.off_hand) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       a.filter = P.Filter.from({
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
@@ -7585,7 +7662,9 @@ void main(){
         // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm); a dagger by
         // its hilt, a shield / book / relic in the middle
         def.parts.off = base.parts.ho
-          ? { pivot: off.axis ? along(off.axis, 0.08) : off.grip, at: base.fist, parent: "ho", z: 4.1, scale: base.scale }
+          ? // (a dagger turned to point forward, held over the break between its pommel and grip where the art has one,
+            // its point for the blade's light trail)
+            { pivot: off.axis ? along(off.axis, off.axis[4] < 0.4 ? off.axis[4] : 0.08) : off.grip, tip: off.axis && along(off.axis, 1), rot: off.axis ? angle(off.axis) - 90 : 0, at: base.fist, parent: "ho", z: 4.1, scale: base.scale }
           : base.parts.bfore
           ? { pivot: off.grip, at: base.fist, parent: "fore", z: 4.5, upright: true, scale: base.scale }
           : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
@@ -7614,7 +7693,7 @@ void main(){
           // (rig.json may set sign itself where that guess fails: a forearm held out sideways)
           const sign = (p.sign ?? (h / 2 > p.pivot[1] ? 1 : -1)) * (def.face === "right" ? -1 : 1)
           // a weapon's tip: the corner of its piece farthest from the grip (for the blade's light trail)
-          const tip = name === "weapon" && (p.tip || [[0, 0], [w, 0], [0, h], [w, h]].sort((u, v) => Math.hypot(v[0] - p.pivot[0], v[1] - p.pivot[1]) - Math.hypot(u[0] - p.pivot[0], u[1] - p.pivot[1]))[0])
+          const tip = (name === "weapon" || (name === "off" && p.tip)) && (p.tip || [[0, 0], [w, 0], [0, h], [w, h]].sort((u, v) => Math.hypot(v[0] - p.pivot[0], v[1] - p.pivot[1]) - Math.hypot(u[0] - p.pivot[0], u[1] - p.pivot[1]))[0])
           return { name, s, p, w, h, tip, sign, rest: ((p.rot || 0) * Math.PI) / 180, x: 0, y: 0, wr: 0, fall: null }
         })
       const by = Object.fromEntries(list.map(q => [q.name, q]))
@@ -7695,6 +7774,12 @@ void main(){
         }
       }
       let pose = A ? sample(A.def, at) : { a: {}, x: 0, y: 0 }
+      // the off hand's own track; a dagger strike leaves the back hand on its set's guard
+      if (A && a.off) {
+        const ho = offPose(a.off, A.name, A.def, at)
+        if (ho) pose.a.ho = ho
+        if (A.def.own && pose.a.hm == null) pose.a.hm = actionOf(a.kind, "idle")?.keys[0].a.hm
+      }
       if (a.from && A && t - A.t0 < a.blend) {
         const p = ease((t - A.t0) / a.blend)
         const b = pose
@@ -7992,7 +8077,7 @@ void main(){
     const mid = a => ({ x: a.x0 + (a.dash || 0), y: a.y0 - a.h * 0.45 })
     // the weapon's tip and grip in world coordinates (null without a weapon)
     function tipOf(a, inner = 1) {
-      const q = a.rig?.by.weapon
+      const q = a.rig?.by[a.act?.def.tip === "off" ? "off" : "weapon"]
       if (!q?.tip || a.rig.fallen) return null
       const sp = q.s.children[0]
       const g = sp.toGlobal(new P.Point(q.p.pivot[0] + (q.tip[0] - q.p.pivot[0]) * inner, q.p.pivot[1] + (q.tip[1] - q.p.pivot[1]) * inner))
@@ -8034,6 +8119,12 @@ void main(){
         else if (Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
         if (p >= 1) s.destroy()
       })
+    }
+    function relicGlow(a) {
+      const h = handOf(a, "ho")
+      if (!h) return
+      light(h.x, h.y, 0xffe9a0, a.h * 0.4, 600, 1.3)
+      sparks(h.x, h.y, 0xffe9a0, 14, { speed: 90, gravity: 0, life: 500, size: 0.35 })
     }
     function banner(a, text, color) {
       if (!text) return
@@ -8196,6 +8287,7 @@ void main(){
         if (e.effect !== "damage") {
           if (src) {
             play1(src, "cast")
+            if (src.off === "relic") later(300, () => relicGlow(src))
             // the sword held high catches the light
             later(300, () => {
               light(src.x0, src.y0 - src.h * 1.05, COLOR.buff, src.h * 0.7, 800, 1.2)
@@ -8212,10 +8304,13 @@ void main(){
         // the attacker's action: wind up, run in (lunge) before the blow lands at act.hit, come back after
         // a skill plays its own action ("skill:<key>") when it has one, else the generic skill; a plain attack picks
         // one of its sets at random (attack, attack2, …)
-        const sets = ["attack", "attack2", "attack3", "attack4"].filter(n => actionOf(src.kind, n))
+        // (a dagger in the off hand adds its own strikes)
+        const sets = ["attack", "attack2", "attack3", "attack4"].filter(n => actionOf(src.kind, n)).concat(src.off === "dagger" ? ["off:stab", "off:slash"] : [])
         // (a skill on every foe: "skill:all" where the set has one)
         const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : e.ab.target === "allEnemies" && actionOf(src.kind, "skill:all") ? "skill:all" : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
         const act = play1(src, name)
+        // a relic in the off hand flares as the blow lands
+        if (src.off === "relic") later(act?.hit ?? 300, () => relicGlow(src))
         const at = act?.hit ?? 300
         // earlier blows of a multi-blow action (hits: [ms, …]): a slash and a flinch, the damage lands at hit
         for (const t of act?.hits || [])
