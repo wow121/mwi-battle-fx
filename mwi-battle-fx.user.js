@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.21
+// @version      0.21.22
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6302,17 +6302,17 @@
   const Lab = (() => {
     // 1号's grip styles to try (the look stays the pilot's: avatar blue_person_1, outfit warrior_1)
     const PILOTS = [
-      { name: "1号 剑盾", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk", "fierce_aura"], items: { main_hand: "holy_sword", off_hand: "knights_aegis" } },
-      { name: "1号 枪盾", style: "stab", element: "physical", skills: ["puncture", "impale", "frenzy", "fierce_aura"], items: { main_hand: "holy_spear", off_hand: "holy_buckler" } },
-      { name: "1号 锤盾", style: "smash", element: "physical", skills: ["stunning_blow", "sweep", "shield_bash", "toughness"], items: { main_hand: "holy_mace", off_hand: "arcane_shield" } },
-      { name: "1号 弩盾", style: "ranged", element: "physical", skills: ["steady_shot", "rain_of_arrows", "aqua_arrow", "precision"], items: { main_hand: "arcane_crossbow", off_hand: "holy_buckler" } },
-      { name: "1号 法杖", style: "magic", element: "fire", skills: ["fireball", "flame_blast", "heal", "mystic_aura"], items: { main_hand: "blazing_trident", off_hand: "tome_of_the_elements" } },
-      { name: "1号 剑+匕首", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk"], items: { main_hand: "holy_sword", off_hand: "vampire_fang_dirk" } },
-      { name: "1号 三叉戟+书", style: "magic", element: "water", skills: ["water_strike", "frost_surge", "heal"], items: { main_hand: "rippling_trident", off_hand: "bishops_codex" } },
-      { name: "1号 三叉戟+遗物", style: "magic", element: "nature", skills: ["entangle", "toxic_pollen", "rejuvenate"], items: { main_hand: "blooming_trident", off_hand: "watchful_relic" } },
-      { name: "1号 弓", style: "ranged", element: "physical", skills: ["quick_shot", "rain_of_arrows", "flame_arrow", "critical_aura"], items: { two_hand: "cursed_bow" } },
-      { name: "1号 重盾", style: "smash", element: "physical", skills: ["stunning_blow", "fracturing_impact", "shield_bash", "guardian_aura"], items: { two_hand: "holy_bulwark" } },
-      { name: "1号 双手斩", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk"], items: { two_hand: "werewolf_slasher" } },
+      { name: "1号 剑盾", style: "slash", element: "physical", skills: ["cleave", "maim", "crippling_slash", "berserk", "fierce_aura"], items: { main_hand: "holy_sword", off_hand: "knights_aegis" } },
+      { name: "1号 枪盾", style: "stab", element: "physical", skills: ["poke", "impale", "puncture", "penetrating_strike", "frenzy"], items: { main_hand: "holy_spear", off_hand: "holy_buckler" } },
+      { name: "1号 锤盾", style: "smash", element: "physical", skills: ["smack", "stunning_blow", "sweep", "fracturing_impact", "shield_bash", "toughness"], items: { main_hand: "holy_mace", off_hand: "arcane_shield" } },
+      { name: "1号 弩盾", style: "ranged", element: "physical", skills: ["quick_shot", "steady_shot", "penetrating_shot", "rain_of_arrows", "aqua_arrow", "precision"], items: { main_hand: "arcane_crossbow", off_hand: "holy_buckler" } },
+      { name: "1号 法杖", style: "magic", element: "fire", skills: ["fireball", "smoke_burst", "flame_blast", "firestorm", "heal", "mystic_aura"], items: { main_hand: "blazing_trident", off_hand: "tome_of_the_elements" } },
+      { name: "1号 剑+匕首", style: "slash", element: "physical", skills: ["cleave", "maim", "crippling_slash", "berserk"], items: { main_hand: "holy_sword", off_hand: "vampire_fang_dirk" } },
+      { name: "1号 三叉戟+书", style: "magic", element: "water", skills: ["water_strike", "ice_spear", "frost_surge", "mana_spring", "heal"], items: { main_hand: "rippling_trident", off_hand: "bishops_codex" } },
+      { name: "1号 三叉戟+遗物", style: "magic", element: "nature", skills: ["entangle", "life_drain", "toxic_pollen", "natures_veil", "rejuvenate"], items: { main_hand: "blooming_trident", off_hand: "watchful_relic" } },
+      { name: "1号 弓", style: "ranged", element: "physical", skills: ["quick_shot", "steady_shot", "penetrating_shot", "rain_of_arrows", "flame_arrow", "silencing_shot", "critical_aura"], items: { two_hand: "cursed_bow" } },
+      { name: "1号 重盾", style: "smash", element: "physical", skills: ["shield_bash", "stunning_blow", "sweep", "fracturing_impact", "guardian_aura"], items: { two_hand: "holy_bulwark" } },
+      { name: "1号 双手斩", style: "slash", element: "physical", skills: ["cleave", "maim", "crippling_slash", "berserk"], items: { two_hand: "werewolf_slasher" } },
     ]
     const st = { loc: "golem_cave", tier: 0, pilot: 0, ...GM_getValue("battle_fx_lab_v2", {}) }
     const PILOT = () => ({ avatar: "blue_person_1", outfit: "warrior_1", ...(PILOTS[st.pilot] || PILOTS[0]) })
@@ -6355,7 +6355,7 @@
       if (!ab || ab.kind === "damage") {
         const f = alive(foe)
         if (!f.length) return
-        targets = (ab?.target === "allEnemies" ? f : [pick(f)]).map(j => change(foe, j, hitAmount(foe, j) * (ab ? 1.6 : 1)))
+        targets = (ab?.target === "allEnemies" ? f : [pick(f)]).map(j => change(foe, j, Math.round(hitAmount(foe, j) * (ab ? 1.6 : 1))))
         // a stunning ability stuns a target it hits with its chance (STUNS), for its duration
         const stun = ab && STUNS[ab.key]
         if (stun) for (const tg of targets) if (tg.dHP < 0 && !tg.died && Math.random() < stun[0]) tg.stunned = stun[1]
@@ -6612,6 +6612,21 @@ void main(){
             { t: 1200, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
+        // 致残斩: crouched with the blade trailing low behind, a sweep at the legs, raised back and a second, harder sweep
+        "skill:crippling_slash": {
+          dur: 1300, hit: 820, hits: [520], ring: 820, lunge: true, color: 0xff8a3b,
+          keys: [
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -12, hm: [-0.12, 0, 130], ho: [0.08, 0.05, 0] }, y: -0.03 },
+            { t: 420, a: { body: -13, hm: [-0.13, -0.01, 132], ho: [0.08, 0.05, 0] }, y: -0.03 },
+            { t: 520, e: "in", a: { body: 16, hm: [0.5, -0.02, -125], ho: [-0.05, 0, 0] }, x: 0.06 },
+            { t: 600, e: "out", a: { body: 12, hm: [0.46, 0.02, -132], ho: [-0.05, 0, 0] }, x: 0.06 },
+            { t: 720, e: "out", a: { body: -8, hm: [0.02, 0.32, 90], ho: [0.04, 0.04, 0] }, x: 0.05 },
+            { t: 820, e: "in", a: { body: 20, hm: [0.52, -0.05, -128], ho: [-0.06, 0, 0] }, x: 0.1 },
+            { t: 1050, a: { body: 18, hm: [0.51, -0.05, -129], ho: [-0.06, 0, 0] }, x: 0.095 },
+            { t: 1300, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
         // any other damage skill: the sword raised high, held (charging), then a slam
         skill: {
           dur: 1100, hit: 650, ring: 650, lunge: true,
@@ -6705,6 +6720,47 @@ void main(){
             { t: 900, e: "out", a: { body: -16, hm: [0.02, 0.22, 30], ho: [0.06, 0.1, 10] }, x: -0.07 },
             { t: 1080, a: { body: -14, hm: [0.03, 0.21, 26], ho: [0.07, 0.095, 8] }, x: -0.065 },
             { t: 1250, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 快速射击: two arrows loosed back to back (shots: the earlier release), barely drawn
+        "skill:quick_shot": {
+          dur: 720, shots: [165], shot: 335, hit: 520, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 80, e: "out", a: { body: 0, hm: [0.46, 0.1, 0], ho: [0.08, 0.06, -8] } },
+            { t: 150, a: { body: -3, hm: [0.24, 0.14, 0], ho: [0.09, 0.07, -6] } },
+            { t: 165, e: "out", a: { body: -5, hm: [0.15, 0.17, 12], ho: [0.08, 0.08, -4] } },
+            { t: 250, e: "out", a: { body: -2, hm: [0.46, 0.1, 0], ho: [0.09, 0.07, -6] } },
+            { t: 320, a: { body: -4, hm: [0.24, 0.14, 0], ho: [0.1, 0.08, -4] } },
+            { t: 335, e: "out", a: { body: -7, hm: [0.14, 0.18, 15], ho: [0.08, 0.09, 0] }, x: -0.015 },
+            { t: 520, a: { body: -6, hm: [0.15, 0.17, 12], ho: [0.08, 0.085, 0] }, x: -0.015 },
+            { t: 720, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 稳定射击: leaning into the bow, a full draw held dead still, a clean release that hardly moves the body
+        "skill:steady_shot": {
+          dur: 1300, shot: 950, hit: 1120, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 240, e: "out", a: { body: 4, hm: [0.52, 0.1, 0], ho: [0.13, 0.07, 0] }, x: 0.02 },
+            { t: 560, a: { body: 6, hm: [0.1, 0.15, 0], ho: [0.14, 0.07, 0] }, x: 0.02 },
+            { t: 940, a: { body: 6, hm: [0.095, 0.152, 0], ho: [0.14, 0.07, 0] }, x: 0.02 },
+            { t: 960, e: "out", a: { body: 2, hm: [0.03, 0.17, 10], ho: [0.12, 0.075, 2] }, x: 0.01 },
+            { t: 1120, a: { body: 2, hm: [0.035, 0.168, 8], ho: [0.12, 0.075, 2] }, x: 0.01 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 贯穿射击: leaned far back for the deepest draw, the arrow goes through the foe and on off the stage (pierce)
+        "skill:penetrating_shot": {
+          dur: 1300, shot: 900, hit: 1000, from: "ho", pierce: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 220, e: "out", a: { body: -4, hm: [0.5, 0.12, 0], ho: [0.1, 0.08, 0] } },
+            { t: 600, a: { body: -16, hm: [0.08, 0.16, 0], ho: [0.13, 0.1, 4] }, x: -0.05 },
+            { t: 880, a: { body: -17, hm: [0.07, 0.162, 0], ho: [0.13, 0.1, 4] }, x: -0.055 },
+            { t: 900, e: "out", a: { body: -24, hm: [0.0, 0.22, 34], ho: [0.04, 0.13, 16] }, x: -0.12 },
+            { t: 1100, a: { body: -20, hm: [0.01, 0.21, 30], ho: [0.05, 0.12, 12] }, x: -0.11 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
           ],
         },
         // 箭雨: the bow tilted back, a volley shot up out of sight, raining down on every foe
@@ -6820,9 +6876,35 @@ void main(){
             { t: 1000, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
           ],
         },
-        // a blow on every foe: a leap, the mace raised, and a slam into the ground
+        // 重扫: run in, wound far back, one wide flat swing through the whole line
+        "skill:sweep": {
+          dur: 1200, hit: 700, ring: 700, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -16, hm: [-0.18, 0.18, 110], ho: [0.08, 0.02, 0] }, x: -0.03 },
+            { t: 580, a: { body: -17, hm: [-0.19, 0.18, 112], ho: [0.08, 0.02, 0] }, x: -0.035 },
+            { t: 700, e: "in", a: { body: 16, hm: [0.5, 0.15, -95], ho: [-0.05, 0, 0] }, x: 0.07 },
+            { t: 780, e: "out", a: { body: 20, hm: [0.42, 0.12, -115], ho: [-0.06, 0, 0] }, x: 0.08 },
+            { t: 980, a: { body: 18, hm: [0.41, 0.12, -116], ho: [-0.06, 0, 0] }, x: 0.075 },
+            { t: 1200, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 重碾: brought down on the foe, then dragged low and ground up through it
+        "skill:smack": {
+          dur: 1150, hit: 760, hits: [430], lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -10, hm: [0.05, 0.5, 95], ho: [0.04, 0.02, 0] }, x: -0.02 },
+            { t: 430, e: "in", a: { body: 18, hm: [0.45, 0.05, -115], ho: [-0.04, 0, 0] }, x: 0.06 },
+            { t: 580, e: "out", a: { body: 8, hm: [0.25, -0.1, -160], ho: [-0.02, -0.02, 0] }, x: 0.06, y: -0.02 },
+            { t: 760, e: "in", a: { body: -12, hm: [0.38, 0.45, 15], ho: [0, 0.02, 0] }, x: 0.08, y: 0.04 },
+            { t: 950, a: { body: -10, hm: [0.37, 0.44, 16], ho: [0, 0.02, 0] }, x: 0.075, y: 0.03 },
+            { t: 1150, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 碎裂冲击 and any other blow on every foe: run in, a leap, the mace raised, and a slam into the ground
         "skill:all": {
-          dur: 1100, hit: 620, ring: 620,
+          dur: 1100, hit: 620, ring: 620, lunge: true,
           keys: [
             { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
             { t: 250, e: "out", a: { body: -10, hm: [0.05, 0.55, 95], ho: [0.03, 0.05, 0] }, y: 0.3 },
@@ -6923,9 +7005,46 @@ void main(){
             { t: 1150, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
           ],
         },
-        // a blow on every foe: a leap and the shield slammed into the ground
+        // 盾击: drawn in behind the shield, then rammed into the foe with the whole body
+        "skill:shield_bash": {
+          dur: 1000, hit: 560, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 280, e: "out", a: { body: -10, hm: [0, 0, 0], ho: [-0.1, -0.04, 10] }, x: -0.06 },
+            { t: 480, a: { body: -11, hm: [0, 0, 0], ho: [-0.11, -0.04, 11] }, x: -0.065 },
+            { t: 560, e: "in", a: { body: 22, hm: [0.25, 0.02, 0], ho: [0.35, 0.02, -10] }, x: 0.15 },
+            { t: 800, a: { body: 20, hm: [0.25, 0.02, 0], ho: [0.34, 0.02, -10] }, x: 0.14 },
+            { t: 1000, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 重锤: the shield hoisted overhead, held, and brought down edge first on the foe's head
+        "skill:stunning_blow": {
+          dur: 1300, hit: 800, ring: 800, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 300, e: "out", a: { body: -14, hm: [0.1, 0.4, 0], ho: [-0.02, 0.6, 35] }, y: 0.06 },
+            { t: 700, a: { body: -15, hm: [0.1, 0.41, 0], ho: [-0.02, 0.61, 37] }, y: 0.06 },
+            { t: 800, e: "in", a: { body: 24, hm: [0.22, 0.05, 0], ho: [0.28, 0, -60] }, x: 0.08 },
+            { t: 1050, a: { body: 22, hm: [0.22, 0.05, 0], ho: [0.27, 0, -61] }, x: 0.075 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 重扫: run in, the shield hauled back past the hip and swung round flat through the whole line
+        "skill:sweep": {
+          dur: 1200, hit: 720, ring: 720, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 280, e: "out", a: { body: -14, hm: [-0.08, 0, 0], ho: [-0.2, 0.02, 45] }, x: -0.04 },
+            { t: 600, a: { body: -15, hm: [-0.09, 0, 0], ho: [-0.21, 0.02, 47] }, x: -0.045 },
+            { t: 720, e: "in", a: { body: 18, hm: [0.22, 0.02, 0], ho: [0.36, 0.03, -35] }, x: 0.09 },
+            { t: 800, e: "out", a: { body: 20, hm: [0.24, 0.02, 0], ho: [0.33, 0.02, -50] }, x: 0.1 },
+            { t: 1000, a: { body: 18, hm: [0.24, 0.02, 0], ho: [0.32, 0.02, -51] }, x: 0.095 },
+            { t: 1200, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 碎裂冲击 and any other blow on every foe: run in, a leap and the shield slammed into the ground
         "skill:all": {
-          dur: 1100, hit: 650, ring: 650,
+          dur: 1100, hit: 650, ring: 650, lunge: true,
           keys: [
             { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
             { t: 260, e: "out", a: { body: -10, hm: [0.1, 0.35, 0], ho: [0, 0.5, 20] }, y: 0.3 },
@@ -7013,6 +7132,43 @@ void main(){
             { t: 860, e: "out", a: { body: -14, hm: [0.28, 0.14, 28], ho: [0.02, 0.02, 0] }, x: -0.08 },
             { t: 1040, a: { body: -11, hm: [0.3, 0.12, 22], ho: [0.03, 0.01, 0] }, x: -0.07 },
             { t: 1200, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+          ],
+        },
+        // 快速射击: two snap shots from the shoulder, one kick each
+        "skill:quick_shot": {
+          dur: 700, shots: [150], shot: 320, hit: 480,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 100, e: "out", a: { body: -2, hm: [0.42, 0.05, 0], ho: [0.06, -0.02, 0] } },
+            { t: 150, e: "out", a: { body: -5, hm: [0.36, 0.08, 13], ho: [0.04, -0.01, 0] }, x: -0.01 },
+            { t: 250, a: { body: -2, hm: [0.42, 0.05, 0], ho: [0.06, -0.02, 0] }, x: -0.01 },
+            { t: 320, e: "out", a: { body: -6, hm: [0.35, 0.08, 15], ho: [0.04, -0.01, 0] }, x: -0.025 },
+            { t: 480, a: { body: -4, hm: [0.37, 0.07, 9], ho: [0.05, -0.015, 0] }, x: -0.02 },
+            { t: 700, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+          ],
+        },
+        // 稳定射击: leaned in over the stock, the front hand braced under it, a long still aim and a clean shot
+        "skill:steady_shot": {
+          dur: 1250, shot: 900, hit: 1060,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 260, e: "out", a: { body: 6, hm: [0.46, 0.03, 0], ho: [0.14, -0.02, 0] }, x: 0.02 },
+            { t: 890, a: { body: 6, hm: [0.462, 0.03, 0], ho: [0.14, -0.02, 0] }, x: 0.02 },
+            { t: 910, e: "out", a: { body: 2, hm: [0.42, 0.05, 8], ho: [0.12, -0.01, 0] }, x: 0.01 },
+            { t: 1060, a: { body: 2, hm: [0.43, 0.045, 5], ho: [0.12, -0.015, 0] }, x: 0.01 },
+            { t: 1250, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+          ],
+        },
+        // 贯穿射击: braced back on the heels, a bolt that goes through the foe and on off the stage, a kick that staggers
+        "skill:penetrating_shot": {
+          dur: 1250, shot: 860, hit: 960, pierce: true,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.4, 0.06, 0], ho: [0.06, -0.01, 0] }, x: -0.03 },
+            { t: 850, a: { body: -9, hm: [0.4, 0.06, 0], ho: [0.06, -0.01, 0] }, x: -0.035 },
+            { t: 870, e: "out", a: { body: -22, hm: [0.2, 0.18, 40], ho: [0, 0.04, 0] }, x: -0.13 },
+            { t: 1060, a: { body: -16, hm: [0.24, 0.14, 30], ho: [0.02, 0.02, 0] }, x: -0.11 },
+            { t: 1250, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // 箭雨: aimed high, a volley up out of sight that rains down on every foe
@@ -7103,6 +7259,65 @@ void main(){
             { t: 740, a: { body: -6, hm: [0.19, 0.46, 4], ho: [0.05, 0.16, 0] }, y: 0.03 },
             { t: 800, e: "in", a: { body: 12, hm: [0.5, 0.2, -75], ho: [0, 0.05, 0] }, x: 0.04 },
             { t: 1000, a: { body: 11, hm: [0.49, 0.2, -76], ho: [0, 0.05, 0] }, x: 0.04 },
+            { t: 1200, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 冰枪术: the staff drawn back level like a spear and thrust, a shard of ice flying off its head
+        "skill:ice_spear": {
+          dur: 1000, shot: 560, hit: 760, missile: "shard",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 240, e: "out", a: { body: -8, hm: [-0.12, 0.05, -76], ho: [0.06, 0.06, 0] }, x: -0.03 },
+            { t: 480, a: { body: -9, hm: [-0.13, 0.05, -76], ho: [0.06, 0.06, 0] }, x: -0.035 },
+            { t: 560, e: "in", a: { body: 12, hm: [0.5, 0.06, -78], ho: [-0.04, 0.03, 0] }, x: 0.04 },
+            { t: 780, a: { body: 11, hm: [0.49, 0.06, -79], ho: [-0.04, 0.03, 0] }, x: 0.04 },
+            { t: 1000, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 缠绕: the staff lifted and its butt driven into the ground; the roots come up under the foe
+        "skill:entangle": {
+          dur: 1100, hit: 700, ring: 640,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 250, e: "out", a: { body: -6, hm: [0.5, 0.33, -6], ho: [0.05, 0.12, 0] }, y: 0.04 },
+            { t: 560, a: { body: -7, hm: [0.5, 0.34, -5], ho: [0.05, 0.13, 0] }, y: 0.04 },
+            { t: 640, e: "in", a: { body: 10, hm: [0.46, -0.02, -10], ho: [0.02, 0, 0] } },
+            { t: 880, a: { body: 9, hm: [0.46, -0.02, -10], ho: [0.02, 0, 0] } },
+            { t: 1100, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 生命吸取: the staff pointed at the foe and held, then drawn back as its life streams over (drain)
+        "skill:life_drain": {
+          dur: 1400, hit: 600, drain: true,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 240, e: "out", a: { body: 8, hm: [0.45, 0.2, -70], ho: [0.06, 0.06, 0] }, x: 0.02 },
+            { t: 600, a: { body: 8, hm: [0.46, 0.2, -71], ho: [0.06, 0.06, 0] }, x: 0.02 },
+            { t: 1100, e: "inout", a: { body: -8, hm: [0.44, 0.16, -55], ho: [0.04, 0.1, 0] }, x: -0.02 },
+            { t: 1400, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 火焰风暴: the staff whirled overhead, then its head swung forward over the foes
+        "skill:firestorm": {
+          dur: 1400, hit: 950,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -5, hm: [0.5, 0.42, 0], ho: [0.05, 0.15, 0] }, y: 0.03 },
+            { t: 760, e: "linear", a: { body: -6, hm: [0.5, 0.44, -720], ho: [0.05, 0.16, 0] }, y: 0.04 },
+            { t: 880, e: "out", a: { body: 12, hm: [0.52, 0.3, -770], ho: [0, 0.06, 0] }, x: 0.03 },
+            { t: 1150, a: { body: 11, hm: [0.51, 0.3, -771], ho: [0, 0.06, 0] }, x: 0.03 },
+            { t: 1400, a: { hm: [0.02, 0, -720], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 剧毒粉尘 / 自然菌幕: the staff tipped back, then swept out low across the foes, scattering the spores
+        "skill:toxic_pollen": {
+          dur: 1200, hit: 850,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.08, -0.04, 100], ho: [0.05, 0.1, 0] } },
+            { t: 620, a: { body: -9, hm: [0.07, -0.04, 102], ho: [0.05, 0.1, 0] } },
+            { t: 850, e: "inout", a: { body: 12, hm: [0.45, 0.12, -100], ho: [-0.02, 0.04, 0] }, x: 0.03 },
+            { t: 1040, a: { body: 11, hm: [0.44, 0.12, -101], ho: [-0.02, 0.04, 0] }, x: 0.03 },
             { t: 1200, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
@@ -7211,7 +7426,33 @@ void main(){
             { t: 1000, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
-        // any other stab skill: crouched and coiled back, then a charge that runs the spear through the foe
+        // 破胆之刺: a quick jab that makes the foe flinch, a half step back, then the real thrust
+        "skill:poke": {
+          dur: 820, hit: 470, hits: [250], lunge: true, color: 0xffe08a,
+          keys: [
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 120, e: "out", a: { body: -6, hm: [-0.05, -0.05, -2], ho: [0.08, 0.13, 0] }, x: -0.02 },
+            { t: 250, e: "in", a: { body: 8, hm: [0.3, -0.04, -4], ho: [0.03, 0.14, 0] }, x: 0.03 },
+            { t: 340, e: "out", a: { body: -8, hm: [-0.1, -0.04, 2], ho: [0.08, 0.13, 0] }, x: -0.03 },
+            { t: 470, e: "in", a: { body: 16, hm: [0.55, -0.02, -2], ho: [-0.02, 0.15, 0] }, x: 0.1 },
+            { t: 650, a: { body: 14, hm: [0.54, -0.02, -2], ho: [-0.02, 0.15, 0] }, x: 0.095 },
+            { t: 820, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+          ],
+        },
+        // 透骨之刺: a crouch, a leap with the spear raised, and the point driven down into the foe
+        "skill:impale": {
+          dur: 1150, hit: 680, ring: 680, lunge: true, color: 0xff5050,
+          keys: [
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 200, e: "out", a: { body: -8, hm: [-0.05, -0.1, 0], ho: [0.08, 0.1, 0] }, y: -0.04 },
+            { t: 420, e: "out", a: { body: -12, hm: [0, 0.45, 60], ho: [0.06, 0.25, 0] }, y: 0.35 },
+            { t: 560, a: { body: -14, hm: [-0.02, 0.5, 65], ho: [0.05, 0.27, 0] }, y: 0.4 },
+            { t: 680, e: "in", a: { body: 24, hm: [0.4, 0.05, -60], ho: [0, 0.12, 0] }, x: 0.08 },
+            { t: 920, a: { body: 22, hm: [0.39, 0.04, -61], ho: [0, 0.12, 0] }, x: 0.075 },
+            { t: 1150, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+          ],
+        },
+        // 贯心之刺 and any other stab skill: crouched and coiled back, then a charge that runs the spear through the foe
         skill: {
           dur: 1100, hit: 700, lunge: true, through: true,
           keys: [
@@ -7296,6 +7537,7 @@ void main(){
         cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
       },
     }
+    ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
     // two-handed slashers / smashers (werewolf, goblin): the sword's moves, heavier (both hands on the haft)
     const slowed = (set, k) =>
       Object.fromEntries(Object.entries(set).map(([n, a]) => [n, { ...a, dur: a.dur * k, hit: a.hit && a.hit * k, ring: a.ring && a.ring * k, hits: a.hits?.map(t => t * k), keys: a.keys.map(x => ({ ...x, t: x.t * k })) }]))
@@ -8174,6 +8416,15 @@ void main(){
         s.poly([0, -wd * 2.6, L * 0.2, 0, 0, wd * 2.6]).fill(big ? color : 0xdfe6f0)
         s.poly([-L, 0, -L * 0.82, -wd * 2.4, -L * 0.7, -wd * 2.4, -L * 0.86, 0, -L * 0.7, wd * 2.4, -L * 0.82, wd * 2.4]).fill(big ? color : 0xf2f2f2)
         shotLayer.addChild(s)
+      } else if (kind === "shard") {
+        // a long pointed shard of ice, pale at the core, flown flat (no arc)
+        s = new P.Graphics()
+        const L = h * 0.5
+        const wd = h * 0.05
+        s.poly([L * 0.5, 0, 0, -wd, -L * 0.5, 0, 0, wd]).fill(color)
+        s.poly([L * 0.4, 0, 0, -wd * 0.4, -L * 0.3, 0, 0, wd * 0.4]).fill(0xeaf8ff)
+        partLayer.addChild(s)
+        arc = 0
       } else {
         s = new P.Sprite(glow)
         s.anchor.set(0.5)
@@ -8187,8 +8438,8 @@ void main(){
         const q = at(p)
         const n = at(Math.min(1, p + 0.02))
         s.position.set(q.x, q.y)
-        if (kind === "arrow") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
-        else if (Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
+        if (kind !== "orb") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
+        if (kind !== "arrow" && Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
         if (p >= 1) s.destroy()
       })
     }
@@ -8422,9 +8673,28 @@ void main(){
         if (act?.shot != null) {
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
-          const opt = { color: kind === "orb" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h }
+          const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h }
+          const fromOf = () => (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
+          // earlier shots of a volley (shots: [ms, …]): each flies as long as the last, the foe flinches where it lands
+          for (const t of act.shots || [])
+            later(t, () =>
+              tgs.forEach(([a]) => {
+                shoot(kind, fromOf(), mid(a), flight, opt)
+                later(flight, () => {
+                  flash(a, 0xffffff, 160)
+                  a.jig = 0.7
+                })
+              }),
+            )
           later(act.shot, () => {
-            const from = (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
+            const from = fromOf()
+            // a piercing shot carries on past the foe, straight, off the side of the stage
+            if (act.pierce)
+              return tgs.forEach(([a]) => {
+                const m = mid(a)
+                const far = { x: m.x + src.dir * app.screen.width, y: m.y + ((m.y - from.y) * app.screen.width) / Math.max(1, Math.abs(m.x - from.x)) }
+                shoot(kind, from, far, (flight * Math.hypot(far.x - from.x, far.y - from.y)) / Math.max(1, Math.hypot(m.x - from.x, m.y - from.y)), { ...opt, arc: 0 })
+              })
             if (!act.rain) return tgs.forEach(([a]) => shoot(kind, from, mid(a), flight, opt))
             for (let n = 0; n < 3; n++) shoot(kind, from, { x: from.x + src.dir * src.h * (0.3 + n * 0.15), y: from.y - src.h * 2.5 }, flight * 0.4, { ...opt, arc: 0 })
             tgs.forEach(([a]) => {
@@ -8437,6 +8707,10 @@ void main(){
             })
           })
         }
+        // a drain: the foe's life streams back over to the caster after the blow
+        if (act?.drain)
+          for (let n = 0; n < 7; n++)
+            later(at + 80 + n * 60, () => tgs.forEach(([a]) => shoot("orb", mid(a), mid(src), 420, { color, h: src.h * 0.6, arc: (Math.random() - 0.5) * 0.5 })))
         const tgt = tgs[0]?.[0]
         if (act?.lunge && tgt) {
           // reach: stop in front of the target, or (act.through) run past it
