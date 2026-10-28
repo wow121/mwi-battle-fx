@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.2
+// @version      0.21.3
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6762,7 +6762,7 @@ void main(){
         }
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, u, kind: side === "p" ? "player" : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null }
+      const a = { side, i, u, kind: side === "p" ? "player" : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       a.filter = P.Filter.from({
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
@@ -7299,26 +7299,30 @@ void main(){
       if (tg.died) die(a)
       else if (a.rig && !a.act?.def.hit) play1(a, "hurt")
     }
+    // a.life counts deaths and revivals: a burn-away or rebuild still running from an earlier one leaves the body
+    // alone (a revival during the 2.4 s burn used to be burnt away again, the unit invisible until its next death)
     function die(a) {
       a.dead = true
+      const life = ++a.life
       drawHp(a)
       a.label.visible = false
       if (!a.rig) return
       if (a.rig.crumble) {
         rigCrumble(a)
-        tween(1500, p => (a.uni.uDis = ease(p)), 900)
-        for (let k = 0; k < 6; k++) later(900 + k * 180, () => sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
+        tween(1500, p => a.life === life && (a.uni.uDis = ease(p)), 900)
+        for (let k = 0; k < 6; k++) later(900 + k * 180, () => a.life === life && sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
       } else play1(a, "dead")
     }
     function revive(a, tg) {
       a.dead = false
+      const life = ++a.life
       a.hp = tg.hp
       a.label.visible = true
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.9, 900)
       if (a.rig) {
         if (a.rig.fallen) {
           rigRise(a)
-          tween(900, p => (a.uni.uDis = 1 - ease(p)))
+          tween(900, p => a.life === life && (a.uni.uDis = 1 - ease(p)))
         } else {
           a.uni.uDis = 0
           // getting up: a slow blend out of the lying pose
