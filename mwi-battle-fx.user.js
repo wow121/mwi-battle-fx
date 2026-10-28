@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.30
+// @version      0.21.31
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6265,7 +6265,7 @@
   const STUNS = {"entangle":[0.1,2000],"stunning_blow":[0.7,3000]}
   // each held weapon piece's long axis [butt x, y, head x, y, break?] in piece pixels (tools/rig-weapon-geom.py); break =
   // where the art is broken along the shaft (0 butt … 1 head), when it is
-  const WEAPON_AXIS = {"arcane_bow":[16,257,52,2],"arcane_crossbow":[5,88,128,88],"arcane_fire_staff":[13,379,58,8],"arcane_nature_staff":[26,270,26,2],"arcane_water_staff":[12,349,71,7],"azure_bulwark":[75,210,75,8],"azure_mace":[7,189,147,24],"azure_spear":[20,399,19,9],"azure_sword":[9,235,183,5,0.118],"birch_bow":[13,304,58,1,0.463],"birch_crossbow":[58,172,58,7],"birch_fire_staff":[17,397,30,8,0.765],"birch_nature_staff":[11,266,27,2],"birch_water_staff":[10,332,59,9],"blazing_trident":[10,402,46,12,0.295],"blooming_trident":[27,437,63,12],"burble_bulwark":[58,164,61,6],"burble_mace":[7,186,152,22],"burble_spear":[20,400,25,9],"burble_sword":[7,200,148,3,0.161],"cedar_bow":[10,269,60,1,0.418],"cedar_crossbow":[10,176,54,9,0.184],"cedar_fire_staff":[8,309,67,7],"cedar_nature_staff":[7,260,48,0],"cedar_water_staff":[7,336,67,4],"chaotic_flail":[-11,160,164,37],"cheese_bulwark":[65,178,65,7],"cheese_mace":[6,203,161,23],"cheese_spear":[24,378,25,9],"cheese_sword":[12,213,153,4,0.14],"crimson_bulwark":[65,180,65,7],"crimson_mace":[6,190,153,22],"crimson_spear":[18,371,19,9],"crimson_sword":[12,261,175,5,0.128],"cursed_bow":[24,337,65,10],"frost_staff":[12,360,64,3],"furious_spear":[42,436,40,12],"ginkgo_bow":[6,307,44,2,0.442],"ginkgo_crossbow":[46,203,46,8],"ginkgo_fire_staff":[10,295,63,7],"ginkgo_nature_staff":[13,353,43,3],"ginkgo_water_staff":[13,358,58,10],"gobo_boomstick":[6,279,81,13,0.661],"gobo_defender":[144,240,6,8,0.172],"gobo_shooter":[68,129,111,11],"gobo_slasher":[6,203,159,-6],"gobo_smasher":[1,214,163,4],"gobo_stabber":[6,184,139,3,0.172],"granite_bludgeon":[6,192,161,7],"griffin_bulwark":[75,211,75,11],"holy_bulwark":[73,196,75,8],"holy_mace":[7,208,156,21],"holy_spear":[23,390,25,10],"holy_sword":[8,222,176,6,0.117],"infernal_battlestaff":[-2,387,96,-1],"jackalope_staff":[10,353,60,0],"purpleheart_bow":[21,311,54,3,0.452],"purpleheart_crossbow":[10,99,126,99],"purpleheart_fire_staff":[15,406,37,8],"purpleheart_nature_staff":[27,271,25,2],"purpleheart_water_staff":[11,305,61,8],"rainbow_bulwark":[32,230,32,8],"rainbow_mace":[21,288,74,12],"rainbow_spear":[7,372,23,9],"rainbow_sword":[35,299,38,6,0.117],"redwood_bow":[13,309,100,1,0.424],"redwood_crossbow":[-1,169,72,13],"redwood_fire_staff":[11,288,30,8],"redwood_nature_staff":[12,304,48,2],"redwood_water_staff":[10,341,64,6],"regal_sword":[6,241,177,6,0.1],"rippling_trident":[14,375,63,10,0.324],"snake_fang_dirk":[4,14,184,62,0.214],"soul_hunter_crossbow":[21,168,56,5],"spiked_bulwark":[69,223,87,9],"stalactite_spear":[7,378,22,9],"sundering_crossbow":[44,237,44,8],"vampire_fang_dirk":[2,6,171,34,0.201],"vampiric_bow":[28,386,42,4],"verdant_bulwark":[70,195,72,8],"verdant_mace":[6,194,155,23],"verdant_spear":[6,374,25,8,0.723],"verdant_sword":[7,247,178,5,0.105],"werewolf_slasher":[15,273,205,35],"wooden_bow":[15,297,39,3,0.459],"wooden_crossbow":[23,186,71,8,0.202],"wooden_fire_staff":[8,319,62,7],"wooden_nature_staff":[27,251,28,2,0.602],"wooden_water_staff":[9,330,59,4],"rig:arcane_crossbow":[0,63,200,63],"rig:birch_crossbow":[0,57,200,57],"rig:cedar_crossbow":[0,46,200,46],"rig:ginkgo_crossbow":[0,43,200,43],"rig:purpleheart_crossbow":[0,39,200,39],"rig:redwood_crossbow":[0,47,200,47],"rig:soul_hunter_crossbow":[0,52,200,52],"rig:sundering_crossbow":[0,61,200,61],"rig:wooden_crossbow":[0,53,200,53]}
+  const WEAPON_AXIS = {"arcane_bow":[16,257,52,2],"arcane_crossbow":[5,88,128,88],"arcane_fire_staff":[13,379,58,8],"arcane_nature_staff":[26,270,26,2],"arcane_water_staff":[12,349,71,7],"azure_bulwark":[75,210,75,8],"azure_mace":[7,189,147,24],"azure_spear":[20,399,19,9],"azure_sword":[9,235,183,5,0.118],"birch_bow":[13,304,58,1,0.463],"birch_crossbow":[58,172,58,7],"birch_fire_staff":[17,397,30,8,0.765],"birch_nature_staff":[11,266,27,2],"birch_water_staff":[10,332,59,9],"blazing_trident":[10,402,46,12,0.295],"blooming_trident":[27,437,63,12],"burble_bulwark":[58,164,61,6],"burble_mace":[7,186,152,22],"burble_spear":[20,400,25,9],"burble_sword":[7,200,148,3,0.161],"cedar_bow":[10,269,60,1,0.418],"cedar_crossbow":[10,176,54,9,0.184],"cedar_fire_staff":[8,309,67,7],"cedar_nature_staff":[7,260,48,0],"cedar_water_staff":[7,336,67,4],"chaotic_flail":[-11,160,164,37],"cheese_bulwark":[65,178,65,7],"cheese_mace":[6,203,161,23],"cheese_spear":[24,378,25,9],"cheese_sword":[12,213,153,4,0.14],"crimson_bulwark":[65,180,65,7],"crimson_mace":[6,190,153,22],"crimson_spear":[18,371,19,9],"crimson_sword":[12,261,175,5,0.128],"cursed_bow":[24,337,65,10],"frost_staff":[12,360,64,3],"furious_spear":[42,436,40,12],"ginkgo_bow":[6,307,44,2,0.442],"ginkgo_crossbow":[46,203,46,8],"ginkgo_fire_staff":[10,295,63,7],"ginkgo_nature_staff":[13,353,43,3],"ginkgo_water_staff":[13,358,58,10],"gobo_boomstick":[6,279,81,13,0.661],"gobo_defender":[144,240,6,8,0.172],"gobo_shooter":[33,105,112,33],"gobo_slasher":[6,203,159,-6],"gobo_smasher":[1,214,163,4],"gobo_stabber":[6,184,139,3,0.172],"granite_bludgeon":[6,192,161,7],"griffin_bulwark":[75,211,75,11],"holy_bulwark":[73,196,75,8],"holy_mace":[7,208,156,21],"holy_spear":[23,390,25,10],"holy_sword":[8,222,176,6,0.117],"infernal_battlestaff":[-2,387,96,-1],"jackalope_staff":[10,353,60,0],"purpleheart_bow":[21,311,54,3,0.452],"purpleheart_crossbow":[10,99,126,99],"purpleheart_fire_staff":[15,406,37,8],"purpleheart_nature_staff":[27,271,25,2],"purpleheart_water_staff":[11,305,61,8],"rainbow_bulwark":[32,230,32,8],"rainbow_mace":[21,288,74,12],"rainbow_spear":[7,372,23,9],"rainbow_sword":[35,299,38,6,0.117],"redwood_bow":[13,309,100,1,0.424],"redwood_crossbow":[-1,169,72,13],"redwood_fire_staff":[11,288,30,8],"redwood_nature_staff":[12,304,48,2],"redwood_water_staff":[10,341,64,6],"regal_sword":[6,241,177,6,0.1],"rippling_trident":[14,375,63,10,0.324],"snake_fang_dirk":[4,14,184,62,0.214],"soul_hunter_crossbow":[21,168,56,5],"spiked_bulwark":[69,223,87,9],"stalactite_spear":[7,378,22,9],"sundering_crossbow":[44,237,44,8],"vampire_fang_dirk":[2,6,171,34,0.201],"vampiric_bow":[28,386,42,4],"verdant_bulwark":[70,195,72,8],"verdant_mace":[6,194,155,23],"verdant_spear":[6,374,25,8,0.723],"verdant_sword":[7,247,178,5,0.105],"werewolf_slasher":[15,273,205,35],"wooden_bow":[15,297,39,3,0.459],"wooden_crossbow":[23,186,71,8,0.202],"wooden_fire_staff":[8,319,62,7],"wooden_nature_staff":[27,251,28,2,0.602],"wooden_water_staff":[9,330,59,4],"rig:arcane_crossbow":[0,63,200,63],"rig:birch_crossbow":[0,57,200,57],"rig:cedar_crossbow":[0,46,200,46],"rig:ginkgo_crossbow":[0,43,200,43],"rig:purpleheart_crossbow":[0,39,200,39],"rig:redwood_crossbow":[0,47,200,47],"rig:soul_hunter_crossbow":[0,52,200,52],"rig:sundering_crossbow":[0,61,200,61],"rig:wooden_crossbow":[0,53,200,53]}
   // where the hand holds an item redrawn for the rig, in its pixels (books: the bottom of the spine, tools/rig-book-guide.py)
   const RIG_GRIP = {"rig:bishops_codex":[71,83],"rig:tome_of_healing":[71,83],"rig:tome_of_the_elements":[72,83]}
   // grip styles of the rigged player: at = where the hand holds the weapon (0 butt … 1 head), aim = its angle at rest
@@ -6284,13 +6284,20 @@
     crossbow: { at: 0.4, aim: 90, scale: 1.25, z: 4.2 },
     bulwark: { at: 0.5, aim: 180, hand: "ho", two: 0.38, scale: 1.35, z: 4.3 },
     great: { at: 0.1, aim: 172, two: 0.24 },
+    // the goblin sais: a pair, one in each hand (the icon's two crossed sais cut apart: ICON_CUT), the sword's moves
+    // with a dagger in the front hand
+    sai: { at: 0.14, aim: 172 },
   }
+  // a weapon held at its own point instead of its style's: the goblin slingshot by its handle (it has its own band
+  // drawn on, so no string), the short goblin boomstick low enough that its head clears the face
+  const GRIP_AT = { gobo_shooter: 0.14, gobo_boomstick: 0.12 }
   function gripOf(items) {
     const id = String(items?.main_hand || items?.two_hand || "").split("/").pop().replace(/_refined$/, "")
     if (/crossbow/.test(id)) return "crossbow"
     if (/_bow$/.test(id) || id === "gobo_shooter") return "bow"
     if (/staff|trident|boomstick/.test(id)) return "staff"
-    if (/spear|stabber/.test(id)) return "spear"
+    if (id === "gobo_stabber") return "sai"
+    if (/spear/.test(id)) return "spear"
     if (/bulwark/.test(id)) return "bulwark"
     if (/slasher|smasher/.test(id)) return "great"
     if (/mace|flail|bludgeon/.test(id)) return "mace"
@@ -6313,6 +6320,10 @@
       { name: "1号 弓", style: "ranged", element: "physical", skills: ["quick_shot", "steady_shot", "penetrating_shot", "rain_of_arrows", "flame_arrow", "silencing_shot", "critical_aura"], items: { two_hand: "cursed_bow" } },
       { name: "1号 重盾", style: "smash", element: "physical", skills: ["shield_bash", "stunning_blow", "sweep", "fracturing_impact", "guardian_aura"], items: { two_hand: "holy_bulwark" } },
       { name: "1号 双手斩", style: "slash", element: "physical", skills: ["cleave", "maim", "crippling_slash", "berserk"], items: { two_hand: "werewolf_slasher" } },
+      { name: "1号 哥布林重锤", style: "smash", element: "physical", skills: ["smack", "stunning_blow", "sweep", "fracturing_impact", "berserk"], items: { two_hand: "gobo_smasher" } },
+      { name: "1号 哥布林刺枪", style: "stab", element: "physical", skills: ["poke", "impale", "puncture", "penetrating_strike", "frenzy"], items: { two_hand: "gobo_stabber" } },
+      { name: "1号 哥布林弹弓", style: "ranged", element: "physical", skills: ["quick_shot", "steady_shot", "penetrating_shot", "rain_of_arrows"], items: { two_hand: "gobo_shooter" } },
+      { name: "1号 哥布林爆炸杖", style: "magic", element: "fire", skills: ["fireball", "flame_blast", "firestorm", "heal"], items: { two_hand: "gobo_boomstick" } },
     ]
     const st = { loc: "golem_cave", tier: 0, pilot: 0, ...GM_getValue("battle_fx_lab_v2", {}) }
     const PILOT = () => ({ avatar: "blue_person_1", outfit: "warrior_1", ...(PILOTS[st.pilot] || PILOTS[0]) })
@@ -6664,7 +6675,7 @@ void main(){
           keys: [
             { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 200, a: { body: -25, hm: [-0.1, 0.1, 20], ho: [-0.05, 0.05, 20] } },
-            { t: 650, e: "in", a: { body: -84, hm: [-0.25, -0.25, 30], ho: [-0.55, -0.2, -90] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.25, -0.25, 30], ho: [-0.2, -0.5, -90] } },
           ],
         },
       },
@@ -6950,7 +6961,7 @@ void main(){
           keys: [
             { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
             { t: 200, a: { body: -25, hm: [0, 0.15, 40], ho: [-0.05, 0.05, 20] } },
-            { t: 650, e: "in", a: { body: -84, hm: [-0.1, -0.6, -82], ho: [-0.55, -0.2, -90] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.1, -0.6, -82], ho: [-0.2, -0.5, -90] } },
           ],
         },
       },
@@ -7207,7 +7218,7 @@ void main(){
           keys: [
             { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
             { t: 200, a: { body: -25, hm: [0.1, 0.08, 10], ho: [-0.05, 0.05, 20] } },
-            { t: 650, e: "in", a: { body: -84, hm: [-0.05, -0.62, 0], ho: [-0.55, -0.2, -90] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.05, -0.62, 0], ho: [-0.2, -0.5, -90] } },
           ],
         },
       },
@@ -7356,7 +7367,7 @@ void main(){
           keys: [
             { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
             { t: 200, a: { body: -25, hm: [-0.05, 0.1, 30], ho: [-0.05, 0.05, 20] } },
-            { t: 650, e: "in", a: { body: -84, hm: [0.14, -0.6, 104], ho: [-0.55, -0.2, -90] } },
+            { t: 650, e: "in", a: { body: -84, hm: [0.14, -0.6, 104], ho: [-0.2, -0.5, -90] } },
           ],
         },
       },
@@ -7488,7 +7499,7 @@ void main(){
           keys: [
             { t: 0, a: { hm: [0.06, 0, -4], ho: [0.06, -0.05, 0] } },
             { t: 200, a: { body: -25, hm: [-0.05, 0.08, 10], ho: [-0.05, 0.05, 20] } },
-            { t: 650, e: "in", a: { body: -84, hm: [-0.2, -0.6, -6], ho: [-0.55, -0.2, -90] } },
+            { t: 650, e: "in", a: { body: -84, hm: [-0.2, -0.6, -6], ho: [-0.2, -0.5, -90] } },
           ],
         },
       },
@@ -7537,10 +7548,157 @@ void main(){
       },
     }
     ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
-    // two-handed slashers / smashers (werewolf, goblin): the sword's moves, heavier (both hands on the haft)
-    const slowed = (set, k) =>
-      Object.fromEntries(Object.entries(set).map(([n, a]) => [n, { ...a, dur: a.dur * k, hit: a.hit && a.hit * k, ring: a.ring && a.ring * k, hits: a.hits?.map(t => t * k), keys: a.keys.map(x => ({ ...x, t: x.t * k })) }]))
-    ACTIONS["player:great"] = slowed(ACTIONS.player, 1.3)
+    // ----- two-handed slashers / smashers (werewolf, goblin; after Lost Castle's THW_*): both hands on the haft (the
+    // front hand follows the weapon, def.two), so only the back hand moves. At rest the head trails low behind the body,
+    // the haft across the hips; every blow is a big committed swing with a long hold after it.
+    ACTIONS["player:great"] = {
+      idle: { dur: 1800, loop: true, keys: [{ t: 0, a: { hm: [0.06, -0.05, 104] } }, { t: 900, a: { body: 2, hm: [0.06, -0.035, 102] }, y: -0.01 }, { t: 1800, a: { hm: [0.06, -0.05, 104] } }] },
+      // 普攻 1: heaved up over the head and brought straight down in front, held in the ground, hauled back
+      attack: {
+        dur: 760, hit: 300, ring: 300, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 180, e: "out", a: { body: -12, hm: [0.02, 0.45, 75] }, x: -0.03 },
+          { t: 300, e: "in", a: { body: 20, hm: [0.48, 0.07, -112] }, x: 0.07 },
+          { t: 560, a: { body: 18, hm: [0.47, 0.06, -113] }, x: 0.065 },
+          { t: 760, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 普攻 2: wound back level and swung flat through the foe, carried on round and down
+      attack2: {
+        dur: 760, hit: 300, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 180, e: "out", a: { body: -14, hm: [-0.16, 0.2, 98] }, x: -0.03 },
+          { t: 300, e: "in", a: { body: 14, hm: [0.5, 0.22, -78] }, x: 0.06 },
+          { t: 400, e: "out", a: { body: 18, hm: [0.38, 0.1, -124] }, x: 0.07 },
+          { t: 580, a: { body: 17, hm: [0.37, 0.09, -125] }, x: 0.065 },
+          { t: 760, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 普攻 3: dragged low and ripped up through the foe, then down on it again
+      attack3: {
+        dur: 1000, hit: 560, hits: [260], ring: 560, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 160, e: "out", a: { body: 10, hm: [0.12, -0.12, 150] }, y: -0.03 },
+          { t: 260, e: "in", a: { body: -14, hm: [0.4, 0.5, 15] }, x: 0.05, y: 0.04 },
+          { t: 420, e: "out", a: { body: -12, hm: [0.05, 0.55, 80] }, x: 0.05, y: 0.08 },
+          { t: 560, e: "in", a: { body: 22, hm: [0.48, 0.06, -114] }, x: 0.1 },
+          { t: 800, a: { body: 20, hm: [0.47, 0.05, -115] }, x: 0.095 },
+          { t: 1000, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 分裂斩: a leap with the blade raised behind, crashing down on the foe with a shock ring (Lost Castle's impact)
+      "skill:cleave": {
+        dur: 1300, hit: 700, ring: 700, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 200, e: "out", a: { body: 8, hm: [0.0, -0.05, 130] }, x: -0.02, y: -0.04 },
+          { t: 450, e: "out", a: { body: -18, hm: [0.0, 0.5, 95] }, x: 0.02, y: 0.35 },
+          { t: 580, a: { body: -20, hm: [0.02, 0.58, 105] }, x: 0.05, y: 0.36 },
+          { t: 700, e: "in", a: { body: 28, hm: [0.52, 0.04, -116] }, x: 0.12 },
+          { t: 1050, a: { body: 26, hm: [0.51, 0.03, -117] }, x: 0.115 },
+          { t: 1300, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 血刃斩: three heavy cuts, down, up, and down through
+      "skill:maim": {
+        dur: 1350, hit: 900, hits: [380, 640], lunge: true, color: 0xff3b3b,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 240, e: "out", a: { body: -12, hm: [0.02, 0.48, 80] }, x: -0.03 },
+          { t: 380, e: "in", a: { body: 18, hm: [0.48, 0.07, -112] }, x: 0.06 },
+          { t: 520, e: "out", a: { body: 12, hm: [0.3, -0.1, -160] }, x: 0.06, y: -0.02 },
+          { t: 640, e: "in", a: { body: -12, hm: [0.42, 0.5, 18] }, x: 0.08, y: 0.04 },
+          { t: 770, e: "out", a: { body: -14, hm: [0.05, 0.56, 85] }, x: 0.08, y: 0.06 },
+          { t: 900, e: "in", a: { body: 24, hm: [0.52, 0.05, -115] }, x: 0.13 },
+          { t: 1150, a: { body: 22, hm: [0.51, 0.04, -116] }, x: 0.125 },
+          { t: 1350, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 致残斩: crouched, the blade trailing low behind; a sweep at the legs, round again and a harder one
+      "skill:crippling_slash": {
+        dur: 1400, hit: 900, hits: [520], ring: 900, lunge: true, color: 0xff8a3b,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 260, e: "out", a: { body: -14, hm: [-0.14, 0.02, 116] }, y: -0.04 },
+          { t: 420, a: { body: -15, hm: [-0.15, 0.01, 117] }, y: -0.04 },
+          { t: 520, e: "in", a: { body: 16, hm: [0.5, 0.0, -100] }, x: 0.06 },
+          { t: 620, e: "out", a: { body: 14, hm: [0.42, -0.04, -130] }, x: 0.06 },
+          { t: 780, e: "inout", a: { body: -16, hm: [-0.15, 0.02, 120] }, x: 0.04, y: -0.03 },
+          { t: 900, e: "in", a: { body: 22, hm: [0.52, -0.01, -102] }, x: 0.11 },
+          { t: 1150, a: { body: 20, hm: [0.51, -0.02, -103] }, x: 0.105 },
+          { t: 1400, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 重锤: hoisted high and held, then hammered down on the foe's head
+      "skill:stunning_blow": {
+        dur: 1350, hit: 820, ring: 820, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 320, e: "out", a: { body: -16, hm: [-0.02, 0.6, 115] }, y: 0.05 },
+          { t: 720, a: { body: -17, hm: [-0.02, 0.62, 117] }, y: 0.05 },
+          { t: 820, e: "in", a: { body: 26, hm: [0.5, 0.05, -115] }, x: 0.11 },
+          { t: 1100, a: { body: 24, hm: [0.49, 0.04, -116] }, x: 0.105 },
+          { t: 1350, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // 重扫: wound far round behind and swung flat through the whole line
+      "skill:sweep": {
+        dur: 1300, hit: 720, ring: 720, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 280, e: "out", a: { body: -18, hm: [-0.22, 0.16, 105] }, x: -0.04 },
+          { t: 600, a: { body: -19, hm: [-0.23, 0.16, 107] }, x: -0.045 },
+          { t: 720, e: "in", a: { body: 16, hm: [0.52, 0.16, -88] }, x: 0.07 },
+          { t: 820, e: "out", a: { body: 20, hm: [0.42, 0.1, -122] }, x: 0.08 },
+          { t: 1050, a: { body: 18, hm: [0.41, 0.09, -123] }, x: 0.075 },
+          { t: 1300, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // any other blow (and one on every foe): two whirls with the weapon swung out, then a slam
+      skill: {
+        dur: 1400, hit: 880, ring: 880, lunge: true,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 220, e: "out", a: { body: -10, hm: [0.42, 0.18, -75] }, y: -0.02 },
+          { t: 820, e: "linear", a: { body: -6, hm: [0.42, 0.18, -75] }, y: 0.05, r: 720 },
+          { t: 880, e: "in", a: { body: 24, hm: [0.5, 0.05, -114] }, x: 0.06, r: 720 },
+          { t: 1150, a: { body: 22, hm: [0.49, 0.04, -115] }, x: 0.06, r: 720 },
+          { t: 1400, a: { hm: [0.06, -0.05, 104] }, r: 720 },
+        ],
+      },
+      // the weapon planted in front against the blow, knocked back a step
+      hurt: {
+        dur: 450,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 80, e: "out", a: { body: -12, hm: [0.06, 0.08, 20] }, x: -0.05 },
+          { t: 250, a: { body: -8, hm: [0.06, 0.07, 25] }, x: -0.04 },
+          { t: 450, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // raised high overhead, head up (a war cry)
+      cast: {
+        dur: 1150,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 300, e: "out", a: { body: -6, hm: [0.08, 0.6, 20] }, y: 0.03 },
+          { t: 850, a: { body: -6, hm: [0.08, 0.61, 20] }, y: 0.03 },
+          { t: 1150, a: { hm: [0.06, -0.05, 104] } },
+        ],
+      },
+      // falls on the back; the weapon drops and lies on the ground beside the body
+      dead: {
+        dur: 700,
+        keys: [
+          { t: 0, a: { hm: [0.06, -0.05, 104] } },
+          { t: 220, a: { body: -25, hm: [-0.05, 0.1, 60] } },
+          { t: 700, e: "in", a: { body: -84, hm: [-0.15, -0.6, -84] } },
+        ],
+      },
+    }
     // a spear with a shield: the shield back at the body as a guard, the spear (drawn over it) low at the hip as without one
     const shifted = (set, dhm, dho, skip) =>
       Object.fromEntries(
@@ -7889,7 +8047,7 @@ void main(){
         }
     }
     function makeUnit(side, i, u) {
-      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? offOf(u.items?.off_hand) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
+      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       a.filter = P.Filter.from({
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
@@ -7964,6 +8122,10 @@ void main(){
     // 2x into a canvas; its axis runs from the lowest-left pixel (butt) to the highest-right one (head).
     const iconTex = {}
     let itemsSvg = null
+    // game icons drawn the other way round, or holding two weapons (cut apart: keep = [line, half width] of the one
+    // kept, drop = [line, half width] of the other, core = the kept one's own half width where they cross; axis = butt → head)
+    const ICON_FLIP = new Set(["gobo_boomstick"])
+    const ICON_CUT = { gobo_stabber: { keep: [3, 48.3, 27.5, 5, 9.7], drop: [48.7, 37, 13, 2, 8.7], core: 1.05, axis: [3, 48.3, 27.5, 5] } }
     async function gameIcon(id) {
       if (iconTex[id] !== undefined) return iconTex[id]
       const url = Stage.sheet("items")
@@ -8006,7 +8168,28 @@ void main(){
               if (t < lo[2]) lo = [x, y, t]
               if (t > hi[2]) hi = [x, y, t]
             }
-        return (iconTex[id] = { tex: P.Texture.from(c), axis: [lo[0], lo[1], hi[0], hi[1]], k: 0.5 })
+        const cut = ICON_CUT[id]
+        if (cut) {
+          // keep the pixels near one line (and off another), in icon units (viewBox 0..50)
+          const q = N / 50
+          const near = (x, y, [ax, ay, bx, by]) => {
+            const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy)
+            const t = ((x - ax) * dx + (y - ay) * dy) / L / L
+            return t < -0.05 || t > 1.05 ? Infinity : Math.abs((x - ax) * dy - (y - ay) * dx) / L
+          }
+          const im = g.getImageData(0, 0, N, N)
+          for (let y = 0; y < N; y++)
+            for (let x = 0; x < N; x++) {
+              const d1 = near(x / q, y / q, cut.keep)
+              const d2 = near(x / q, y / q, cut.drop)
+              if (!(d1 < cut.keep[4] && (d2 > cut.drop[4] || d1 < cut.core))) im.data[(y * N + x) * 4 + 3] = 0
+            }
+          g.putImageData(im, 0, 0)
+          return (iconTex[id] = { tex: P.Texture.from(c), axis: cut.axis.map(v => v * q), k: 0.5 })
+        }
+        // the head is at the top right in most icons, the bottom left in a few (ICON_FLIP)
+        const axis = ICON_FLIP.has(id) ? [hi[0], hi[1], lo[0], lo[1]] : [lo[0], lo[1], hi[0], hi[1]]
+        return (iconTex[id] = { tex: P.Texture.from(c), axis, k: 0.5 })
       } catch (e) {
         console.warn("[动画测试] icon", id, e)
         return (iconTex[id] = null)
@@ -8059,11 +8242,12 @@ void main(){
         if (base.parts.hm) {
           const ax = G.at != null && w.axis
           const ho = G.hand === "ho"
-          const at = ax && G.gap && ax[4] > 0.15 && ax[4] < 0.5 ? ax[4] : G.at
+          const wid = String(items.main_hand || items.two_hand).split("/").pop().replace(/_refined$/, "")
+          const at = GRIP_AT[wid] ?? (ax && G.gap && ax[4] > 0.15 && ax[4] < 0.5 ? ax[4] : G.at)
           def.parts.weapon = { pivot: ax ? along(ax, at) : w.grip, tip: ax && along(ax, 1), at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: G.z || (G === GRIPS.spear && offOf(u.items?.off_hand) === "shield" ? 4.2 : ho ? 3.95 : 2.9), rot: ax ? angle(ax) - G.aim : -30, scale: base.scale * (G.scale || 1) * (w.k || 1) }
           if (ax && G.two && !u.items?.off_hand) def.two = along(ax, G.two)
           // a bow's string runs between its two ends (pulled back by the drawing hand)
-          if (ax && G === GRIPS.bow) def.string = [ax.slice(0, 2), ax.slice(2)]
+          if (ax && G === GRIPS.bow && wid !== "gobo_shooter") def.string = [ax.slice(0, 2), ax.slice(2)]
         } else def.parts.weapon = base.parts.bfore
           ? // at rest the blade points up and forward from the back hand
             { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: -60, scale: base.scale }
@@ -8079,7 +8263,8 @@ void main(){
         const sleeve = outfit && C["o_" + outfit]?.armf?.cover > 0.5 ? C["o_" + outfit].armf : C["a_" + avatar]?.armf
         def.armColor = sleeve || { fill: "#c8c8c8", line: "#6e6e6e" }
       }
-      const off = await piece(u.items?.off_hand)
+      // (the second sai of the goblin pair in the front hand)
+      const off = await piece(u.items?.off_hand || (G === GRIPS.sai && items.two_hand))
       if (off) {
         tex.off = off.tex
         // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm); a dagger by
@@ -8087,7 +8272,7 @@ void main(){
         def.parts.off = base.parts.ho
           ? // (a dagger turned to point forward, held over the break between its pommel and grip where the art has one,
             // its point for the blade's light trail)
-            { pivot: off.axis ? along(off.axis, off.axis[4] < 0.4 ? off.axis[4] : 0.08) : off.grip, tip: off.axis && along(off.axis, 1), rot: off.axis ? angle(off.axis) - 90 : 0, at: base.fist, parent: "ho", z: 4.1, scale: base.scale }
+            { pivot: off.axis ? along(off.axis, off.axis[4] < 0.4 ? off.axis[4] : 0.08) : off.grip, tip: off.axis && along(off.axis, 1), rot: off.axis ? angle(off.axis) - 90 : 0, at: base.fist, parent: "ho", z: 4.1, scale: base.scale * (off.k || 1) }
           : base.parts.bfore
           ? { pivot: off.grip, at: base.fist, parent: "fore", z: 4.5, upright: true, scale: base.scale }
           : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
