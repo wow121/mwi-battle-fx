@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.26
+// @version      0.21.27
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -7666,7 +7666,7 @@ void main(){
     let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
-    let dot, glow, smokeTex, streakTex, rayTex, hazeTex
+    let dot, glow, smokeTex, streakTex, rayTex, hazeTex, leafTex
     let shock = null
     // filters on the whole scene (shockwave, heat haze, zoom blur), each running for a while; the numbers and names
     // over it stay sharp
@@ -7763,6 +7763,21 @@ void main(){
           c.fillStyle = g
           c.fillRect(0, 0, n, n)
         }
+      })
+      // a leaf / petal: a pointed oval with a paler midrib
+      leafTex = canvasTex(32, (c, n) => {
+        c.fillStyle = "#fff"
+        c.beginPath()
+        c.moveTo(n * 0.08, n / 2)
+        c.quadraticCurveTo(n / 2, n * 0.12, n * 0.92, n / 2)
+        c.quadraticCurveTo(n / 2, n * 0.88, n * 0.08, n / 2)
+        c.fill()
+        c.strokeStyle = "rgba(255,255,255,.5)"
+        c.lineWidth = 1.5
+        c.beginPath()
+        c.moveTo(n * 0.15, n / 2)
+        c.lineTo(n * 0.85, n / 2)
+        c.stroke()
       })
       // a spark streak (bright head on the right, long fading tail), and a light ray (a thin taper)
       streakTex = stripTex(64, 8, (c, w, h) => {
@@ -8525,8 +8540,9 @@ void main(){
     // toward a moving point; tex "streak" draws them as streaks along their flight, "smoke" as puffs that do not glow
     function emit(x, y, o = {}) {
       const n = Math.min(o.n ?? 10, MAX_PARTS - parts.length)
-      const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : dot
-      const layer = o.tex === "smoke" ? smokeLayer : partLayer
+      const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : o.tex === "leaf" ? leafTex : dot
+      // smoke and leaves are solid things: drawn over the bodies without glowing
+      const layer = o.tex === "smoke" || o.tex === "leaf" ? smokeLayer : partLayer
       const cols = [].concat(o.color ?? 0xffffff)
       for (let k = 0; k < n; k++) {
         const s = new P.Sprite(tex)
@@ -8539,7 +8555,7 @@ void main(){
         const v = (o.speed ?? 200) * (0.4 + Math.random() * 0.8)
         const s0 = (o.size ?? 0.5) * (0.6 + Math.random() * 0.8)
         s.scale.set(s0)
-        if (o.tex === "smoke") s.rotation = Math.random() * 6.3
+        if (o.tex === "smoke" || o.tex === "leaf") s.rotation = Math.random() * 6.3
         layer.addChild(s)
         parts.push({
           s,
@@ -8557,7 +8573,7 @@ void main(){
           fadeIn: o.fadeIn,
           to: o.to,
           pull: o.pull || 0,
-          spin: o.tex === "smoke" ? (Math.random() - 0.5) * 1.2 : 0,
+          spin: o.tex === "smoke" ? (Math.random() - 0.5) * 1.2 : o.tex === "leaf" ? (Math.random() - 0.5) * 8 : 0,
           stretch: o.tex === "streak" ? (o.stretch ?? 0.004) : 0,
         })
       }
@@ -8655,6 +8671,23 @@ void main(){
           for (let st = 1; st <= 3; st++) g.lineTo(Math.cos(an + (Math.random() - 0.5) * 0.5) * r * st * 0.33, Math.sin(an + (Math.random() - 0.5) * 0.5) * r * st * 0.33 * 0.25)
         }
         g.stroke({ color: 0x1a120c, width: r * 0.035, alpha: 0.75 })
+      } else if (kind === "frost") {
+        // a pale icy patch with spikes standing up round it
+        g.ellipse(0, 0, r, r * 0.24).fill({ color: 0xcff2ff, alpha: 0.35 })
+        for (let k = 0; k < 9; k++) {
+          const x = (Math.random() - 0.5) * r * 1.6
+          const sh = r * (0.12 + Math.random() * 0.22)
+          g.poly([x - r * 0.04, 0, x, -sh, x + r * 0.04, 0]).fill({ color: k % 2 ? 0xe8fbff : 0x9fe6ff, alpha: 0.85 })
+        }
+      } else if (kind === "vines") {
+        // green tendrils curling up out of the ground round the legs
+        for (let k = 0; k < 6; k++) {
+          const x = (k / 5 - 0.5) * r * 0.8
+          const hh = r * (0.35 + Math.random() * 0.3)
+          const bend = (Math.random() - 0.5) * r * 0.4
+          g.moveTo(x, 0).quadraticCurveTo(x + bend, -hh * 0.6, x - bend * 0.5, -hh).stroke({ color: k % 2 ? 0x3f9a3a : 0x5fc350, width: r * 0.035, cap: "round" })
+          g.ellipse(x - bend * 0.5, -hh, r * 0.05, r * 0.025).fill(0x8fe86a)
+        }
       } else if (kind === "arrow") {
         // stuck in the ground at a slant, fletching up
         const ex = -dir * r * 0.45
@@ -8662,7 +8695,8 @@ void main(){
         g.moveTo(0, 0).lineTo(ex, ey).stroke({ color: 0x8a5a2b, width: r * 0.05 })
         g.moveTo(ex, ey).lineTo(ex - dir * r * 0.08, ey - r * 0.12).stroke({ color, width: r * 0.09 })
       }
-      decalLayer.addChild(g)
+      // vines wind round the legs, in front of the body; the rest lie under everyone
+      ;(kind === "vines" ? smokeLayer : decalLayer).addChild(g)
       tween(dur, p => {
         g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
         if (p >= 1) g.destroy({ children: true })
@@ -9010,6 +9044,128 @@ void main(){
         if (p < 1 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.3, { n: 1, color: [0xffb04a, 0xff6a2a], color1: 0x501000, size: 0.3, size1: 0.05, speed: 30, up: 160, gravity: -60, life: 1100 })
       })
     }
+    // ----- element kits (what a hit of each element throws off) -----
+    // rings spreading flat on the ground (water, shock)
+    function ripple(x, y, r, color, { n = 2, dur = 900, gap = 160 } = {}) {
+      for (let k = 0; k < n; k++)
+        later(k * gap, () => {
+          const g = new P.Graphics()
+          fxLayer.addChild(g)
+          tween(dur, p => {
+            g.clear()
+            const R = r * (0.2 + 0.8 * ease(p))
+            g.ellipse(x, y, R, R * 0.22).stroke({ color, width: r * 0.05 * (1 - p) + 1, alpha: (1 - p) * 0.9 })
+            if (p >= 1) g.destroy()
+          })
+        })
+    }
+    // water: a splash of drops thrown up and falling, spray off the ground, a little mist, ripples underfoot
+    const splash = (a, big, color = 0x5ac8ff) => {
+      const m = mid(a)
+      emit(m.x, m.y, { n: big ? 34 : 20, color: [color, 0xbfefff, 0xffffff], size: 0.4, size1: 0.15, speed: 340, up: 220, gravity: 900, drag: 0.4, life: 800, jitter: a.h * 0.3 })
+      emit(a.x0, a.y0, { n: big ? 14 : 8, color: [color, 0xffffff], size: 0.35, speed: 260, angle: -Math.PI / 2, spread: 1.6, gravity: 1000, life: 600, jitter: a.h * 0.5, flat: 0.3 })
+      emit(m.x, m.y, { n: 4, tex: "smoke", color: 0xbfe8ff, alpha: 0.3, size: 0.6, size1: 1.5, speed: 40, up: 20, drag: 0.3, life: 1100, jitter: a.h * 0.3 })
+      ripple(a.x0, a.y0, a.h * (big ? 1 : 0.7), color)
+    }
+    // ice: shards flying off, frost glitter hanging in the air, cold mist, a frosted patch, the foe tinged blue
+    const shatter = (a, big) => {
+      const m = mid(a)
+      emit(m.x, m.y, { n: big ? 26 : 16, tex: "streak", color: [0xbff4ff, 0x7fd8ff, 0xffffff], size: 0.45, speed: 480, up: 120, gravity: 900, drag: 0.2, life: 600, jitter: a.h * 0.2 })
+      emit(m.x, m.y, { n: big ? 14 : 8, color: [0xe8fbff, 0x9fe6ff], size: 0.3, size1: 0.05, speed: 60, gravity: -20, life: 1400, jitter: a.h * 0.6 })
+      emit(a.x0, a.y0 - a.h * 0.2, { n: 5, tex: "smoke", color: 0xdff6ff, alpha: 0.3, size: 0.7, size1: 1.8, speed: 30, drag: 0.3, life: 1500, jitter: a.h * 0.5, flat: 0.5 })
+      decal("frost", a.x0, a.y0, a.h * (big ? 0.8 : 0.6), { dur: 3200 })
+      flash(a, 0x9fe6ff, 600)
+    }
+    // nature: leaves torn loose and drifting down, green motes rising
+    const leaves = (a, big) => {
+      const m = mid(a)
+      emit(m.x, m.y, { n: big ? 18 : 11, tex: "leaf", color: [0x5fd35a, 0x8fe86a, 0x3fae4a], size: 0.5, speed: 220, up: 160, gravity: 220, drag: 0.5, life: 1500, jitter: a.h * 0.3 })
+      emit(m.x, m.y, { n: 10, color: [0xb8ff9a, 0xffffff], size: 0.3, size1: 0.05, speed: 80, gravity: -60, life: 1000, jitter: a.h * 0.5 })
+    }
+    // a cloud lingering over an area: puffs drifting up for dur ms (spores, smoke)
+    const cloud = (x, y, w, h, dur, colors, alpha = 0.35) =>
+      tween(dur, p => {
+        if (p < 1 && Math.random() < 0.8) emit(x + (Math.random() - 0.5) * w, y - Math.random() * h, { n: 1, tex: "smoke", color: colors, alpha, size: 0.5, size1: 1.4, speed: 20, up: 15, drag: 0.5, life: 1300, fadeIn: 0.3 })
+      })
+    // rock and earth thrown up by a heavy blow
+    const debris = (x, y, h, n = 14) => emit(x, y, { n, color: [0x8a7458, 0x6a5840, 0xb09a78], size: 0.35, speed: 320, angle: -Math.PI / 2, spread: 1.8, gravity: 1300, life: 700, jitter: h * 0.4, flat: 0.3 })
+    // a blade's spray carried on through the foe out of its back
+    const through = (a, dir, color, n = 18) => {
+      const m = mid(a)
+      emit(m.x + dir * a.h * 0.2, m.y, { n, tex: "streak", color: [color, 0xffffff], size: 0.5, speed: 760, angle: dir > 0 ? 0 : Math.PI, spread: 0.35, drag: 0.05, life: 280 })
+    }
+    // a ring standing up across a blow (a shield's shock, an arrow's punch)
+    function shockRing(x, y, h, color) {
+      const g = new P.Graphics()
+      g.position.set(x, y)
+      fxLayer.addChild(g)
+      tween(300, p => {
+        g.clear()
+        const r = h * (0.1 + 0.55 * ease(p))
+        g.ellipse(0, 0, r * 0.4, r).stroke({ color, width: h * 0.05 * (1 - p) + 1, alpha: 1 - p })
+        if (p >= 1) g.destroy()
+      })
+    }
+    // a bubble of light round a body for a while (a shield, invulnerability)
+    function bubble(a, color, dur) {
+      const g = new P.Graphics()
+      fxLayer.addChild(g)
+      tween(dur, p => {
+        g.clear()
+        const x = a.x0 + (a.dash || 0)
+        const y = a.y0 - a.h * 0.45
+        const al = (p < 0.15 ? p / 0.15 : 1 - Math.max(0, p - 0.6) / 0.4) * (0.75 + 0.25 * Math.sin(p * dur * 0.02))
+        g.ellipse(x, y, a.h * 0.42, a.h * 0.58).fill({ color, alpha: 0.12 * al }).stroke({ color, width: a.h * 0.025, alpha: 0.9 * al })
+        if (p >= 1) g.destroy()
+      })
+    }
+    const spanOf = tgs => span(tgs.map(([a]) => a))
+    const each = f => ({ tgs, src, color }) => tgs.forEach(([a]) => f(a, src, color))
+    // a buff: a ring spreading underfoot, motes and streaks rising round the body in its colour
+    function buffFx(a, color, { motes = 26, streaks = 10 } = {}) {
+      ripple(a.x0, a.y0, a.h * 0.9, color, { n: 2, dur: 700, gap: 140 })
+      tween(700, p => {
+        if (p < 1 && Math.random() < 0.8) emit(a.x0 + (Math.random() - 0.5) * a.h * 0.6, a.y0, { n: 1, color: [color, 0xffffff], size: 0.35, size1: 0.05, speed: 20, up: 260, gravity: -80, life: 800 })
+      })
+      emit(a.x0, a.y0 - a.h * 0.3, { n: streaks, tex: "streak", color: [color, 0xffffff], size: 0.5, speed: 420, angle: -Math.PI / 2, spread: 0.7, drag: 0.1, life: 420, jitter: a.h * 0.5 })
+      emit(a.x0, a.y0 - a.h * 0.5, { n: motes, color, size: 0.3, size1: 0.05, speed: 90, gravity: -40, life: 900, jitter: a.h * 0.5 })
+    }
+    // buffs: their colour, and what each adds
+    const BUFF_FX = {
+      berserk: [0xff3b2a, a => cloud(a.x0, a.y0, a.h * 0.6, a.h * 0.8, 900, [0xff4a2a, 0xff8a3a], 0.25)],
+      frenzy: [0xffd84a, a => emit(a.x0 - a.dir * a.h * 0.4, a.y0 - a.h * 0.45, { n: 16, tex: "streak", color: [0xffe680, 0xffffff], size: 0.6, speed: 700, angle: a.dir > 0 ? Math.PI : 0, spread: 0.25, life: 300, jitter: a.h * 0.8 })],
+      toughness: [0x8fb4ff, a => bubble(a, 0x8fb4ff, 1100)],
+      invincible: [0xffe680, a => bubble(a, 0xffe680, 1500)],
+      spike_shell: [0xc8b090, a => emit(a.x0, a.y0 - a.h * 0.45, { n: 14, tex: "streak", color: [0xe0d0b0, 0xffffff], size: 0.5, speed: 300, drag: 0.02, life: 360 })],
+      precision: [0xff8a3c, a => ripple(a.x0, a.y0 - a.h * 0.5, a.h * 0.5, 0xff8a3c, { n: 3, dur: 500, gap: 100 })],
+      elusiveness: [0x9cff9a, a => emit(a.x0, a.y0 - a.h * 0.4, { n: 14, tex: "streak", color: [0xc8ffc8, 0xffffff], size: 0.5, speed: 380, angle: a.dir > 0 ? Math.PI : 0, spread: 0.6, life: 360, jitter: a.h * 0.7 })],
+      vampirism: [0xd01a3a, a => gather(() => mid(a), 0xff2a4a, a.h * 1.4, 600)],
+      insanity: [0xc040ff, a => cloud(a.x0, a.y0, a.h * 0.6, a.h * 0.9, 900, [0x8a2ad0, 0xc040ff], 0.25)],
+      elemental_affinity: [0x9a7cff, a => gather(() => mid(a), 0x9a7cff, a.h * 1.4, 600)],
+      retribution: [0xff9a3c, a => bubble(a, 0xff9a3c, 1000)],
+      provoke: [0xff5050, a => ripple(a.x0, a.y0, a.h * 1.4, 0xff5050, { n: 3, dur: 600, gap: 120 })],
+      taunt: [0xff5050, a => ripple(a.x0, a.y0, a.h * 1.4, 0xff5050, { n: 3, dur: 600, gap: 120 })],
+      critical_aura: [0xff8a3c],
+      fierce_aura: [0xff3c5a],
+      mystic_aura: [0x9a7cff],
+      guardian_aura: [0x4aa8ff],
+      speed_aura: [0x9cff4a],
+    }
+    // heals: green motes rising, a soft ripple; a revive: a pillar of gold light
+    function healFx(a, key) {
+      if (key === "revive") {
+        light(a.x0, a.y0 - a.h * 0.6, 0xffe680, a.h * 1.2, 1100, 1.3)
+        emit(a.x0, a.y0, { n: 40, tex: "streak", color: [0xffe680, 0xffffff], size: 0.5, speed: 500, angle: -Math.PI / 2, spread: 0.3, drag: 0.15, life: 700, jitter: a.h * 0.4 })
+        ripple(a.x0, a.y0, a.h * 1.3, 0xffe680, { n: 3 })
+        return
+      }
+      ripple(a.x0, a.y0, a.h * 0.8, COLOR.heal, { n: 1, dur: 700 })
+      tween(800, p => {
+        if (p < 1 && Math.random() < 0.7) emit(a.x0 + (Math.random() - 0.5) * a.h * 0.6, a.y0 - Math.random() * a.h * 0.3, { n: 1, color: [COLOR.heal, 0xffffff], size: 0.35, size1: 0.05, speed: 15, up: 150, gravity: -40, life: 1000 })
+      })
+      if (key === "rejuvenate") emit(a.x0, a.y0 - a.h * 0.9, { n: 10, tex: "leaf", color: [0xffb0d0, 0xfff0f6, 0x9fe88a], size: 0.4, speed: 60, gravity: 90, drag: 0.6, life: 1600, jitter: a.h * 0.8 })
+    }
+
     // sheet: false = the recipe draws the skill itself, the old stage's sheet for it is left out (no doubled volley)
     const SKILL_FX = {
       // 火球: a smoking trail behind it; it bursts in flame, scorching the ground and heating the air
@@ -9044,6 +9200,230 @@ void main(){
           decal("crack", src.x0 + (src.dash || 0), src.y0, src.h * 0.9)
         },
       },
+      // ----- fire -----
+      // 烟爆灭影: the foe swallowed in a burst of black smoke shot through with embers
+      smoke_burst: {
+        hit: each(a => {
+          const m = mid(a)
+          emit(m.x, m.y, { n: 14, tex: "smoke", color: [0x1e1818, 0x2a2222, 0x3a2e2a], alpha: 0.75, size: 0.7, size1: 2, speed: 160, drag: 0.15, life: 1500, jitter: a.h * 0.3 })
+          emit(m.x, m.y, { n: 20, color: [0xffb04a, 0xff5a1a], color1: 0x401000, size: 0.3, size1: 0.05, speed: 260, gravity: -80, drag: 0.3, life: 900 })
+          cloud(a.x0, a.y0, a.h * 0.8, a.h * 0.8, 900, [0x1e1818, 0x2a2222], 0.5)
+        }),
+      },
+      // ----- water / ice -----
+      // 流水冲击: a burst of water over the foe, drops raining back down, ripples underfoot
+      water_strike: { hit: each(a => splash(a, true)) },
+      // 冰枪术: frost mist and glitter trailing the shard; it shatters on the foe and frosts the ground
+      ice_spear: {
+        fly: q => {
+          if (Math.random() < 0.6) emit(q.x, q.y, { n: 1, tex: "smoke", color: 0xdff6ff, alpha: 0.35, size: 0.25, size1: 0.8, speed: 10, life: 500 })
+          if (Math.random() < 0.7) emit(q.x, q.y, { n: 1, color: [0xe8fbff, 0x9fe6ff], size: 0.28, size1: 0.05, speed: 40, life: 600 })
+        },
+        hit: each(a => shatter(a, false)),
+      },
+      // 冰霜爆裂: the whole row shatters and frosts over, cold mist rolling along the ground
+      frost_surge: {
+        hit: ({ tgs }) => {
+          if (!tgs.length) return
+          const S = spanOf(tgs)
+          tgs.forEach(([a]) => shatter(a, true))
+          cloud(S.cx, S.ground, S.w, S.h * 0.3, 1200, [0xdff6ff, 0xc8eeff], 0.35)
+          zoomBlur(S.cx, S.ground - S.h * 0.5, 240, 0.05)
+          shake = Math.max(shake, 0.8)
+        },
+      },
+      // 法力喷泉: water bursts up out of the ground under every foe and rains back down
+      mana_spring: {
+        hit: ({ tgs }) =>
+          tgs.forEach(([a]) => {
+            emit(a.x0, a.y0, { n: 36, color: [0x5ac8ff, 0xbfefff, 0xffffff], size: 0.45, size1: 0.2, speed: 700, angle: -Math.PI / 2, spread: 0.35, gravity: 1400, life: 1000, jitter: a.h * 0.3 })
+            splash(a, false)
+            ripple(a.x0, a.y0, a.h * 1.2, 0x5ac8ff, { n: 3 })
+          }),
+      },
+      // ----- nature -----
+      // 缠绕: vines grow up round the foe's legs, leaves torn loose
+      entangle: {
+        hit: each(a => {
+          decal("vines", a.x0, a.y0, a.h * 0.9, { dur: 2800 })
+          leaves(a, false)
+        }),
+      },
+      // 生命吸取: green motes and leaves torn off the foe (the stream back is the action's drain)
+      life_drain: { hit: each(a => leaves(a, false)) },
+      // 剧毒粉尘: a green-yellow cloud of spores hangs over the row, poison bubbles rising
+      toxic_pollen: {
+        hit: ({ tgs }) => {
+          if (!tgs.length) return
+          const S = spanOf(tgs)
+          cloud(S.cx, S.ground - S.h * 0.2, S.w, S.h * 0.8, 1800, [0x8fd14a, 0xb6e05a, 0x6fae3a], 0.75)
+          tgs.forEach(([a]) => emit(a.x0, a.y0 - a.h * 0.3, { n: 16, color: [0xb6ff5a, 0x6fd13a], size: 0.35, size1: 0.1, speed: 40, up: 90, gravity: -30, life: 1400, jitter: a.h * 0.6 }))
+        },
+      },
+      // 自然菌幕: leaves and petals swirl down over the whole row
+      natures_veil: {
+        hit: ({ tgs }) => {
+          if (!tgs.length) return
+          const S = spanOf(tgs)
+          tween(1100, p => {
+            if (p < 1 && Math.random() < 0.8) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - S.h * 1.4, { n: 1, tex: "leaf", color: [0x5fd35a, 0x8fe86a, 0xffb0d0], size: 0.45, speed: 80, angle: Math.PI / 2, spread: 1, gravity: 160, drag: 0.6, life: 1500 })
+          })
+          tgs.forEach(([a]) => leaves(a, true))
+        },
+      },
+      // ----- arrows -----
+      // 快速射击: speed lines on the arrows, a punch ring where they land
+      quick_shot: {
+        fly: q => Math.random() < 0.5 && emit(q.x, q.y, { n: 1, tex: "streak", color: 0xffffff, size: 0.35, speed: 10, life: 160 }),
+        hit: ({ tgs, src, color }) => tgs.forEach(([a]) => shockRing(mid(a).x - src.dir * a.h * 0.15, mid(a).y, a.h * 0.8, color)),
+      },
+      // 稳定射击: a hard punch: a ring, the spray carried on through
+      steady_shot: {
+        hit: ({ tgs, src, color }) =>
+          tgs.forEach(([a]) => {
+            shockRing(mid(a).x - src.dir * a.h * 0.15, mid(a).y, a.h * 1.1, color)
+            through(a, src.dir, color, 14)
+          }),
+      },
+      // 贯穿射击: the beam (the action's pierce) and the foe torn through, sparks carried far behind
+      penetrating_shot: {
+        hit: ({ tgs, src, color }) =>
+          tgs.forEach(([a]) => {
+            through(a, src.dir, color, 28)
+            shockRing(mid(a).x, mid(a).y, a.h * 1.2, color)
+          }),
+      },
+      // 流水箭: drops trailing the arrow, a splash where it lands
+      aqua_arrow: {
+        fly: q => Math.random() < 0.7 && emit(q.x, q.y, { n: 1, color: [0x5ac8ff, 0xbfefff], size: 0.28, speed: 50, gravity: 500, life: 400 }),
+        hit: each(a => splash(a, false)),
+      },
+      // 烈焰箭: embers and smoke trailing it, a small fire burst
+      flame_arrow: {
+        fly: q => {
+          if (Math.random() < 0.7) emit(q.x, q.y, { n: 1, color: [0xffd27a, 0xff7a2a], color1: 0x601000, size: 0.28, size1: 0.05, speed: 40, gravity: -40, life: 450 })
+          if (Math.random() < 0.35) emit(q.x, q.y, { n: 1, tex: "smoke", color: 0x2e2420, alpha: 0.35, size: 0.2, size1: 0.6, speed: 10, up: 20, life: 500 })
+        },
+        hit: each(a => fireBurst(a, false)),
+      },
+      // 沉默之箭: purple motes trailing it; a seal ring closes round the foe's head
+      silencing_shot: {
+        fly: q => Math.random() < 0.6 && emit(q.x, q.y, { n: 1, color: [0xc48cff, 0xffffff], size: 0.28, size1: 0.05, speed: 30, life: 450 }),
+        hit: each(a => {
+          const g = new P.Graphics()
+          fxLayer.addChild(g)
+          tween(1000, p => {
+            g.clear()
+            const r = a.h * (0.5 - 0.22 * ease(Math.min(1, p * 2)))
+            const x = a.x0
+            const y = a.y0 - a.h * 0.85
+            g.ellipse(x, y, r, r * 0.3).stroke({ color: 0xc48cff, width: a.h * 0.03, alpha: p < 0.7 ? 1 : (1 - p) / 0.3 })
+            if (p >= 1) g.destroy()
+          })
+          emit(a.x0, a.y0 - a.h * 0.85, { n: 14, color: [0xc48cff, 0xffffff], size: 0.3, size1: 0.05, speed: 120, life: 600 })
+        }),
+      },
+      // 疫病射击: a green trail; a puff of poison clings to the foe
+      pestilent_shot: {
+        fly: q => Math.random() < 0.6 && emit(q.x, q.y, { n: 1, tex: "smoke", color: 0x8fd14a, alpha: 0.35, size: 0.2, size1: 0.6, speed: 10, life: 500 }),
+        hit: each(a => {
+          cloud(a.x0, a.y0, a.h * 0.6, a.h * 0.8, 1300, [0x8fd14a, 0x6fae3a], 0.7)
+          emit(a.x0, a.y0 - a.h * 0.4, { n: 12, color: [0xb6ff5a, 0x6fd13a], size: 0.3, size1: 0.1, speed: 30, up: 80, gravity: -30, life: 1200, jitter: a.h * 0.5 })
+        }),
+      },
+      // ----- slash -----
+      // 血刃斩: red sparks spraying with each cut, a red mist hanging after
+      maim: {
+        hit: ({ tgs, src }) =>
+          tgs.forEach(([a]) => {
+            through(a, src.dir, 0xff3b3b, 22)
+            emit(mid(a).x, mid(a).y, { n: 5, tex: "smoke", color: [0x8a1020, 0xb01a2a], alpha: 0.35, size: 0.5, size1: 1.3, speed: 40, drag: 0.4, life: 1100, jitter: a.h * 0.3 })
+          }),
+      },
+      // 致残斩: sparks skidding low along the ground at the foes' legs, dust kicked up
+      crippling_slash: {
+        hit: ({ tgs, src, color }) =>
+          tgs.forEach(([a]) => {
+            emit(a.x0, a.y0 - a.h * 0.12, { n: 22, tex: "streak", color: [color, 0xffffff], size: 0.5, speed: 600, angle: src.dir > 0 ? 0 : Math.PI, spread: 0.3, drag: 0.05, life: 320, jitter: a.h * 0.3, flat: 0.2 })
+            emit(a.x0, a.y0, { n: 6, tex: "smoke", color: 0xb8a68a, alpha: 0.45, size: 0.4, size1: 1.1, speed: 120, angle: src.dir > 0 ? -0.3 : Math.PI + 0.3, spread: 0.8, drag: 0.1, life: 800 })
+          }),
+      },
+      // ----- stab -----
+      // 破胆之刺: a sharp spray out of the foe's back
+      poke: { hit: ({ tgs, src, color }) => tgs.forEach(([a]) => through(a, src.dir, color, 14)) },
+      // 透骨之刺: driven down through the foe: a long spray behind, the ground cracked under it
+      impale: {
+        hit: ({ tgs, src }) =>
+          tgs.forEach(([a]) => {
+            through(a, src.dir, 0xff5050, 26)
+            decal("crack", a.x0, a.y0, a.h * 0.7)
+            debris(a.x0, a.y0, a.h, 8)
+            zoomBlur(mid(a).x, mid(a).y, 200, 0.04)
+          }),
+      },
+      // 破甲之刺: bits of armour knocked off, grey and glinting
+      puncture: {
+        hit: ({ tgs, src }) =>
+          tgs.forEach(([a]) => {
+            const m = mid(a)
+            emit(m.x, m.y, { n: 16, color: [0xc8ccd4, 0x9aa0aa, 0xffffff], size: 0.32, speed: 380, angle: src.dir > 0 ? -0.5 : Math.PI + 0.5, spread: 1.6, gravity: 1100, life: 700 })
+            through(a, src.dir, 0xffb03b, 12)
+          }),
+      },
+      // 贯心之刺: run clean through: a long spray and a ring where the spear went in
+      penetrating_strike: {
+        hit: ({ tgs, src, color }) =>
+          tgs.forEach(([a]) => {
+            through(a, src.dir, color, 30)
+            shockRing(mid(a).x, mid(a).y, a.h * 1.1, color)
+          }),
+      },
+      // ----- smash -----
+      // 重碾: earth thrown up
+      smack: { hit: ({ tgs }) => tgs.forEach(([a]) => debris(a.x0, a.y0, a.h, 12)) },
+      // 重扫: a wave of dust rolling along the ground through the whole row
+      sweep: {
+        hit: ({ tgs, src }) => {
+          if (!tgs.length) return
+          const S = spanOf(tgs)
+          for (let k = 0; k < 10; k++) emit(S.cx - src.dir * S.w * 0.5, S.ground, { n: 1, tex: "smoke", color: [0xb8a68a, 0xc8b89a], alpha: 0.5, size: 0.6, size1: 1.5, speed: 380, angle: src.dir > 0 ? 0 : Math.PI, spread: 0.2, drag: 0.15, life: 1000, jitter: S.h * 0.2, flat: 0.2 })
+          tgs.forEach(([a]) => debris(a.x0, a.y0, a.h, 8))
+          shake = Math.max(shake, 0.8)
+        },
+      },
+      // 重锤: a heavy blow on the head: a ring, the ground cracked, the camera jolted
+      stunning_blow: {
+        hit: ({ tgs, color }) =>
+          tgs.forEach(([a]) => {
+            const m = mid(a)
+            ripple(a.x0, a.y0, a.h * 1.2, color, { n: 2, dur: 600 })
+            debris(a.x0, a.y0, a.h, 14)
+            zoomBlur(m.x, m.y, 220, 0.05)
+            focusOn(m.x, m.y, 0.06, 450)
+          }),
+      },
+      // 碎裂冲击: the ground breaks under the whole row: wide cracks, rocks and dust everywhere
+      fracturing_impact: {
+        hit: ({ tgs }) => {
+          if (!tgs.length) return
+          const S = spanOf(tgs)
+          tgs.forEach(([a]) => {
+            decal("crack", a.x0, a.y0, a.h * 1.2, { dur: 3200 })
+            debris(a.x0, a.y0, a.h, 22)
+            emit(a.x0, a.y0, { n: 8, tex: "smoke", color: [0xb8a68a, 0xa08c70], alpha: 0.55, size: 0.6, size1: 1.6, speed: 160, angle: -Math.PI / 2, spread: 2.6, drag: 0.15, life: 1200, flat: 0.3, jitter: a.h * 0.5 })
+          })
+          zoomBlur(S.cx, S.ground - S.h * 0.3, 280, 0.06)
+          shake = Math.max(shake, 1.2)
+        },
+      },
+      // 盾击: a shock ring off the shield's face, sparks
+      shield_bash: {
+        hit: ({ tgs, src, color }) =>
+          tgs.forEach(([a]) => {
+            shockRing(mid(a).x - src.dir * a.h * 0.25, mid(a).y, a.h * 1.2, color)
+            through(a, src.dir, 0xffffff, 12)
+          }),
+      },
     }
 
     function play(evs) {
@@ -9061,6 +9441,7 @@ void main(){
             // the heal's own sheet: one over a whole side, else on each
             const spec = Stage.fxSpec(e.ab) || { ground: "heal", h: 1.5 }
             later(300, () => (tgs.length > 1 && groupAt(spec, tgs.map(([a]) => a), { dur: 1000 })) || tgs.forEach(([a]) => specAt(spec, a, { dur: 900 })))
+            later(300, () => tgs.forEach(([a]) => healFx(a, e.ab?.key)))
           }
           tgs.forEach(([a, tg]) => later(src ? 300 : 0, () => heal(a, tg)))
           continue
@@ -9073,6 +9454,9 @@ void main(){
             const spec = Stage.fxSpec(e.ab) || { ground: "buff", h: 1.4 }
             const allies = e.ab?.target === "allAllies" ? units[e.actor.side].filter(a => !a.dead) : [src]
             later(260, () => (allies.length > 1 && groupAt(spec, allies, { dur: 1000 })) || specAt(spec, src, { dur: 900 }))
+            // its colour rising round each one it lands on, and what that buff adds
+            const [bc, extra] = BUFF_FX[e.ab?.key] || [COLOR.buff]
+            later(260, () => allies.forEach(a => (buffFx(a, bc), extra?.(a))))
             if (src.off === "relic") later(300, () => relicGlow(src))
             // the sword held high catches the light
             later(300, () => {
