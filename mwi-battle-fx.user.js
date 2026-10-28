@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.5
+// @version      0.21.6
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6595,32 +6595,46 @@ void main(){
           ],
         },
       },
+      // a heavy monster after Lost Castle's granite giant: a slow wind-up, a fast blow, a long hold
       magnetic_golem: {
         idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
+        // 普攻 1: the red fist drawn back to the chest, then a straight punch with the whole body behind it
         attack: {
-          dur: 900, hit: 430, lunge: true,
+          dur: 1150, hit: 620, lunge: true,
           keys: [
             { t: 0, a: {} },
-            { t: 300, e: "out", a: { torso: -10, head: -8, arm_f: -55, arm_b: -20, leg_f: -6 }, x: -0.03 },
-            { t: 360, a: { torso: -12, head: -9, arm_f: -60, arm_b: -22, leg_f: -7 }, x: -0.035 },
-            { t: 440, e: "in", a: { torso: 14, head: 8, arm_f: 70, arm_b: 18, leg_f: 10, leg_b: -6 }, x: 0.06 },
-            { t: 560, a: { torso: 12, head: 6, arm_f: 62, arm_b: 15, leg_f: 9, leg_b: -5 }, x: 0.05 },
-            { t: 900, a: {} },
+            { t: 450, e: "out", a: { torso: -10, head: -6, arm_f: -55, arm_b: 12, leg_f: -5 }, x: -0.03 },
+            { t: 540, a: { torso: -11, head: -7, arm_f: -60, arm_b: 14, leg_f: -6 }, x: -0.035 },
+            { t: 620, e: "in", a: { torso: 16, head: 10, arm_f: 95, arm_b: -15, leg_f: 10, leg_b: -6 }, x: 0.08 },
+            { t: 880, a: { torso: 15, head: 9, arm_f: 92, arm_b: -14, leg_f: 9, leg_b: -5 }, x: 0.075 },
+            { t: 1150, a: {} },
           ],
         },
-        // the ground pound: both arms up, a hop, both fists down
-        skill: {
-          dur: 1200, hit: 700, lunge: true,
+        // 普攻 2: both fists raised, brought down together
+        attack2: {
+          dur: 1200, hit: 650, ring: 650, lunge: true,
           keys: [
             { t: 0, a: {} },
-            { t: 380, e: "out", a: { torso: -8, head: -12, arm_f: -110, arm_b: -120 }, y: 0.06 },
-            { t: 520, a: { torso: -10, head: -14, arm_f: -120, arm_b: -130 }, y: 0.1 },
-            { t: 700, e: "in", a: { torso: 18, head: 10, arm_f: 40, arm_b: 35, leg_f: 8, leg_b: -8 }, y: -0.03, x: 0.04 },
-            { t: 850, a: { torso: 14, head: 8, arm_f: 35, arm_b: 30, leg_f: 6, leg_b: -6 }, y: -0.02, x: 0.03 },
+            { t: 480, e: "out", a: { torso: -12, head: -12, arm_f: -140, arm_b: -150 }, y: 0.03 },
+            { t: 570, a: { torso: -13, head: -13, arm_f: -145, arm_b: -155 }, y: 0.04 },
+            { t: 650, e: "in", a: { torso: 20, head: 12, arm_f: 45, arm_b: 40, leg_f: 8, leg_b: -8 }, x: 0.05 },
+            { t: 920, a: { torso: 18, head: 10, arm_f: 42, arm_b: 38, leg_f: 7, leg_b: -7 }, x: 0.045 },
             { t: 1200, a: {} },
           ],
         },
-        hurt: { dur: 560, keys: [{ t: 0, a: {} }, { t: 100, e: "out", a: { torso: -16, head: -20, arm_f: -25, arm_b: -35, leg_f: -6 }, x: -0.05 }, { t: 560, a: {} }] },
+        // skill: a twist to one side, both arms windmilling a whole turn, both fists slammed down
+        skill: {
+          dur: 1650, hit: 1050, ring: 1050, lunge: true,
+          keys: [
+            { t: 0, a: {} },
+            { t: 400, e: "out", a: { torso: -14, head: -10, arm_f: -70, arm_b: -45 }, x: -0.03 },
+            { t: 900, e: "linear", a: { torso: 6, head: 2, arm_f: 290, arm_b: 315 }, y: 0.03 },
+            { t: 1050, e: "in", a: { torso: 20, head: 12, arm_f: 405, arm_b: 400, leg_f: 8, leg_b: -8 }, x: 0.06 },
+            { t: 1350, a: { torso: 18, head: 10, arm_f: 402, arm_b: 398 }, x: 0.055 },
+            { t: 1650, a: { arm_f: 360, arm_b: 360 } },
+          ],
+        },
+        hurt: { dur: 520, keys: [{ t: 0, a: {} }, { t: 90, e: "out", a: { torso: -14, head: -18, arm_f: -25, arm_b: 30, leg_f: -6 }, x: -0.04 }, { t: 240, a: { torso: -10, head: -12, arm_f: 15, arm_b: -20 }, x: -0.035 }, { t: 520, a: {} }] },
         cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
       },
     }
@@ -7115,7 +7129,10 @@ void main(){
       const R = a.rig
       R.fallen = true
       for (const q of R.parts) {
-        q.fall = { vx: 60 + Math.random() * 220, vy: -(120 + Math.random() * 260), vr: (Math.random() - 0.5) * 12, floor: -Math.min(q.w, q.h) * 0.3 }
+        // the arms come off first, the head and body topple after them, the legs last (Lost Castle's giant)
+        const wait = /^arm/.test(q.name) ? 0 : q.name === "head" || q.name === "torso" ? 0.35 : 0.5
+        const arm = /^arm/.test(q.name)
+        q.fall = { vx: arm ? 30 + Math.random() * 120 : 60 + Math.random() * 220, vy: arm ? -(40 + Math.random() * 80) : -(120 + Math.random() * 260), vr: (Math.random() - 0.5) * (arm ? 6 : 12), floor: -Math.min(q.w, q.h) * 0.3, wait }
         if (instant) {
           q.s.position.set(q.p.at[0] - R.def.foot[0] + 80 + Math.random() * 120, q.fall.floor)
           q.s.rotation = (Math.random() - 0.5) * 3
@@ -7128,6 +7145,10 @@ void main(){
       for (const q of a.rig.parts) {
         const f = q.fall
         if (!f) continue
+        if (f.wait > 0) {
+          f.wait -= dt
+          continue
+        }
         f.vy += 1500 * dt
         q.s.x += f.vx * dt
         q.s.y += f.vy * dt
