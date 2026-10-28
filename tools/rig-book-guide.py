@@ -28,11 +28,12 @@ GRIP = A
 if sys.argv[1] == "draw":
     im = Image.new("RGB", (1024, 1024), (0, 255, 0))
     d = ImageDraw.Draw(im)
+    # flat fills, no outlines: the game's icons have none
     for q in (PAGES_L, PAGES_R):
-        d.polygon(q, fill=(245, 235, 210), outline=(30, 20, 50), width=5)
-    d.polygon(LEFT, fill=(120, 85, 180), outline=(30, 20, 50), width=6)
-    d.polygon(RIGHT, fill=(150, 110, 210), outline=(30, 20, 50), width=6)
-    d.polygon(SPINE, fill=(95, 65, 150), outline=(30, 20, 50), width=4)
+        d.polygon(q, fill=(205, 205, 205))
+    d.polygon(LEFT, fill=(125, 90, 185))
+    d.polygon(RIGHT, fill=(145, 108, 205))
+    d.polygon(SPINE, fill=(105, 75, 165))
     im.save(sys.argv[2])
 else:
     src, root = sys.argv[2], sys.argv[3]
