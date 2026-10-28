@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.31
+// @version      0.21.32
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "9e0a5ec02a"
+  const ASSET_REV = "8f5cb5bc34"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -6326,7 +6326,14 @@
       { name: "1号 哥布林爆炸杖", style: "magic", element: "fire", skills: ["fireball", "flame_blast", "firestorm", "heal"], items: { two_hand: "gobo_boomstick" } },
     ]
     const st = { loc: "golem_cave", tier: 0, pilot: 0, ...GM_getValue("battle_fx_lab_v2", {}) }
-    const PILOT = () => ({ avatar: "blue_person_1", outfit: "warrior_1", ...(PILOTS[st.pilot] || PILOTS[0]) })
+    const PILOT = () => ({ ...(PILOTS[st.pilot] || PILOTS[0]), avatar: st.avatar || "blue_person_1", outfit: st.outfit || "warrior_1" })
+    // the avatars and outfits drawn for the rig so far (rig/player/rig.json), to dress 1号 in
+    let looks = null
+    const loadLooks = () =>
+      (looks ||= fetch(Assets.url("rig/player/rig.json"))
+        .then(r => r.json())
+        .then(j => ((looks = { avatars: j.avatars, outfits: j.outfits }), draw()))
+        .catch(() => {}))
     const save = () => GM_setValue("battle_fx_lab_v2", st)
     const lab = { p: [], m: [] }
     let root = null
@@ -6449,6 +6456,13 @@
         // 1号's weapon (grip style)
         select(PILOTS.map((p, k) => [k, p.name]), st.pilot, v => ((st.pilot = +v), save(), reset(), draw())),
       )
+      // 1号's look (avatar, outfit)
+      if (looks?.avatars)
+        row("形象").append(
+          select(looks.avatars.map(k => [k, k]), PILOT().avatar, v => ((st.avatar = v), save(), reset(), draw())),
+          select(looks.outfits.map(k => [k, k]), PILOT().outfit, v => ((st.outfit = v), save(), reset(), draw())),
+        )
+      else loadLooks()
       row("操作").append(
         button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
         // a monster uses one of its own abilities (MONSTER_SKILLS); one without any just attacks
