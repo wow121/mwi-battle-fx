@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.17
+// @version      0.21.18
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "8fe6843e9b"
+  const ASSET_REV = "083e9b705e"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -6266,8 +6266,8 @@
   // each held weapon piece's long axis [butt x, y, head x, y, break?] in piece pixels (tools/rig-weapon-geom.py); break =
   // where the art is broken along the shaft (0 butt … 1 head), when it is
   const WEAPON_AXIS = {"arcane_bow":[16,257,52,2],"arcane_crossbow":[5,88,128,88],"arcane_fire_staff":[13,379,58,8],"arcane_nature_staff":[26,270,26,2],"arcane_water_staff":[12,349,71,7],"azure_bulwark":[75,210,75,8],"azure_mace":[7,189,147,24],"azure_spear":[20,399,19,9],"azure_sword":[9,235,183,5,0.118],"birch_bow":[13,304,58,1,0.463],"birch_crossbow":[58,172,58,7],"birch_fire_staff":[17,397,30,8,0.765],"birch_nature_staff":[11,266,27,2],"birch_water_staff":[10,332,59,9],"blazing_trident":[10,402,46,12,0.295],"blooming_trident":[27,437,63,12],"burble_bulwark":[58,164,61,6],"burble_mace":[7,186,152,22],"burble_spear":[20,400,25,9],"burble_sword":[7,200,148,3,0.161],"cedar_bow":[10,269,60,1,0.418],"cedar_crossbow":[10,176,54,9,0.184],"cedar_fire_staff":[8,309,67,7],"cedar_nature_staff":[7,260,48,0],"cedar_water_staff":[7,336,67,4],"chaotic_flail":[-11,160,164,37],"cheese_bulwark":[65,178,65,7],"cheese_mace":[6,203,161,23],"cheese_spear":[24,378,25,9],"cheese_sword":[12,213,153,4,0.14],"crimson_bulwark":[65,180,65,7],"crimson_mace":[6,190,153,22],"crimson_spear":[18,371,19,9],"crimson_sword":[12,261,175,5,0.128],"cursed_bow":[24,337,65,10],"frost_staff":[12,360,64,3],"furious_spear":[42,436,40,12],"ginkgo_bow":[6,307,44,2,0.442],"ginkgo_crossbow":[46,203,46,8],"ginkgo_fire_staff":[10,295,63,7],"ginkgo_nature_staff":[13,353,43,3],"ginkgo_water_staff":[13,358,58,10],"gobo_boomstick":[6,279,81,13,0.661],"gobo_defender":[144,240,6,8,0.172],"gobo_shooter":[68,129,111,11],"gobo_slasher":[6,203,159,-6],"gobo_smasher":[1,214,163,4],"gobo_stabber":[6,184,139,3,0.172],"granite_bludgeon":[6,192,161,7],"griffin_bulwark":[75,211,75,11],"holy_bulwark":[73,196,75,8],"holy_mace":[7,208,156,21],"holy_spear":[23,390,25,10],"holy_sword":[8,222,176,6,0.117],"infernal_battlestaff":[-2,387,96,-1],"jackalope_staff":[10,353,60,0],"purpleheart_bow":[21,311,54,3,0.452],"purpleheart_crossbow":[10,99,126,99],"purpleheart_fire_staff":[15,406,37,8],"purpleheart_nature_staff":[27,271,25,2],"purpleheart_water_staff":[11,305,61,8],"rainbow_bulwark":[32,230,32,8],"rainbow_mace":[21,288,74,12],"rainbow_spear":[7,372,23,9],"rainbow_sword":[35,299,38,6,0.117],"redwood_bow":[13,309,100,1,0.424],"redwood_crossbow":[-1,169,72,13],"redwood_fire_staff":[11,288,30,8],"redwood_nature_staff":[12,304,48,2],"redwood_water_staff":[10,341,64,6],"regal_sword":[6,241,177,6,0.1],"rippling_trident":[14,375,63,10,0.324],"snake_fang_dirk":[4,14,184,62,0.214],"soul_hunter_crossbow":[21,168,56,5],"spiked_bulwark":[69,223,87,9],"stalactite_spear":[7,378,22,9],"sundering_crossbow":[44,237,44,8],"vampire_fang_dirk":[2,6,171,34,0.201],"vampiric_bow":[28,386,42,4],"verdant_bulwark":[70,195,72,8],"verdant_mace":[6,194,155,23],"verdant_spear":[6,374,25,8,0.723],"verdant_sword":[7,247,178,5,0.105],"werewolf_slasher":[15,273,205,35],"wooden_bow":[15,297,39,3,0.459],"wooden_crossbow":[23,186,71,8,0.202],"wooden_fire_staff":[8,319,62,7],"wooden_nature_staff":[27,251,28,2,0.602],"wooden_water_staff":[9,330,59,4],"rig:arcane_crossbow":[0,63,200,63],"rig:birch_crossbow":[0,57,200,57],"rig:cedar_crossbow":[0,46,200,46],"rig:ginkgo_crossbow":[0,43,200,43],"rig:purpleheart_crossbow":[0,39,200,39],"rig:redwood_crossbow":[0,47,200,47],"rig:soul_hunter_crossbow":[0,52,200,52],"rig:sundering_crossbow":[0,61,200,61],"rig:wooden_crossbow":[0,53,200,53]}
-  // where the pose mannequin's fist held an item redrawn for the rig (tools/rig-held.py), in its pixels
-  const RIG_GRIP = {"rig:bishops_codex":[28,105],"rig:tome_of_healing":[32,107],"rig:tome_of_the_elements":[29,122]}
+  // where the hand holds an item redrawn for the rig, in its pixels (books: the bottom of the spine, tools/rig-book-guide.py)
+  const RIG_GRIP = {"rig:bishops_codex":[61,121],"rig:tome_of_healing":[60,121],"rig:tome_of_the_elements":[61,121]}
   // grip styles of the rigged player: at = where the hand holds the weapon (0 butt … 1 head), aim = its angle at rest
   // (degrees from straight down, 90 level forward, 180 straight up), hand = the hand it is in (hm back / ho front),
   // gap = held over a break in the art near the butt instead (a trident's loose spike), two = where the other hand takes
@@ -7323,11 +7323,11 @@ void main(){
       // read at the chest, held by the bottom of the spine (the art faces the reader); pushed out at the foe with each
       // blow, raised high on a buff
       book: {
-        idle: [{ t: 0, ho: [0.02, 0.04, 0] }, { t: 0.5, ho: [0.02, 0.055, 2] }, { t: 1, ho: [0.02, 0.04, 0] }],
-        attack: [{ t: 0, ho: [0.02, 0.04, 0] }, { t: "pre", ho: [0.06, 0.06, -5] }, { t: "hit", ho: [0.16, 0.06, -15] }, { t: "hold", ho: [0.15, 0.06, -13] }, { t: 1, ho: [0.02, 0.04, 0] }],
-        hurt: [{ t: 0, ho: [0.02, 0.04, 0] }, { t: 0.2, ho: [-0.02, 0.08, 15] }, { t: 1, ho: [0.02, 0.04, 0] }],
-        cast: [{ t: 0, ho: [0.02, 0.04, 0] }, { t: 0.25, ho: [0, 0.4, -10] }, { t: 0.75, ho: [0, 0.41, -10] }, { t: 1, ho: [0.02, 0.04, 0] }],
-        dead: [{ t: 0, ho: [0.02, 0.04, 0] }, { t: 0.3, ho: [-0.05, 0.05, 20] }, { t: 1, ho: [0.05, -0.6, -90] }],
+        idle: [{ t: 0, ho: [0.02, -0.03, 0] }, { t: 0.5, ho: [0.02, -0.015, 2] }, { t: 1, ho: [0.02, -0.03, 0] }],
+        attack: [{ t: 0, ho: [0.02, -0.03, 0] }, { t: "pre", ho: [0.1, -0.06, -5] }, { t: "hit", ho: [0.26, -0.09, -15] }, { t: "hold", ho: [0.25, -0.09, -13] }, { t: 1, ho: [0.02, -0.03, 0] }],
+        hurt: [{ t: 0, ho: [0.02, -0.03, 0] }, { t: 0.2, ho: [-0.02, 0.01, 15] }, { t: 1, ho: [0.02, -0.03, 0] }],
+        cast: [{ t: 0, ho: [0.02, -0.03, 0] }, { t: 0.25, ho: [0, 0.33, -10] }, { t: 0.75, ho: [0, 0.34, -10] }, { t: 1, ho: [0.02, -0.03, 0] }],
+        dead: [{ t: 0, ho: [0.02, -0.03, 0] }, { t: 0.3, ho: [-0.05, -0.02, 20] }, { t: 1, ho: [0.05, -0.6, -90] }],
       },
       // held up in front like a lantern; thrust high at the foe, raised overhead on a buff (it glows: see play)
       relic: {
@@ -7683,7 +7683,7 @@ void main(){
         const pole = id && /staff|trident|spear|boomstick|stabber/.test(id) && (await gameIcon(String(id).split("/").pop()))
         if (pole) return { tex: pole.tex, grip: [0, 0], axis: pole.axis, k: pole.k }
         // an item redrawn for the rig (assets/rig/weapons: side-view crossbows, their axes in WEAPON_AXIS too; books
-        // drawn in the pose mannequin's fist, read by it, gripped where that fist was: RIG_GRIP)
+        // read by the character, painted over a parallel-projection layout: RIG_GRIP)
         const k = String(id || "").replace(/_refined$/, "")
         if (k && Assets.list("weapons").includes(k)) {
           const t = await P.Assets.load(Assets.url(`rig/weapons/${k}.webp`))
