@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.7
+// @version      0.21.8
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6261,6 +6261,8 @@
   // ---------- 动画测试: the rigged battle (PixiJS) with an auto battle ----------
   // the abilities each monster has in the game (game data: combatMonsterDetailMap[].abilities)
   const MONSTER_SKILLS = {"abyssal_imp":["quick_aid","firestorm","fireball"],"acrobat":["speed_aura","elusiveness","precision","smack","stunning_blow"],"alligator":["scratch"],"anchor_shark":["invincible","toughness","berserk","stunning_blow","shield_bash"],"aquahorse":["aqua_arrow"],"black_bear":["frenzy"],"brine_marksman":["critical_aura","rain_of_arrows","aqua_arrow","penetrating_shot","quick_shot"],"butterjerry":["fierce_aura","frenzy","poke","impale"],"captain_fishhook":["fierce_aura","frenzy","cleave","maim","fracturing_impact"],"centaur_archer":["elusiveness","rain_of_arrows","quick_shot"],"chronofrost_sorcerer":["mystic_aura","heal","elemental_affinity","frost_surge","ice_spear"],"crab":["smack"],"crystal_colossus":["invincible","toughness","spike_shell","puncture","impale"],"cyclops":["guardian_aura","toughness","sweep","stunning_blow","fracturing_impact"],"demonic_overlord":["mystic_aura","toughness","firestorm","flame_blast","fireball"],"deranged_jester":["insanity","vampirism","smoke_burst","sweep","stunning_blow"],"dodocamel":["invincible","toughness","berserk","sweep","shield_bash"],"dryad":["guardian_aura","toxic_pollen","natures_veil","life_drain","entangle"],"dusk_revenant":["critical_aura","vampirism","steady_shot","silencing_shot","rain_of_arrows"],"elementalist":["revive","elemental_affinity","ice_spear","flame_blast"],"enchanted_bishop":["revive","retribution","rejuvenate","heal","natures_veil"],"enchanted_king":["invincible","toughness","elusiveness","crippling_slash","cleave"],"enchanted_knight":["fierce_aura","toughness","frenzy","crippling_slash","maim"],"enchanted_pawn":["promote","elusiveness","precision","stunning_blow"],"enchanted_queen":["speed_aura","toxic_pollen","mana_spring","flame_blast","water_strike"],"enchanted_rook":["critical_aura","precision","rain_of_arrows","silencing_shot","penetrating_shot"],"eye":["precision"],"eyes":["precision"],"flame_sorcerer":["flame_blast","fireball"],"frog":["smack"],"frost_sniper":["critical_aura","silencing_shot","rain_of_arrows","aqua_arrow","quick_shot"],"giant_mantis":["fierce_aura","precision","cleave","maim","crippling_slash"],"giant_scorpion":["fierce_aura","berserk","impale","puncture","penetrating_strike"],"giant_shoebill":["speed_aura","elusiveness","sweep","smack"],"gobo_boomy":["revive","fireball"],"gobo_chieftain":["fierce_aura","berserk","puncture","impale","poke"],"gobo_shooty":["flame_arrow"],"gobo_slashy":["cleave"],"gobo_smashy":["berserk"],"gobo_stabby":["impale"],"granite_golem":["invincible","provoke","stunning_blow","sweep"],"griffin":["fierce_aura","berserk","frenzy","rain_of_arrows","crippling_slash"],"grizzly_bear":["frenzy"],"gummy_bear":["frenzy"],"ice_sorcerer":["ice_spear","water_strike"],"infernal_warlock":["mystic_aura","firestorm","flame_blast"],"jackalope":["guardian_aura","heal","natures_veil","entangle"],"juggler":["critical_aura","precision","frenzy","pestilent_shot","steady_shot"],"jungle_sprite":["rejuvenate","heal","entangle"],"luna_empress":["guardian_aura","rejuvenate","elusiveness","natures_veil","toxic_pollen"],"magician":["mystic_aura","elemental_affinity","rejuvenate","firestorm","fireball"],"magnetic_golem":["stunning_blow"],"manticore":["critical_aura","precision","pestilent_shot","steady_shot","rain_of_arrows"],"marine_huntress":["mystic_aura","silencing_shot","aqua_arrow","rain_of_arrows"],"mimic":["speed_aura","frenzy","elusiveness","impale","penetrating_strike"],"myconid":["toxic_pollen"],"nom_nom":["impale"],"novice_sorcerer":["quick_aid","water_strike"],"panda":["toughness"],"polar_bear":["fierce_aura","frenzy"],"porcupine":["quick_shot"],"pyre_hunter":["critical_aura","precision","steady_shot","rain_of_arrows","flame_arrow"],"rabid_rabbit":["insanity","berserk","frenzy","scratch"],"rat":["poke"],"red_panda":["insanity","berserk","frenzy","maim","cleave"],"salamander":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"sea_snail":["toughness"],"shadow_archer":["critical_aura","elusiveness","rain_of_arrows","penetrating_shot","steady_shot"],"siren":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"skunk":["scratch"],"slimy":["minor_heal","water_strike"],"snake":["poke"],"soul_hunter":["critical_aura","silencing_shot","flame_arrow"],"squawker":["guardian_aura","life_drain","natures_veil","entangle"],"stalactite_golem":["guardian_aura","spike_shell","toughness"],"swampy":["sweep"],"the_kraken":["critical_aura","frenzy","aqua_arrow","penetrating_shot","fracturing_impact"],"the_watcher":["speed_aura","precision","steady_shot","aqua_arrow","flame_arrow"],"tidal_conjuror":["mystic_aura","elemental_affinity","frost_surge","ice_spear","water_strike"],"treant":["guardian_aura","toxic_pollen","entangle"],"trial_badger":["fierce_aura","berserk","maim","cleave","scratch"],"trial_beetle":["invincible","toughness","fracturing_impact","stunning_blow","sweep"],"trial_chameleon":["critical_aura","precision","penetrating_shot","rain_of_arrows","steady_shot"],"trial_dragonfly":["critical_aura","precision","steady_shot","rain_of_arrows","pestilent_shot"],"trial_firefly":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"trial_hedgehog":["guardian_aura","toughness","spike_shell","natures_veil","fracturing_impact"],"trial_jellyfish":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"trial_wasp":["fierce_aura","frenzy","penetrating_strike","puncture","impale"],"turtle":["taunt","toughness"],"vampire":["fierce_aura","vampirism","puncture"],"veyes":["precision"],"werewolf":["insanity","berserk","maim"],"zombie":["toughness","maim","natures_veil"],"zombie_bear":["fierce_aura","berserk","puncture","penetrating_strike"]}
+  // abilities that can stun: [chance, duration ms] (game data: abilityEffects stunChance / stunDuration)
+  const STUNS = {"entangle":[0.1,2000],"stunning_blow":[0.7,3000]}
   // Only units that have a rig take part: 1号 is the drawn player pilot (blue hair, warrior outfit, holy sword +
   // knight's aegis, sword skills), the monsters are every rigged monster. The DOM stage still hangs in a hidden slot
   // (Stage.attach(Lab.render(), "test")) but gets no events.
@@ -6307,6 +6309,9 @@
         const f = alive(foe)
         if (!f.length) return
         targets = (ab?.target === "allEnemies" ? f : [pick(f)]).map(j => change(foe, j, hitAmount(foe, j) * (ab ? 1.6 : 1)))
+        // a stunning ability stuns a target it hits with its chance (STUNS), for its duration
+        const stun = ab && STUNS[ab.key]
+        if (stun) for (const tg of targets) if (tg.dHP < 0 && !tg.died && Math.random() < stun[0]) tg.stunned = stun[1]
       } else if (ab.kind === "heal" || ab.kind === "revive") {
         effect = "heal"
         targets = [change(side, i, Math.round(u.maxHp * 0.15))]
@@ -7041,7 +7046,9 @@ void main(){
         let deg = v[2]
         // lying flat is as far as a body goes (a fall can tip past it, head below the feet)
         if (q.name === "body") deg = Math.max(-88, Math.min(88, deg))
-        if (q.name === "body" || q.name === "torso" || q.name === "head") deg -= wob
+        // the hit wobble: on the trunk, and on a monster's own head; a player's head is cut from its body
+        // drawing (long hair stays on the body) and must move with it exactly or the head looks split
+        if (q.name === "body" || q.name === "torso" || (q.name === "head" && !R.def.hands)) deg -= wob
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
         if (par) {
@@ -7359,26 +7366,26 @@ void main(){
       a.jig = tg.crit ? 1.3 : 0.9
       number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
       if (tg.crit) crit(a)
-      if (/stun/.test(key || "") && !tg.died) stun(a)
+      if (tg.stunned && !tg.died) stun(a, tg.stunned)
       drawHp(a)
       if (tg.died) die(a)
       else if (a.rig && !a.act?.def.hit) play1(a, "hurt")
     }
     // a.life counts deaths and revivals: a burn-away or rebuild still running from an earlier one leaves the body
     // alone (a revival during the 2.4 s burn used to be burnt away again, the unit invisible until its next death)
-    // stunned: three stars circling over the head for a while
-    function stun(a) {
+    // stunned: three stars circling over the head for the stun's duration
+    function stun(a, ms) {
       const stars = [0, 1, 2].map(() => {
         const t = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18, fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
         t.anchor.set(0.5)
         textLayer.addChild(t)
         return t
       })
-      tween(1800, p => {
+      tween(ms, p => {
         stars.forEach((t, k) => {
-          const an = p * Math.PI * 6 + (k * Math.PI * 2) / 3
+          const an = (p * ms * Math.PI) / 300 + (k * Math.PI * 2) / 3
           t.position.set(a.x0 + (a.dash || 0) + Math.cos(an) * a.h * 0.28, a.y0 - a.h * 1.02 + Math.sin(an) * a.h * 0.07)
-          t.alpha = p < 0.85 ? 1 : (1 - p) / 0.15
+          t.alpha = p < 0.9 ? 1 : (1 - p) / 0.1
           t.scale.set(Math.sin(an) > 0 ? 1 : 0.75)
         })
         if (p >= 1) stars.forEach(t => t.destroy())
