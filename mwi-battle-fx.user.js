@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.29
+// @version      0.21.30
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8467,20 +8467,24 @@ void main(){
         if (p >= 1) g.destroy()
       })
     }
-    // a wave rolling in from dir's side, rearing up and curling over, breaking on the foe in spray
-    function waveCrash(a, dir, dur = 800) {
+    // a wave rising at from (x) and rolling travel ms toward the foe, rearing up and curling over as it goes, breaking
+    // on it in spray as it arrives
+    function waveCrash(a, dir, { from = a.x0 - dir * a.h * 1.45, travel = 280 } = {}) {
       const g = new P.Graphics()
       smokeLayer.addChild(g)
       const y = a.y0
       const W = a.h * 1.1
       const H = a.h * 1.15
+      const dur = travel + 520
+      const end = a.x0 - dir * a.h * 0.15
       let broke = false
       tween(dur, p => {
         g.clear()
-        const e = 1 - Math.pow(1 - Math.min(1, p / 0.35), 3)
-        const cx = a.x0 - dir * a.h * (1.3 * (1 - e) + 0.15)
-        const hh = H * (0.35 + 0.65 * e)
-        const al = p < 0.55 ? 1 : 1 - (p - 0.55) / 0.45
+        const t = p * dur
+        const e = 1 - Math.pow(1 - Math.min(1, t / travel), 2)
+        const cx = from + (end - from) * e
+        const hh = H * (0.3 + 0.7 * e)
+        const al = t < travel + 120 ? 1 : 1 - (t - travel - 120) / (dur - travel - 120)
         // drawn facing right, mirrored for a wave rolling left: back slope, the crest curling over, the hollow front face
         const X = u => cx + dir * u
         g.moveTo(X(-W * 0.75), y)
@@ -8498,8 +8502,8 @@ void main(){
         g.moveTo(X(-W * 0.3), y - hh * 0.78)
           .bezierCurveTo(X(-W * 0.12), y - hh * 1.04, X(W * 0.25), y - hh * 1.02, X(W * 0.36), y - hh * 0.7)
           .stroke({ color: 0xffffff, width: a.h * 0.05, alpha: 0.9 * al, cap: "round" })
-        if (p < 0.4 && Math.random() < 0.7) emit(X(W * 0.2), y - hh * 0.95, { n: 1, color: [0xffffff, 0xbfe8ff], size: 0.35, speed: 120, angle: dir > 0 ? -0.6 : Math.PI + 0.6, spread: 0.8, gravity: 900, life: 450 })
-        if (!broke && p >= 0.35) {
+        if (t < travel && Math.random() < 0.7) emit(X(W * 0.2), y - hh * 0.95, { n: 1, color: [0xffffff, 0xbfe8ff], size: 0.35, speed: 120, angle: dir > 0 ? -0.6 : Math.PI + 0.6, spread: 0.8, gravity: 900, life: 450 })
+        if (!broke && t >= travel) {
           broke = true
           splash(a, true)
           emit(a.x0, y - a.h * 0.5, { n: 26, color: [0x5ab8ff, 0xbfe8ff, 0xffffff], alpha: 0.9, size: 0.45, speed: a.h * 3.5, angle: dir > 0 ? -0.5 : Math.PI + 0.5, spread: 1.6, gravity: a.h * 6, life: 700 })
@@ -8602,10 +8606,54 @@ void main(){
         }
       })
     }
-    // leaves and petals whirling up round a body
-    function petalVortex(x, y, h, dur) {
+    // a veil: a sheet of green light let down over a row (S: its span), glowing threads swaying in it, spores drifting
+    // down through it, little mushrooms springing up at the foes' feet; then it lifts and fades, the spores lingering
+    function veil(S, feet, dur = 1700) {
+      const g = new P.Graphics()
+      fxLayer.addChild(g)
+      const caps = new P.Graphics()
+      smokeLayer.addChild(caps)
+      const top = S.ground - S.h * 2
+      const L = S.cx - S.w * 0.6
+      const R = S.cx + S.w * 0.6
+      const threads = Array.from({ length: 14 }, () => ({ u: Math.random(), ph: Math.random() * 6, len: 0.6 + Math.random() * 0.4 }))
+      const shrooms = feet.flatMap(a => Array.from({ length: 4 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.06), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xc8f06a : 0x8fe0a0 })))
+      light(S.cx, S.ground - S.h * 0.8, 0x7fe86a, S.w * 0.6, dur, 0.9)
       tween(dur, p => {
-        if (p < 1 && Math.random() < 0.9) emit(x, y, { n: 1, tex: "leaf", color: [0x5fd35a, 0x8fe86a, 0xffb0d0, 0xfff0f6], size: 0.55, size1: 0.3, life: 1100, orbit: { cx: x, y, r: h * 0.3, spin: 5 + Math.random() * 2, rise: h * 0.9, widen: 0.8 } })
+        g.clear()
+        caps.clear()
+        const t = p * dur
+        // let down over 450 ms, hangs, lifts away over the last 30 %
+        const down = 1 - Math.pow(1 - Math.min(1, t / 450), 3)
+        const lift = p > 0.7 ? (p - 0.7) / 0.3 : 0
+        const bottom = top + (S.ground - S.h * 0.05 - top) * down - lift * S.h * 0.6
+        const al = 1 - lift
+        const pts = [L, top, R, top]
+        for (let i = 0; i <= 16; i++) {
+          const x = R - (R - L) * (i / 16)
+          pts.push(x, bottom - S.h * 0.08 * (1 + Math.sin(i * 1.3 + t * 0.006)))
+        }
+        g.poly(pts).fill({ color: 0x4fc84a, alpha: 0.2 * al })
+        for (const th of threads) {
+          const x = L + (R - L) * th.u
+          const sway = Math.sin(t * 0.004 + th.ph) * S.h * 0.06
+          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xc8ff9a, width: 2, alpha: 0.55 * al })
+        }
+        // mushrooms: a stem and a round cap with pale spots, popping up and shrinking away at the end
+        for (const m of shrooms) {
+          const k = Math.min(1, Math.max(0, (p - m.t) / 0.1)) * (p > 0.85 ? (1 - p) / 0.15 : 1)
+          if (k <= 0) continue
+          const sz = m.s * k
+          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xf0f0d8)
+          caps.ellipse(m.x, m.y - sz * 1.1, sz * 0.75, sz * 0.5).fill(m.c)
+          caps.circle(m.x - sz * 0.25, m.y - sz * 1.25, sz * 0.12).fill(0xffffff)
+          caps.circle(m.x + sz * 0.2, m.y - sz * 1.15, sz * 0.09).fill(0xffffff)
+        }
+        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xd8ff9a, 0xa8f07a, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
+        if (p >= 1) {
+          g.destroy()
+          caps.destroy()
+        }
       })
     }
     // a soft column of light standing on the ground (heals, buffs, revivals, under a geyser)
@@ -9491,16 +9539,12 @@ void main(){
           tgs.forEach(([a]) => emit(a.x0, a.y0 - a.h * 0.3, { n: 16, color: [0xb6ff5a, 0x6fd13a], size: 0.35, size1: 0.1, speed: 40, up: 90, gravity: -30, life: 1400, jitter: a.h * 0.6 }))
         },
       },
-      // 自然菌幕: leaves and petals swirl down over the whole row
+      // 自然菌幕: each foe dimmed green under the veil, a puff of spores off it
       natures_veil: {
-        hit: ({ tgs }) => {
-          if (!tgs.length) return
-          const S = spanOf(tgs)
-          tween(1100, p => {
-            if (p < 1 && Math.random() < 0.8) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - S.h * 1.4, { n: 1, tex: "leaf", color: [0x5fd35a, 0x8fe86a, 0xffb0d0], size: 0.45, speed: 80, angle: Math.PI / 2, spread: 1, gravity: 160, drag: 0.6, life: 1500 })
-          })
-          tgs.forEach(([a]) => leaves(a, true))
-        },
+        hit: each(a => {
+          flash(a, 0x7fe86a, 700)
+          emit(mid(a).x, mid(a).y, { n: 14, color: [0xd8ff9a, 0xa8f07a], size: 0.3, size1: 0.08, speed: 90, gravity: -20, drag: 0.4, life: 1200, jitter: a.h * 0.4 })
+        }),
       },
       // ----- arrows -----
       // 快速射击: speed lines on the arrows, a punch ring where they land
@@ -9669,7 +9713,7 @@ void main(){
       }),
       firestorm: onEach(a => fireTornado(a.x0, a.y0, a.h * 1.9, 1200)),
       // 流水冲击: a wave rolling in from the caster's side and breaking over the foe
-      water_strike: onEach((a, src) => waveCrash(a, src.dir)),
+      water_strike: () => {},
       // 法力喷泉: a tall blue-violet spring of mana out of a glowing circle under every foe, sparkles rising
       mana_spring: onEach(a => {
         circle(a, "mana", 1300)
@@ -9679,7 +9723,7 @@ void main(){
       ice_spear: onEach(a => iceSpikes(a.x0, a.y0, a.h * 0.5, a.h * 0.6, { n: 4, dur: 900 })),
       frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
       entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.75, a.h * 1.0, 1900)),
-      natures_veil: onEach(a => petalVortex(a.x0, a.y0, a.h, 1000)),
+      natures_veil: () => {},
       toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: [0xb6ff5a, 0x8fd14a, 0xe0ff8a], size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
       life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0x62d65a)),
       cleave: onEach((a, src, color) => slashArc(mid(a).x, mid(a).y, a.h * 0.75, src.dir, color, { width: 1.3, tilt: 0.3 })),
@@ -9693,6 +9737,13 @@ void main(){
       scratch: onEach((a, src) => claws(mid(a).x, mid(a).y, a.h * 0.5, src.dir, 0xffe3a3)),
     }
     for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
+    // skills whose body comes first (pre: [ms before the blow, draw]): 自然菌幕's veil is let down as the blow lands
+    SKILL_FX.natures_veil.pre = [450, ({ all }) => all.length && veil(span(all), all)]
+    // skills whose body travels to the foe itself (release: at the shot, flight = ms to the blow): no missile
+    SKILL_FX.water_strike.release = ({ src, all, flight }) => {
+      const from = (tipOf(src) || mid(src)).x
+      all.forEach(a => waveCrash(a, src.dir, { from, travel: flight }))
+    }
 
     function play(evs) {
       if (!app) return
@@ -9781,7 +9832,11 @@ void main(){
         if (act?.ring != null) later(act.ring, () => ring(src, tcol))
         // a shot (act.shot: the release, ms): a missile from the bow hand (from: "ho") or the weapon's tip to each target,
         // landing at act.hit; a volley (rain) goes up out of sight and comes down on every target
-        if (act?.shot != null) {
+        if (recipe?.pre) later(Math.max(0, at - recipe.pre[0]), () => recipe.pre[1]({ src, all: tgs.map(([a]) => a) }))
+        if (act?.shot != null && recipe?.release) {
+          const flight = Math.max(80, at - act.shot)
+          later(act.shot, () => recipe.release({ src, all: tgs.map(([a]) => a), flight }))
+        } else if (act?.shot != null) {
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
           const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, element: e.element, onFly: recipe?.fly && (q => recipe.fly(q, src)) }
