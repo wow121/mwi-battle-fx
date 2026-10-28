@@ -28,6 +28,11 @@ def cut(name):
         mask=(np.asarray(m)>0)&grow(SIL,6)
         a=np.asarray(im).copy(); a[...,3]=np.where(mask,a[...,3],0)
         arm=Image.fromarray(a)
+        # the drawn upper arm and forearm, each straightened into a strip (joint at x = T/4, the far end at T/4 + length)
+        for seg,(p0,p1) in (('up',(sh,el)),('lo',(el,wr))):
+            st=segment(arm,p0,p1)
+            st=st.resize((round(st.width*S),round(T*S)),Image.LANCZOS)
+            st.save(f'{OUT}{name}_{part}_{seg}.webp',lossless=True)
         # the colour: the median of the arm's solid pixels; how much of the arm the layer covers (a sleeve or not)
         px=a[mask&(a[...,3]>200)][:,:3]
         cover=len(px)/max(1,mask.sum())
@@ -37,6 +42,6 @@ COL={}
 for n in sys.argv[1:]: cut(n)
 r=json.load(open(OUT+'rig.json'))
 r['armColors']=COL
-r['arms']={p:{'shoulder':[sh[0]*S,sh[1]*S],'len':[round(math.dist(sh,el)*S,1),round(math.dist(el,wr)*S,1)],'hand':'hm' if p=='armb' else 'ho','z':0.5 if p=='armb' else 3.5,'width':[round(T*S*0.95,1),round(T*S*0.8,1)]} for p,(poly,sh,el,wr,f) in ARMS.items()}
+r['arms']={p:{'shoulder':[sh[0]*S,sh[1]*S],'len':[round(math.dist(sh,el)*S,1),round(math.dist(el,wr)*S,1)],'hand':'hm' if p=='armb' else 'ho','z':0.5 if p=='armb' else 3.5,'width':[round(T*S*0.95,1),round(T*S*0.8,1)],'pad':round(T*0.25*S,1)} for p,(poly,sh,el,wr,f) in ARMS.items()}
 json.dump(r,open(OUT+'rig.json','w'),indent=1)
 print(json.dumps(r['arms']))

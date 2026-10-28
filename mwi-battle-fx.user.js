@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.3
+// @version      0.21.4
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6870,6 +6870,10 @@ void main(){
       }
       // arm colours: the outfit's sleeve where it has one, else the avatar's skin; the far arm a shade darker
       if (base.arms) {
+        // the drawn upper arm and forearm of each arm (avatar + outfit layers), laid along the arm by the stage
+        def.armTex = {}
+        for (const arm of Object.keys(base.arms))
+          for (const seg of ["up", "lo"]) def.armTex[arm + "_" + seg] = [await L(`a_${avatar}_${arm}_${seg}`).catch(() => null), outfit && (await L(`o_${outfit}_${arm}_${seg}`).catch(() => null))].filter(Boolean)
         const C = base.armColors || {}
         const sleeve = outfit && C["o_" + outfit]?.armf?.cover > 0.5 ? C["o_" + outfit].armf : C["a_" + avatar]?.armf
         def.armColor = sleeve || { fill: "#c8c8c8", line: "#6e6e6e" }
@@ -6926,7 +6930,21 @@ void main(){
         const g = new P.Graphics()
         g.zIndex = arm.z
         root.addChild(g)
-        return { name, arm, g }
+        // textured segments when the layers have drawn arms (the joint end of a strip sits arm.pad from its left)
+        const seg = k => {
+          const ts = def.armTex?.[name + "_" + k]
+          if (!ts?.length) return null
+          const c = new P.Container()
+          for (const t of ts) {
+            const sp = new P.Sprite(t)
+            sp.anchor.set(arm.pad / t.width, 0.5)
+            c.addChild(sp)
+          }
+          c.zIndex = arm.z + (k === "lo" ? 0.02 : 0.01)
+          root.addChild(c)
+          return c
+        }
+        return { name, arm, g, up: seg("up"), lo: seg("lo") }
       })
       root.filters = [a.filter]
       a.cont.addChildAt(root, 1)
@@ -7029,8 +7047,9 @@ void main(){
     function rigArms(a) {
       const R = a.rig
       const body = R.by.body
-      for (const { arm, g } of R.arms) {
-        g.visible = armsOn
+      for (const { arm, g, up, lo } of R.arms) {
+        g.visible = armsOn && !up
+        if (up) up.visible = lo.visible = armsOn
         if (!armsOn) continue
         const hand = R.by[arm.hand]
         const dx0 = arm.shoulder[0] - body.p.at[0]
@@ -7059,7 +7078,18 @@ void main(){
           const side = ux >= 0 ? 1 : -1
           E = { x: S.x + ux * along - uy * off * side, y: S.y + uy * along + ux * off * side }
         }
-        // a shade darker than the sleeve on the body (the far arm darker still) so an arm reads against the torso
+        // drawn segments: each from its joint, turned along the bone and stretched to its length
+        if (up) {
+          const lay = (c, A, B, len) => {
+            c.position.set(A.x, A.y)
+            c.rotation = Math.atan2(B.y - A.y, B.x - A.x)
+            c.scale.set(Math.max(0.6, Math.hypot(B.x - A.x, B.y - A.y) / len), 1)
+          }
+          lay(up, S, E, arm.len[0])
+          lay(lo, E, W, arm.len[1])
+          continue
+        }
+        // a plain tube otherwise: a shade darker than the sleeve on the body (the far arm darker still)
         const col = R.def.armColor
         const shade = arm.hand === "hm" ? 0xb0b0b0 : 0xd0d0d0
         const w = arm.width[0]
