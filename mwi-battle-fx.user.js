@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.16
+// @version      0.21.17
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -7608,6 +7608,59 @@ void main(){
         })
       return rigs[id]
     }
+    // a pole weapon (staff, trident, spear) is the game's own item icon: a straight pole drawn on the diagonal, the same
+    // from any side (the paper-doll ones were drawn with breaks and kinks). Rendered from the items sprite sheet at
+    // 2x into a canvas; its axis runs from the lowest-left pixel (butt) to the highest-right one (head).
+    const iconTex = {}
+    let itemsSvg = null
+    async function gameIcon(id) {
+      if (iconTex[id] !== undefined) return iconTex[id]
+      const url = Stage.sheet("items")
+      if (!url) return null
+      try {
+        itemsSvg = itemsSvg || new DOMParser().parseFromString(await (await fetch(url)).text(), "image/svg+xml")
+        const sym = itemsSvg.getElementById(id)
+        if (!sym) return (iconTex[id] = null)
+        const N = 560
+        // everything it refers to (gradients, clip paths, shared shapes: url(#id) / href="#id"), wherever the sheet keeps it
+        const refs = new Map()
+        const scan = html => {
+          for (const m of html.matchAll(/url\(#([^)]+)\)|href="#([^"]+)"/g)) {
+            const rid = m[1] || m[2]
+            if (refs.has(rid)) continue
+            const el = itemsSvg.getElementById(rid)
+            refs.set(rid, el ? el.outerHTML : "")
+            if (el) scan(el.outerHTML)
+          }
+        }
+        scan(sym.outerHTML)
+        const defs = "<defs>" + [...refs.values()].join("") + "</defs>"
+        // the symbol's own paint (fill="none" on it: paths without a fill of their own would turn black)
+        const attrs = [...sym.attributes].filter(x => !/^(id|viewBox|xmlns.*)$/.test(x.name)).map(x => `${x.name}="${x.value}"`).join(" ")
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${sym.getAttribute("viewBox") || "0 0 100 100"}" width="${N}" height="${N}">${defs}<g ${attrs}>${sym.innerHTML}</g></svg>`
+        const img = new Image()
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)
+        await img.decode()
+        const c = document.createElement("canvas")
+        c.width = c.height = N
+        const g = c.getContext("2d")
+        g.drawImage(img, 0, 0, N, N)
+        const px = g.getImageData(0, 0, N, N).data
+        let lo = [0, 0, Infinity]
+        let hi = [0, 0, -Infinity]
+        for (let y = 0; y < N; y += 2)
+          for (let x = 0; x < N; x += 2)
+            if (px[(y * N + x) * 4 + 3] > 128) {
+              const t = x - y
+              if (t < lo[2]) lo = [x, y, t]
+              if (t > hi[2]) hi = [x, y, t]
+            }
+        return (iconTex[id] = { tex: P.Texture.from(c), axis: [lo[0], lo[1], hi[0], hi[1]], k: 0.5 })
+      } catch (e) {
+        console.warn("[动画测试] icon", id, e)
+        return (iconTex[id] = null)
+      }
+    }
     // a player: the shared 3/4 battle-view template with this avatar's and outfit's registered layers (body, upper
     // arm, forearm), the paper-doll weapon piece in the fist (turned from the doll's arm angle) and the off-hand behind
     let playerBase = null
@@ -7627,6 +7680,8 @@ void main(){
       // the weapon pieces come with the paper-doll index
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
+        const pole = id && /staff|trident|spear|boomstick|stabber/.test(id) && (await gameIcon(String(id).split("/").pop()))
+        if (pole) return { tex: pole.tex, grip: [0, 0], axis: pole.axis, k: pole.k }
         // an item redrawn for the rig (assets/rig/weapons: side-view crossbows, their axes in WEAPON_AXIS too; books
         // drawn in the pose mannequin's fist, read by it, gripped where that fist was: RIG_GRIP)
         const k = String(id || "").replace(/_refined$/, "")
@@ -7654,7 +7709,7 @@ void main(){
           const ax = G.at != null && w.axis
           const ho = G.hand === "ho"
           const at = ax && G.gap && ax[4] > 0.15 && ax[4] < 0.5 ? ax[4] : G.at
-          def.parts.weapon = { pivot: ax ? along(ax, at) : w.grip, tip: ax && along(ax, 1), at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: G.z || (G === GRIPS.spear && offOf(u.items?.off_hand) === "shield" ? 4.2 : ho ? 3.95 : 2.9), rot: ax ? angle(ax) - G.aim : -30, scale: base.scale * (G.scale || 1) }
+          def.parts.weapon = { pivot: ax ? along(ax, at) : w.grip, tip: ax && along(ax, 1), at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: G.z || (G === GRIPS.spear && offOf(u.items?.off_hand) === "shield" ? 4.2 : ho ? 3.95 : 2.9), rot: ax ? angle(ax) - G.aim : -30, scale: base.scale * (G.scale || 1) * (w.k || 1) }
           if (ax && G.two && !u.items?.off_hand) def.two = along(ax, G.two)
           // a bow's string runs between its two ends (pulled back by the drawing hand)
           if (ax && G === GRIPS.bow) def.string = [ax.slice(0, 2), ax.slice(2)]
