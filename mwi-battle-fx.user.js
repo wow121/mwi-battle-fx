@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.25
+// @version      0.21.26
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -7663,7 +7663,7 @@ void main(){
       return { a: { ...z.a }, x: z.x || 0, y: z.y || 0, r: z.r || 0 }
     }
 
-    let P, F, app, host, world, scene, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
+    let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
     let dot, glow, smokeTex, streakTex, rayTex, hazeTex
@@ -7672,6 +7672,9 @@ void main(){
     // over it stay sharp
     const worldFx = new Set()
     const setWorldFx = () => scene && (scene.filters = worldFx.size ? [...worldFx] : null)
+    // heat haze only bends what is behind the flames (ground, bodies, smoke), never the effects themselves
+    const hazeFx = new Set()
+    const setHazeFx = () => back && (back.filters = hazeFx.size ? [...hazeFx] : null)
     let shake = 0
     let punch = 0
     let dim = 0
@@ -7819,7 +7822,9 @@ void main(){
       decalLayer = new P.Container()
       smokeLayer = new P.Container()
       scene = new P.Container()
-      scene.addChild(bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer)
+      back = new P.Container()
+      back.addChild(bg, decalLayer, lights, unitsLayer, smokeLayer)
+      scene.addChild(back, shotLayer, fxLayer, partLayer)
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
@@ -8595,7 +8600,7 @@ void main(){
       focus = { x, y, amt, t0: now(), until: now() + ms }
     }
     // the air shimmers over a hot area (a displacement filter on the scene, its map drifting) for dur ms
-    function haze(x, y, w, h, dur, amp = 14) {
+    function haze(x, y, w, h, dur, amp = 7) {
       const map = new P.Sprite(hazeTex)
       map.anchor.set(0.5)
       map.position.set(x, y)
@@ -8604,16 +8609,16 @@ void main(){
       map.alpha = 0
       fxLayer.addChild(map)
       const f = new P.DisplacementFilter({ sprite: map, scale: 0 })
-      worldFx.add(f)
-      setWorldFx()
+      hazeFx.add(f)
+      setHazeFx()
       tween(dur, p => {
         const a = amp * Math.sin(Math.PI * Math.min(1, p * 1.4)) * (p > 0.7 ? (1 - p) / 0.3 : 1)
         f.scale.x = a * (1 + 0.3 * Math.sin(p * dur * 0.02))
         f.scale.y = a
         map.position.set(x + Math.sin(p * dur * 0.006) * w * 0.06, y - p * h * 0.15)
         if (p >= 1) {
-          worldFx.delete(f)
-          setWorldFx()
+          hazeFx.delete(f)
+          setHazeFx()
           map.destroy()
         }
       })
@@ -8997,7 +9002,7 @@ void main(){
       if (!tgs.length) return
       const list = tgs.map(([a]) => a)
       const S = span(list)
-      haze(S.cx, S.ground - S.h * 0.7, S.w, S.h * 2, 1600, 18)
+      haze(S.cx, S.ground - S.h * 0.7, S.w, S.h * 2, 1600, 9)
       zoomBlur(S.cx, S.ground - S.h * 0.5, 260, 0.06)
       shake = Math.max(shake, 1)
       list.forEach(a => fireBurst(a, true))
@@ -9005,6 +9010,7 @@ void main(){
         if (p < 1 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.3, { n: 1, color: [0xffb04a, 0xff6a2a], color1: 0x501000, size: 0.3, size1: 0.05, speed: 30, up: 160, gravity: -60, life: 1100 })
       })
     }
+    // sheet: false = the recipe draws the skill itself, the old stage's sheet for it is left out (no doubled volley)
     const SKILL_FX = {
       // 火球: a smoking trail behind it; it bursts in flame, scorching the ground and heating the air
       fireball: {
@@ -9015,13 +9021,16 @@ void main(){
         hit: ({ tgs }) =>
           tgs.forEach(([a]) => {
             fireBurst(a, false)
-            haze(a.x0, a.y0 - a.h * 0.6, a.h * 1.4, a.h * 1.6, 1000, 12)
+            haze(a.x0, a.y0 - a.h * 0.6, a.h * 1.4, a.h * 1.6, 1000, 6)
           }),
       },
       flame_blast: { hit: blaze },
+      // 箭雨: the volley itself is drawn (rain in play), not the old sheet
+      rain_of_arrows: { sheet: false },
       firestorm: { hit: blaze },
       // 分裂斩: a crescent of light flung through the whole line; time slows on the blow, the camera leans in
       cleave: {
+        sheet: false,
         hit: ({ src, tgs, color }) => {
           if (!tgs.length) return
           const list = tgs.map(([a]) => a)
@@ -9156,13 +9165,14 @@ void main(){
             if (!act.rain) return tgs.forEach(([a]) => shoot(kind, from, mid(a), flight, opt))
             for (let n = 0; n < 3; n++) shoot(kind, from, { x: from.x + src.dir * src.h * (0.3 + n * 0.15), y: from.y - src.h * 2.5 }, flight * 0.4, { ...opt, arc: 0 })
             tgs.forEach(([a]) => {
-              for (let n = 0; n < 9; n++)
-                later(flight * 0.5 - n * 45, () => {
+              // a long, dense volley: arrows keep landing from a little before the blow to a little after it
+              for (let n = 0; n < 14; n++)
+                later(Math.max(0, flight - 140 - n * 35), () => {
                   // every other arrow into the ground round the foe's feet, where it stays standing
                   const ground = n % 2 === 0
                   const x = a.x0 + (Math.random() - 0.5) * a.h * (ground ? 1.3 : 0.6)
                   const y = ground ? a.y0 + (Math.random() - 0.3) * a.h * 0.12 : a.y0 - a.h * (0.15 + Math.random() * 0.45)
-                  shoot(kind, { x: x - src.dir * a.h * 0.5, y: y - a.h * 2.4 }, { x, y }, flight * 0.5, {
+                  shoot(kind, { x: x - src.dir * a.h * 0.5, y: y - a.h * 2.4 }, { x, y }, 260, {
                     ...opt,
                     arc: 0,
                     onLand: B => {
@@ -9190,7 +9200,7 @@ void main(){
         }
         later(at, () => {
           // a skill on every foe: one big sheet over the whole row
-          const shown = isSkill && !spec?.proj && (e.ab.target === "allEnemies" || tgs.length > 1) && groupAt(spec, tgs.map(([a]) => a), { flip: src.dir < 0 })
+          const shown = recipe?.sheet === false || (isSkill && !spec?.proj && (e.ab.target === "allEnemies" || tgs.length > 1) && groupAt(spec, tgs.map(([a]) => a), { flip: src.dir < 0 }))
           tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
           // a skill's blow: light rays and white-hot sparks out of each foe it lands on, dust and a crack under a smash
           if (isSkill)
