@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.4
+// @version      0.21.5
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -530,6 +530,13 @@
               manifest = JSON.parse(r.responseText)
               // a manifest taken from a commit before its pin has no rev: it is that commit
               if (!manifest.rev) manifest.rev = (/@([0-9a-f]{7,40})\//.exec(urls[k]) || [])[1]
+              // the art commit's own manifest (ASSET_REV, fetched when raw.githubusercontent.com is out of reach)
+              // still carries the previous pin: its rev / revs would load the files this commit added or changed
+              // from older commits (missing or stale). Everything comes from the art commit itself instead.
+              if (urls[k].includes("@" + ASSET_REV + "/")) {
+                manifest.rev = ASSET_REV
+                delete manifest.revs
+              }
               fetchedAt = Date.now()
               source = urls[k]
               loading = false
