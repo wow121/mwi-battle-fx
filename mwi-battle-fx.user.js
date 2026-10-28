@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.1
+// @version      0.21.2
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6471,69 +6471,69 @@ void main(){
         // [forward, up, degrees] from where it is drawn. The sword rests pointing up and forward; + turns it back
         // (+30 straight up, +80 back over the head), - forward and down (-60 level, -110 down-forward).
         // Timing after the 2D brawlers: a very short wind-up, the blow lands in one frame, a held follow-through.
-        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } }, { t: 700, a: { body: 2, hm: [0.05, 0.1, 4], ho: [0, 0.015, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } }] },
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } }, { t: 700, a: { body: 2, hm: [-0.04, 0.04, 4], ho: [0.06, -0.035, 2] }, y: -0.01 }, { t: 1400, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } }] },
         // 普攻 1: the sword snaps up behind the head and chops down in front
         attack: {
           dur: 430, hit: 150, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 90, e: "out", a: { body: -8, hm: [0.1, 0.5, 80], ho: [0.04, 0.02, 0] }, x: -0.02 },
             { t: 150, e: "in", a: { body: 12, hm: [0.45, 0.12, -110], ho: [-0.04, 0, 0] }, x: 0.05 },
             { t: 330, a: { body: 10, hm: [0.44, 0.1, -112], ho: [-0.04, 0, 0] }, x: 0.045 },
-            { t: 430, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 430, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // 普攻 2: low in front, then a rising cut
         attack2: {
           dur: 520, hit: 220, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 140, e: "out", a: { body: 8, hm: [0.3, -0.05, -175], ho: [0.02, -0.02, 0] }, y: -0.03 },
             { t: 220, e: "in", a: { body: -10, hm: [0.4, 0.5, 20], ho: [-0.03, 0.03, 0] }, x: 0.05, y: 0.03 },
             { t: 400, a: { body: -9, hm: [0.4, 0.48, 22], ho: [-0.03, 0.03, 0] }, x: 0.045, y: 0.02 },
-            { t: 520, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 520, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // 普攻 3: a hop and a smash down, the shield thrown forward
         attack3: {
           dur: 560, hit: 200, ring: 200, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 100, e: "out", a: { body: -10, hm: [0.1, 0.55, 80], ho: [0.05, 0.1, 0] }, y: 0.25 },
             { t: 200, e: "in", a: { body: 22, hm: [0.5, 0.05, -120], ho: [0.1, 0, 0] }, x: 0.08 },
             { t: 420, a: { body: 20, hm: [0.49, 0.04, -121], ho: [0.1, 0, 0] }, x: 0.075 },
-            { t: 560, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 560, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // 普攻 4: a shield bash, the sword held back
         attack4: {
           dur: 600, hit: 220, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 120, e: "out", a: { body: -6, hm: [-0.05, 0.05, 40], ho: [-0.1, 0, 0] }, x: -0.03 },
             { t: 220, e: "in", a: { body: 18, hm: [0, 0.05, 30], ho: [0.25, 0.03, 0] }, x: 0.1 },
             { t: 420, a: { body: 16, hm: [0, 0.05, 30], ho: [0.24, 0.03, 0] }, x: 0.095 },
-            { t: 600, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 600, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // 分裂斩: the blade held out level, two whole spins, a slam with a shock ring
         "skill:cleave": {
           dur: 1250, hit: 760, ring: 760, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 220, e: "out", a: { body: -10, hm: [0.4, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: -0.02 },
             { t: 300, a: { body: -6, hm: [0.45, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: 0.04 },
             { t: 760, e: "linear", a: { body: -6, hm: [0.45, 0.25, -60], ho: [-0.05, 0.05, 0] }, y: 0.06, r: 720 },
             { t: 820, e: "out", a: { body: 15, hm: [0.45, 0.1, -100], ho: [0, 0, 0] }, x: 0.04, r: 720 },
             { t: 1000, a: { body: 14, hm: [0.44, 0.1, -102], ho: [0, 0, 0] }, x: 0.04, r: 720 },
-            { t: 1250, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] }, r: 720 },
+            { t: 1250, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] }, r: 720 },
           ],
         },
         // 血刃斩: a storm of stabs, the last one driving through
         "skill:maim": {
           dur: 1200, hit: 800, hits: [380, 520, 660], lunge: true, color: 0xff3b3b,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 220, e: "out", a: { body: -8, hm: [0.15, 0.25, -60], ho: [-0.05, 0.03, 0] }, x: -0.03 },
             { t: 380, e: "in", a: { body: 14, hm: [0.6, 0.25, -60], ho: [-0.05, 0, 0] }, x: 0.06 },
             { t: 450, a: { body: 10, hm: [0.3, 0.27, -60], ho: [-0.05, 0, 0] }, x: 0.06 },
@@ -6543,46 +6543,46 @@ void main(){
             { t: 730, a: { body: 8, hm: [0.3, 0.25, -60], ho: [-0.05, 0, 0] }, x: 0.08 },
             { t: 800, e: "in", a: { body: 18, hm: [0.7, 0.25, -60], ho: [-0.08, 0, 0] }, x: 0.12 },
             { t: 1000, a: { body: 16, hm: [0.68, 0.25, -61], ho: [-0.08, 0, 0] }, x: 0.11 },
-            { t: 1200, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 1200, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // any other damage skill: the sword raised high, held (charging), then a slam
         skill: {
           dur: 1100, hit: 650, ring: 650, lunge: true,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 260, e: "out", a: { body: -8, hm: [0.1, 0.6, 30], ho: [0, 0.03, 0] }, y: 0.02 },
             { t: 560, a: { body: -9, hm: [0.1, 0.62, 32], ho: [0, 0.03, 0] }, y: 0.02 },
             { t: 650, e: "in", a: { body: 22, hm: [0.5, 0.05, -120], ho: [0.05, 0, 0] }, x: 0.08 },
             { t: 900, a: { body: 20, hm: [0.49, 0.04, -121], ho: [0.05, 0, 0] }, x: 0.075 },
-            { t: 1100, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 1100, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // the shield thrust out against the blow, knocked back a step
         hurt: {
           dur: 400,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 70, e: "out", a: { body: -12, hm: [-0.08, 0.05, 30], ho: [0.1, 0.08, 10] }, x: -0.05 },
             { t: 230, a: { body: -8, hm: [-0.06, 0.06, 25], ho: [0.09, 0.07, 8] }, x: -0.04 },
-            { t: 400, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 400, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // the sword raised straight up overhead
         cast: {
           dur: 1100,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 280, e: "out", a: { hm: [0.1, 0.62, 30], ho: [0, 0.02, 0] }, y: 0.03 },
             { t: 800, a: { hm: [0.1, 0.63, 30], ho: [0, 0.02, 0] }, y: 0.03 },
-            { t: 1100, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 1100, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // falls on the back; the sword ends planted upright beside the body, the shield on the ground
         dead: {
           dur: 650,
           keys: [
-            { t: 0, a: { hm: [0.05, 0.08, 0], ho: [0, 0, 0] } },
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
             { t: 200, a: { body: -25, hm: [-0.1, 0.1, 20], ho: [-0.05, 0.05, 20] } },
             { t: 650, e: "in", a: { body: -84, hm: [-0.25, -0.25, 30], ho: [-0.55, -0.2, -90] } },
           ],
@@ -7059,12 +7059,13 @@ void main(){
           const side = ux >= 0 ? 1 : -1
           E = { x: S.x + ux * along - uy * off * side, y: S.y + uy * along + ux * off * side }
         }
+        // a shade darker than the sleeve on the body (the far arm darker still) so an arm reads against the torso
         const col = R.def.armColor
-        const dark = arm.z < 1
+        const shade = arm.hand === "hm" ? 0xb0b0b0 : 0xd0d0d0
         const w = arm.width[0]
         g.clear()
-        g.moveTo(S.x, S.y).lineTo(E.x, E.y).lineTo(W.x, W.y).stroke({ width: w + 5, color: col.line, cap: "round", join: "round" })
-        g.moveTo(S.x, S.y).lineTo(E.x, E.y).lineTo(W.x, W.y).stroke({ width: w, color: dark ? new P.Color(col.fill).multiply(0xd8d8d8).toNumber() : col.fill, cap: "round", join: "round" })
+        g.moveTo(S.x, S.y).lineTo(E.x, E.y).lineTo(W.x, W.y).stroke({ width: w + 7, color: new P.Color(col.line).multiply(0xb0b0b0).toNumber(), cap: "round", join: "round" })
+        g.moveTo(S.x, S.y).lineTo(E.x, E.y).lineTo(W.x, W.y).stroke({ width: w, color: new P.Color(col.fill).multiply(shade).toNumber(), cap: "round", join: "round" })
       }
     }
     let armsOn = GM_getValue("battle_fx_lab_v2", {}).arms !== false
