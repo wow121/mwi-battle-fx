@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.32
+// @version      0.21.33
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "8f5cb5bc34"
+  const ASSET_REV = "2b793496bc"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -8333,14 +8333,16 @@ void main(){
         const g = new P.Graphics()
         g.zIndex = arm.z
         root.addChild(g)
-        // textured segments when the layers have drawn arms (the joint end of a strip sits arm.pad from its left)
+        // textured segments when the layers have drawn arms (the joint end of a strip sits arm.pad from its left: one
+        // for both, or [upper arm, forearm])
         const seg = k => {
+          const pad = Array.isArray(arm.pad) ? arm.pad[k === "up" ? 0 : 1] : arm.pad
           const ts = def.armTex?.[name + "_" + k]
           if (!ts?.length) return null
           const c = new P.Container()
           for (const t of ts) {
             const sp = new P.Sprite(t)
-            sp.anchor.set(arm.pad / t.width, 0.5)
+            sp.anchor.set(pad / t.width, 0.5)
             c.addChild(sp)
           }
           c.zIndex = arm.z + (k === "lo" ? 0.02 : 0.01)
