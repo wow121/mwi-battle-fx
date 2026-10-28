@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.23
+// @version      0.21.24
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2749,7 +2749,7 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    return { sheet, fxSpec, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -6504,6 +6504,7 @@
     const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
     const BURST = { fire: "fire_burst", water: "water_burst", nature: "nature_burst" }
+    const ORB = { fire: "fire_orb", water: "ice_orb", nature: "nature_orb" }
     // per-body shader: uFlash mixes in a solid colour, uDis burns the body away along value noise (orange edge)
     const FRAG = `in vec2 vTextureCoord;
 out vec4 finalColor;
@@ -6612,6 +6613,21 @@ void main(){
             { t: 1200, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
+        // 致残斩: crouched with the blade trailing low behind, a sweep at the legs, raised back and a second, harder sweep
+        "skill:crippling_slash": {
+          dur: 1300, hit: 820, hits: [520], ring: 820, lunge: true, color: 0xff8a3b,
+          keys: [
+            { t: 0, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -12, hm: [-0.12, 0, 130], ho: [0.08, 0.05, 0] }, y: -0.03 },
+            { t: 420, a: { body: -13, hm: [-0.13, -0.01, 132], ho: [0.08, 0.05, 0] }, y: -0.03 },
+            { t: 520, e: "in", a: { body: 16, hm: [0.5, -0.02, -125], ho: [-0.05, 0, 0] }, x: 0.06 },
+            { t: 600, e: "out", a: { body: 12, hm: [0.46, 0.02, -132], ho: [-0.05, 0, 0] }, x: 0.06 },
+            { t: 720, e: "out", a: { body: -8, hm: [0.02, 0.32, 90], ho: [0.04, 0.04, 0] }, x: 0.05 },
+            { t: 820, e: "in", a: { body: 20, hm: [0.52, -0.05, -128], ho: [-0.06, 0, 0] }, x: 0.1 },
+            { t: 1050, a: { body: 18, hm: [0.51, -0.05, -129], ho: [-0.06, 0, 0] }, x: 0.095 },
+            { t: 1300, a: { hm: [-0.04, 0.02, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
         // any other damage skill: the sword raised high, held (charging), then a slam
         skill: {
           dur: 1100, hit: 650, ring: 650, lunge: true,
@@ -6705,6 +6721,47 @@ void main(){
             { t: 900, e: "out", a: { body: -16, hm: [0.02, 0.22, 30], ho: [0.06, 0.1, 10] }, x: -0.07 },
             { t: 1080, a: { body: -14, hm: [0.03, 0.21, 26], ho: [0.07, 0.095, 8] }, x: -0.065 },
             { t: 1250, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 快速射击: two arrows loosed back to back (shots: the earlier release), barely drawn
+        "skill:quick_shot": {
+          dur: 720, shots: [165], shot: 335, hit: 520, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 80, e: "out", a: { body: 0, hm: [0.46, 0.1, 0], ho: [0.08, 0.06, -8] } },
+            { t: 150, a: { body: -3, hm: [0.24, 0.14, 0], ho: [0.09, 0.07, -6] } },
+            { t: 165, e: "out", a: { body: -5, hm: [0.15, 0.17, 12], ho: [0.08, 0.08, -4] } },
+            { t: 250, e: "out", a: { body: -2, hm: [0.46, 0.1, 0], ho: [0.09, 0.07, -6] } },
+            { t: 320, a: { body: -4, hm: [0.24, 0.14, 0], ho: [0.1, 0.08, -4] } },
+            { t: 335, e: "out", a: { body: -7, hm: [0.14, 0.18, 15], ho: [0.08, 0.09, 0] }, x: -0.015 },
+            { t: 520, a: { body: -6, hm: [0.15, 0.17, 12], ho: [0.08, 0.085, 0] }, x: -0.015 },
+            { t: 720, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 稳定射击: leaning into the bow, a full draw held dead still, a clean release that hardly moves the body
+        "skill:steady_shot": {
+          dur: 1300, shot: 950, hit: 1120, from: "ho",
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 240, e: "out", a: { body: 4, hm: [0.52, 0.1, 0], ho: [0.13, 0.07, 0] }, x: 0.02 },
+            { t: 560, a: { body: 6, hm: [0.1, 0.15, 0], ho: [0.14, 0.07, 0] }, x: 0.02 },
+            { t: 940, a: { body: 6, hm: [0.095, 0.152, 0], ho: [0.14, 0.07, 0] }, x: 0.02 },
+            { t: 960, e: "out", a: { body: 2, hm: [0.03, 0.17, 10], ho: [0.12, 0.075, 2] }, x: 0.01 },
+            { t: 1120, a: { body: 2, hm: [0.035, 0.168, 8], ho: [0.12, 0.075, 2] }, x: 0.01 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+          ],
+        },
+        // 贯穿射击: leaned far back for the deepest draw, the arrow goes through the foe and on off the stage (pierce)
+        "skill:penetrating_shot": {
+          dur: 1300, shot: 900, hit: 1000, from: "ho", pierce: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
+            { t: 220, e: "out", a: { body: -4, hm: [0.5, 0.12, 0], ho: [0.1, 0.08, 0] } },
+            { t: 600, a: { body: -16, hm: [0.08, 0.16, 0], ho: [0.13, 0.1, 4] }, x: -0.05 },
+            { t: 880, a: { body: -17, hm: [0.07, 0.162, 0], ho: [0.13, 0.1, 4] }, x: -0.055 },
+            { t: 900, e: "out", a: { body: -24, hm: [0.0, 0.22, 34], ho: [0.04, 0.13, 16] }, x: -0.12 },
+            { t: 1100, a: { body: -20, hm: [0.01, 0.21, 30], ho: [0.05, 0.12, 12] }, x: -0.11 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [-0.09, -0.11, -120] } },
           ],
         },
         // 箭雨: the bow tilted back, a volley shot up out of sight, raining down on every foe
@@ -6820,7 +6877,33 @@ void main(){
             { t: 1000, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
           ],
         },
-        // a blow on every foe: run in, a leap, the mace raised, and a slam into the ground
+        // 重扫: run in, wound far back, one wide flat swing through the whole line
+        "skill:sweep": {
+          dur: 1200, hit: 700, ring: 700, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -16, hm: [-0.18, 0.18, 110], ho: [0.08, 0.02, 0] }, x: -0.03 },
+            { t: 580, a: { body: -17, hm: [-0.19, 0.18, 112], ho: [0.08, 0.02, 0] }, x: -0.035 },
+            { t: 700, e: "in", a: { body: 16, hm: [0.5, 0.15, -95], ho: [-0.05, 0, 0] }, x: 0.07 },
+            { t: 780, e: "out", a: { body: 20, hm: [0.42, 0.12, -115], ho: [-0.06, 0, 0] }, x: 0.08 },
+            { t: 980, a: { body: 18, hm: [0.41, 0.12, -116], ho: [-0.06, 0, 0] }, x: 0.075 },
+            { t: 1200, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 重碾: brought down on the foe, then dragged low and ground up through it
+        "skill:smack": {
+          dur: 1150, hit: 760, hits: [430], lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -10, hm: [0.05, 0.5, 95], ho: [0.04, 0.02, 0] }, x: -0.02 },
+            { t: 430, e: "in", a: { body: 18, hm: [0.45, 0.05, -115], ho: [-0.04, 0, 0] }, x: 0.06 },
+            { t: 580, e: "out", a: { body: 8, hm: [0.25, -0.1, -160], ho: [-0.02, -0.02, 0] }, x: 0.06, y: -0.02 },
+            { t: 760, e: "in", a: { body: -12, hm: [0.38, 0.45, 15], ho: [0, 0.02, 0] }, x: 0.08, y: 0.04 },
+            { t: 950, a: { body: -10, hm: [0.37, 0.44, 16], ho: [0, 0.02, 0] }, x: 0.075, y: 0.03 },
+            { t: 1150, a: { hm: [0.1, 0.12, 60], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 碎裂冲击 and any other blow on every foe: run in, a leap, the mace raised, and a slam into the ground
         "skill:all": {
           dur: 1100, hit: 620, ring: 620, lunge: true,
           keys: [
@@ -6923,7 +7006,44 @@ void main(){
             { t: 1150, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
           ],
         },
-        // a blow on every foe: run in, a leap and the shield slammed into the ground
+        // 盾击: drawn in behind the shield, then rammed into the foe with the whole body
+        "skill:shield_bash": {
+          dur: 1000, hit: 560, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 280, e: "out", a: { body: -10, hm: [0, 0, 0], ho: [-0.1, -0.04, 10] }, x: -0.06 },
+            { t: 480, a: { body: -11, hm: [0, 0, 0], ho: [-0.11, -0.04, 11] }, x: -0.065 },
+            { t: 560, e: "in", a: { body: 22, hm: [0.25, 0.02, 0], ho: [0.35, 0.02, -10] }, x: 0.15 },
+            { t: 800, a: { body: 20, hm: [0.25, 0.02, 0], ho: [0.34, 0.02, -10] }, x: 0.14 },
+            { t: 1000, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 重锤: the shield hoisted overhead, held, and brought down edge first on the foe's head
+        "skill:stunning_blow": {
+          dur: 1300, hit: 800, ring: 800, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 300, e: "out", a: { body: -14, hm: [0.1, 0.4, 0], ho: [-0.02, 0.6, 35] }, y: 0.06 },
+            { t: 700, a: { body: -15, hm: [0.1, 0.41, 0], ho: [-0.02, 0.61, 37] }, y: 0.06 },
+            { t: 800, e: "in", a: { body: 24, hm: [0.22, 0.05, 0], ho: [0.28, 0, -60] }, x: 0.08 },
+            { t: 1050, a: { body: 22, hm: [0.22, 0.05, 0], ho: [0.27, 0, -61] }, x: 0.075 },
+            { t: 1300, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 重扫: run in, the shield hauled back past the hip and swung round flat through the whole line
+        "skill:sweep": {
+          dur: 1200, hit: 720, ring: 720, lunge: true,
+          keys: [
+            { t: 0, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+            { t: 280, e: "out", a: { body: -14, hm: [-0.08, 0, 0], ho: [-0.2, 0.02, 45] }, x: -0.04 },
+            { t: 600, a: { body: -15, hm: [-0.09, 0, 0], ho: [-0.21, 0.02, 47] }, x: -0.045 },
+            { t: 720, e: "in", a: { body: 18, hm: [0.22, 0.02, 0], ho: [0.36, 0.03, -35] }, x: 0.09 },
+            { t: 800, e: "out", a: { body: 20, hm: [0.24, 0.02, 0], ho: [0.33, 0.02, -50] }, x: 0.1 },
+            { t: 1000, a: { body: 18, hm: [0.24, 0.02, 0], ho: [0.32, 0.02, -51] }, x: 0.095 },
+            { t: 1200, a: { hm: [0.04, -0.02, 0], ho: [0.02, -0.06, 0] } },
+          ],
+        },
+        // 碎裂冲击 and any other blow on every foe: run in, a leap and the shield slammed into the ground
         "skill:all": {
           dur: 1100, hit: 650, ring: 650, lunge: true,
           keys: [
@@ -7013,6 +7133,43 @@ void main(){
             { t: 860, e: "out", a: { body: -14, hm: [0.28, 0.14, 28], ho: [0.02, 0.02, 0] }, x: -0.08 },
             { t: 1040, a: { body: -11, hm: [0.3, 0.12, 22], ho: [0.03, 0.01, 0] }, x: -0.07 },
             { t: 1200, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+          ],
+        },
+        // 快速射击: two snap shots from the shoulder, one kick each
+        "skill:quick_shot": {
+          dur: 700, shots: [150], shot: 320, hit: 480,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 100, e: "out", a: { body: -2, hm: [0.42, 0.05, 0], ho: [0.06, -0.02, 0] } },
+            { t: 150, e: "out", a: { body: -5, hm: [0.36, 0.08, 13], ho: [0.04, -0.01, 0] }, x: -0.01 },
+            { t: 250, a: { body: -2, hm: [0.42, 0.05, 0], ho: [0.06, -0.02, 0] }, x: -0.01 },
+            { t: 320, e: "out", a: { body: -6, hm: [0.35, 0.08, 15], ho: [0.04, -0.01, 0] }, x: -0.025 },
+            { t: 480, a: { body: -4, hm: [0.37, 0.07, 9], ho: [0.05, -0.015, 0] }, x: -0.02 },
+            { t: 700, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+          ],
+        },
+        // 稳定射击: leaned in over the stock, the front hand braced under it, a long still aim and a clean shot
+        "skill:steady_shot": {
+          dur: 1250, shot: 900, hit: 1060,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 260, e: "out", a: { body: 6, hm: [0.46, 0.03, 0], ho: [0.14, -0.02, 0] }, x: 0.02 },
+            { t: 890, a: { body: 6, hm: [0.462, 0.03, 0], ho: [0.14, -0.02, 0] }, x: 0.02 },
+            { t: 910, e: "out", a: { body: 2, hm: [0.42, 0.05, 8], ho: [0.12, -0.01, 0] }, x: 0.01 },
+            { t: 1060, a: { body: 2, hm: [0.43, 0.045, 5], ho: [0.12, -0.015, 0] }, x: 0.01 },
+            { t: 1250, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+          ],
+        },
+        // 贯穿射击: braced back on the heels, a bolt that goes through the foe and on off the stage, a kick that staggers
+        "skill:penetrating_shot": {
+          dur: 1250, shot: 860, hit: 960, pierce: true,
+          keys: [
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.4, 0.06, 0], ho: [0.06, -0.01, 0] }, x: -0.03 },
+            { t: 850, a: { body: -9, hm: [0.4, 0.06, 0], ho: [0.06, -0.01, 0] }, x: -0.035 },
+            { t: 870, e: "out", a: { body: -22, hm: [0.2, 0.18, 40], ho: [0, 0.04, 0] }, x: -0.13 },
+            { t: 1060, a: { body: -16, hm: [0.24, 0.14, 30], ho: [0.02, 0.02, 0] }, x: -0.11 },
+            { t: 1250, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // 箭雨: aimed high, a volley up out of sight that rains down on every foe
@@ -7106,6 +7263,30 @@ void main(){
             { t: 1200, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
+        // 冰枪术: the staff drawn back level like a spear and thrust, a shard of ice flying off its head
+        "skill:ice_spear": {
+          dur: 1000, shot: 560, hit: 760, missile: "shard",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 240, e: "out", a: { body: -8, hm: [-0.12, 0.05, -76], ho: [0.06, 0.06, 0] }, x: -0.03 },
+            { t: 480, a: { body: -9, hm: [-0.13, 0.05, -76], ho: [0.06, 0.06, 0] }, x: -0.035 },
+            { t: 560, e: "in", a: { body: 12, hm: [0.5, 0.06, -78], ho: [-0.04, 0.03, 0] }, x: 0.04 },
+            { t: 780, a: { body: 11, hm: [0.49, 0.06, -79], ho: [-0.04, 0.03, 0] }, x: 0.04 },
+            { t: 1000, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 缠绕: the staff lifted and its butt driven into the ground; the roots come up under the foe
+        "skill:entangle": {
+          dur: 1100, hit: 700, ring: 640,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 250, e: "out", a: { body: -6, hm: [0.5, 0.33, -6], ho: [0.05, 0.12, 0] }, y: 0.04 },
+            { t: 560, a: { body: -7, hm: [0.5, 0.34, -5], ho: [0.05, 0.13, 0] }, y: 0.04 },
+            { t: 640, e: "in", a: { body: 10, hm: [0.46, -0.02, -10], ho: [0.02, 0, 0] } },
+            { t: 880, a: { body: 9, hm: [0.46, -0.02, -10], ho: [0.02, 0, 0] } },
+            { t: 1100, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
         // 生命吸取: the staff pointed at the foe and held, then drawn back as its life streams over (drain)
         "skill:life_drain": {
           dur: 1400, hit: 600, drain: true,
@@ -7115,6 +7296,30 @@ void main(){
             { t: 600, a: { body: 8, hm: [0.46, 0.2, -71], ho: [0.06, 0.06, 0] }, x: 0.02 },
             { t: 1100, e: "inout", a: { body: -8, hm: [0.44, 0.16, -55], ho: [0.04, 0.1, 0] }, x: -0.02 },
             { t: 1400, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 火焰风暴: the staff whirled overhead, then its head swung forward over the foes
+        "skill:firestorm": {
+          dur: 1400, hit: 950,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 220, e: "out", a: { body: -5, hm: [0.5, 0.42, 0], ho: [0.05, 0.15, 0] }, y: 0.03 },
+            { t: 760, e: "linear", a: { body: -6, hm: [0.5, 0.44, -720], ho: [0.05, 0.16, 0] }, y: 0.04 },
+            { t: 880, e: "out", a: { body: 12, hm: [0.52, 0.3, -770], ho: [0, 0.06, 0] }, x: 0.03 },
+            { t: 1150, a: { body: 11, hm: [0.51, 0.3, -771], ho: [0, 0.06, 0] }, x: 0.03 },
+            { t: 1400, a: { hm: [0.02, 0, -720], ho: [0.06, -0.05, 0] } },
+          ],
+        },
+        // 剧毒粉尘 / 自然菌幕: the staff tipped back, then swept out low across the foes, scattering the spores
+        "skill:toxic_pollen": {
+          dur: 1200, hit: 850,
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.08, -0.04, 100], ho: [0.05, 0.1, 0] } },
+            { t: 620, a: { body: -9, hm: [0.07, -0.04, 102], ho: [0.05, 0.1, 0] } },
+            { t: 850, e: "inout", a: { body: 12, hm: [0.45, 0.12, -100], ho: [-0.02, 0.04, 0] }, x: 0.03 },
+            { t: 1040, a: { body: 11, hm: [0.44, 0.12, -101], ho: [-0.02, 0.04, 0] }, x: 0.03 },
+            { t: 1200, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
         // a spell on every foe: the staff raised high, then its butt slammed on the ground
@@ -7222,7 +7427,33 @@ void main(){
             { t: 1000, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
           ],
         },
-        // any other stab skill: crouched and coiled back, then a charge that runs the spear through the foe
+        // 破胆之刺: a quick jab that makes the foe flinch, a half step back, then the real thrust
+        "skill:poke": {
+          dur: 820, hit: 470, hits: [250], lunge: true, color: 0xffe08a,
+          keys: [
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 120, e: "out", a: { body: -6, hm: [-0.05, -0.05, -2], ho: [0.08, 0.13, 0] }, x: -0.02 },
+            { t: 250, e: "in", a: { body: 8, hm: [0.3, -0.04, -4], ho: [0.03, 0.14, 0] }, x: 0.03 },
+            { t: 340, e: "out", a: { body: -8, hm: [-0.1, -0.04, 2], ho: [0.08, 0.13, 0] }, x: -0.03 },
+            { t: 470, e: "in", a: { body: 16, hm: [0.55, -0.02, -2], ho: [-0.02, 0.15, 0] }, x: 0.1 },
+            { t: 650, a: { body: 14, hm: [0.54, -0.02, -2], ho: [-0.02, 0.15, 0] }, x: 0.095 },
+            { t: 820, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+          ],
+        },
+        // 透骨之刺: a crouch, a leap with the spear raised, and the point driven down into the foe
+        "skill:impale": {
+          dur: 1150, hit: 680, ring: 680, lunge: true, color: 0xff5050,
+          keys: [
+            { t: 0, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+            { t: 200, e: "out", a: { body: -8, hm: [-0.05, -0.1, 0], ho: [0.08, 0.1, 0] }, y: -0.04 },
+            { t: 420, e: "out", a: { body: -12, hm: [0, 0.45, 60], ho: [0.06, 0.25, 0] }, y: 0.35 },
+            { t: 560, a: { body: -14, hm: [-0.02, 0.5, 65], ho: [0.05, 0.27, 0] }, y: 0.4 },
+            { t: 680, e: "in", a: { body: 24, hm: [0.4, 0.05, -60], ho: [0, 0.12, 0] }, x: 0.08 },
+            { t: 920, a: { body: 22, hm: [0.39, 0.04, -61], ho: [0, 0.12, 0] }, x: 0.075 },
+            { t: 1150, a: { hm: [0.06, -0.08, -4], ho: [0.1, 0.1, 0] } },
+          ],
+        },
+        // 贯心之刺 and any other stab skill: crouched and coiled back, then a charge that runs the spear through the foe
         skill: {
           dur: 1100, hit: 700, lunge: true, through: true,
           keys: [
@@ -7307,6 +7538,7 @@ void main(){
         cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
       },
     }
+    ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
     // two-handed slashers / smashers (werewolf, goblin): the sword's moves, heavier (both hands on the haft)
     const slowed = (set, k) =>
       Object.fromEntries(Object.entries(set).map(([n, a]) => [n, { ...a, dur: a.dur * k, hit: a.hit && a.hit * k, ring: a.ring && a.ring * k, hits: a.hits?.map(t => t * k), keys: a.keys.map(x => ({ ...x, t: x.t * k })) }]))
@@ -7518,6 +7750,7 @@ void main(){
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
       for (const n of Assets.list("fx")) sheet(n)
+      circles()
       sync()
     }
 
@@ -8082,11 +8315,11 @@ void main(){
       }
       return null
     }
-    function playSheet(name, x, y, h, { dur = 480, flip = false, tint = 0xffffff, delay = 0 } = {}) {
+    function playSheet(name, x, y, h, { dur = 480, flip = false, tint = 0xffffff, delay = 0, anchor = "center" } = {}) {
       const frames = sheet(name)
       if (!frames) return false
       const s = new P.Sprite(frames[0])
-      s.anchor.set(0.5)
+      s.anchor.set(0.5, anchor === "bottom" ? 1 : 0.5)
       s.tint = tint
       s.position.set(x, y)
       const k = h / frames[0].height
@@ -8103,6 +8336,103 @@ void main(){
         delay,
       )
       return true
+    }
+    // a skill's own effect the way the DOM stage drew it (Stage.fxSpec): a ground sheet rises from the feet, an "on"
+    // sheet plays over the body, h = its height in body heights
+    function specAt(spec, a, { delay = 0, dur = 820, flip = false } = {}) {
+      if (!spec || (!spec.ground && !spec.on)) return false
+      const H = a.h * spec.h * FX_K
+      if (spec.ground) return playSheet(spec.ground, a.x0 + (a.dash || 0), a.y0 + a.h * 0.04, H, { dur, delay, flip, anchor: "bottom" })
+      const m = mid(a)
+      return playSheet(spec.on, m.x, m.y, H * 0.95, { dur, delay, flip })
+    }
+    // a skill on a whole side: one big sheet over the row instead of a copy on every unit (3:4 frames, sized to cover
+    // the row, within the stage)
+    function groupAt(spec, list, { delay = 0, dur = 900, flip = false } = {}) {
+      if (!spec || (!spec.ground && !spec.on) || !list.length) return false
+      const xs = list.map(a => a.x0 + (a.dash || 0))
+      const s = Math.max(...list.map(a => a.h))
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+      const ground = Math.max(...list.map(a => a.y0))
+      const H = Math.min(app.screen.height * 0.95, Math.max(s * spec.h * FX_K * 1.2, ((Math.max(...xs) - Math.min(...xs) + s * FX_K) * 1.05) / 0.75))
+      if (spec.ground) return playSheet(spec.ground, cx, ground + s * 0.04, H, { dur, delay, flip, anchor: "bottom" })
+      return playSheet(spec.on, cx, ground - s * 0.5, H, { dur, delay, flip })
+    }
+    // the DOM stage's sprites were boxes a good deal taller than the body; its sizes are in those boxes
+    const FX_K = 1.35
+    // magic circles (a 2x2 sheet of round glyphs: fire, water, nature, holy), turning flat on the ground under a caster
+    let circleTex = null
+    const CIRCLE = { fire: 0, water: 1, nature: 2 }
+    function circles() {
+      if (circleTex) return circleTex === "loading" ? null : circleTex
+      if (!Assets.has("fx", "circles")) return null
+      circleTex = "loading"
+      P.Assets.load(Assets.url("fx/circles.webp"))
+        .then(tex => {
+          const cw = tex.width / 2
+          const ch = tex.height / 2
+          circleTex = [0, 1, 2, 3].map(k => new P.Texture({ source: tex.source, frame: new P.Rectangle((k % 2) * cw + (cw - ch) / 2, Math.floor(k / 2) * ch, ch, ch) }))
+        })
+        .catch(() => (circleTex = null))
+      return null
+    }
+    function circle(a, element, dur) {
+      const tx = circles()
+      if (!tx) return
+      const c = new P.Container()
+      c.position.set(a.x0 + (a.dash || 0), a.y0)
+      c.scale.set(1, 0.32)
+      const s = new P.Sprite(tx[CIRCLE[element] ?? 3])
+      s.anchor.set(0.5)
+      s.width = s.height = a.h * 1.5
+      c.addChild(s)
+      fxLayer.addChild(c)
+      tween(dur, p => {
+        s.rotation = (p * dur) / 900
+        c.alpha = p < 0.15 ? p / 0.15 : 1 - Math.max(0, p - 0.6) / 0.4
+        if (p >= 1) c.destroy({ children: true })
+      })
+      sparks(a.x0, a.y0 - a.h * 0.2, COLOR[element] || COLOR.buff, 12, { speed: 60, up: 120, gravity: -120, life: dur, size: 0.35 })
+    }
+    // a shot leaving: a flash and a ring standing across the line of flight, sparks thrown forward
+    function muzzle(pt, a, color, big) {
+      light(pt.x, pt.y, color, a.h * (big ? 0.45 : 0.3), big ? 320 : 220, 1.4)
+      const g = new P.Graphics()
+      g.position.set(pt.x, pt.y)
+      fxLayer.addChild(g)
+      tween(big ? 320 : 240, p => {
+        g.clear()
+        const r = a.h * (0.05 + (big ? 0.42 : 0.26) * ease(p))
+        g.ellipse(0, 0, r * 0.55, r).stroke({ color, width: a.h * 0.035 * (1 - p) + 1, alpha: 1 - p })
+        if (p >= 1) g.destroy()
+      })
+      for (let k = 0; k < (big ? 12 : 7); k++) {
+        const s = new P.Sprite(dot)
+        s.anchor.set(0.5)
+        s.tint = color
+        s.position.set(pt.x, pt.y)
+        s.scale.set(0.35)
+        partLayer.addChild(s)
+        const an = (Math.random() - 0.5) * 0.9
+        const v = 190 * (0.5 + Math.random())
+        parts.push({ s, vx: Math.cos(an) * v * a.dir, vy: Math.sin(an) * v, t0: now(), life: 260, g: 0 })
+      }
+    }
+    // a shot that goes through: a beam from the shooter on past the target to the edge of the stage
+    function beam(from, to, color, h) {
+      const dx = to.x - from.x
+      const dy = to.y - from.y
+      const len = Math.hypot(dx, dy) || 1
+      const W = app.screen.width
+      const end = { x: to.x + (dx / len) * W, y: to.y + (dy / len) * W }
+      const g = new P.Graphics()
+      fxLayer.addChild(g)
+      tween(340, p => {
+        g.clear()
+        g.moveTo(from.x, from.y).lineTo(end.x, end.y).stroke({ color, width: h * 0.07 * (1 - p) + 2, alpha: 1 - p, cap: "round" })
+        g.moveTo(from.x, from.y).lineTo(end.x, end.y).stroke({ color: 0xffffff, width: 2, alpha: 1 - p })
+        if (p >= 1) g.destroy()
+      })
     }
     function sparks(x, y, color, n, { speed = 260, up = 0, life = 600, size = 0.5, gravity = 500 } = {}) {
       for (let k = 0; k < n; k++) {
@@ -8174,10 +8504,20 @@ void main(){
     }
     // a missile from A to B over dur ms along an arc (arc: the rise as a share of the distance): "arrow" (a drawn shaft,
     // coloured head and fletching), "orb" (a glowing ball trailing sparks); big for a skill
-    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100 } = {}) {
+    // art: an effect sheet flown along the path instead (a bolt, a skill arrow), looping its frames; arrows and art
+    // leave a fading streak with sparks hanging in the air
+    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100, art = null } = {}) {
       const dist = Math.hypot(B.x - A.x, B.y - A.y)
+      const frames = art && sheet(art)
       let s
-      if (kind === "arrow") {
+      if (frames) {
+        s = new P.Sprite(frames[0])
+        s.anchor.set(0.5)
+        const k = (h * (big ? 0.8 : 0.6)) / frames[0].height
+        s.scale.set(k)
+        partLayer.addChild(s)
+        if (kind === "shard") arc = 0
+      } else if (kind === "arrow") {
         s = new P.Graphics()
         const L = h * (big ? 0.42 : 0.32)
         const wd = h * (big ? 0.022 : 0.016)
@@ -8185,6 +8525,15 @@ void main(){
         s.poly([0, -wd * 2.6, L * 0.2, 0, 0, wd * 2.6]).fill(big ? color : 0xdfe6f0)
         s.poly([-L, 0, -L * 0.82, -wd * 2.4, -L * 0.7, -wd * 2.4, -L * 0.86, 0, -L * 0.7, wd * 2.4, -L * 0.82, wd * 2.4]).fill(big ? color : 0xf2f2f2)
         shotLayer.addChild(s)
+      } else if (kind === "shard") {
+        // a long pointed shard of ice, pale at the core, flown flat (no arc)
+        s = new P.Graphics()
+        const L = h * 0.5
+        const wd = h * 0.05
+        s.poly([L * 0.5, 0, 0, -wd, -L * 0.5, 0, 0, wd]).fill(color)
+        s.poly([L * 0.4, 0, 0, -wd * 0.4, -L * 0.3, 0, 0, wd * 0.4]).fill(0xeaf8ff)
+        partLayer.addChild(s)
+        arc = 0
       } else {
         s = new P.Sprite(glow)
         s.anchor.set(0.5)
@@ -8194,13 +8543,29 @@ void main(){
       }
       s.position.set(A.x, A.y)
       const at = p => ({ x: lerp(A.x, B.x, p), y: lerp(A.y, B.y, p) - arc * dist * 4 * p * (1 - p) })
+      const streak = frames || kind === "arrow" ? new P.Graphics() : null
+      if (streak) fxLayer.addChild(streak)
+      const pts = []
       tween(dur, p => {
         const q = at(p)
         const n = at(Math.min(1, p + 0.02))
         s.position.set(q.x, q.y)
-        if (kind === "arrow") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
-        else if (Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
-        if (p >= 1) s.destroy()
+        if (frames) s.texture = frames[Math.floor((p * dur) / 60) % 8]
+        if (frames || kind !== "orb") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
+        if (kind !== "arrow" && Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
+        if (streak) {
+          // a ribbon over the last few points, white toward the head
+          pts.push(q)
+          if (pts.length > 10) pts.shift()
+          streak.clear()
+          for (let k = 1; k < pts.length; k++)
+            streak.moveTo(pts[k - 1].x, pts[k - 1].y).lineTo(pts[k].x, pts[k].y).stroke({ color: k > pts.length - 3 ? 0xffffff : color, width: (1 + (k / pts.length) * (big ? 5 : 3)) * (h / 100), alpha: (k / pts.length) * 0.85, cap: "round" })
+          if (Math.random() < 0.5) sparks(q.x, q.y, color, 1, { speed: 40, gravity: 0, life: 300, size: 0.25 })
+        }
+        if (p >= 1) {
+          s.destroy()
+          streak?.destroy()
+        }
       })
     }
     function relicGlow(a) {
@@ -8269,7 +8634,7 @@ void main(){
         }
     }
 
-    function hit(a, tg, src, e, isSkill) {
+    function hit(a, tg, src, e, isSkill, shown) {
       if (!a) return
       const el = e.element || "physical"
       const color = COLOR[el] || COLOR.physical
@@ -8279,7 +8644,8 @@ void main(){
       const key = e.ab?.key
       const style = e.style || "smash"
       const flip = src ? src.dir < 0 : false
-      if (!(isSkill && key && Assets.has("fx", key) && playSheet(key, m.x, m.y, a.h * 1.1, { flip })))
+      const spec = isSkill && key ? Stage.fxSpec(e.ab) : null
+      if (!(shown || (spec && !spec.proj && specAt(spec, a, { flip }))))
         playSheet(el !== "physical" ? BURST[el] || "phys_hit" : { slash: 1, stab: 1, smash: 1 }[style] ? style : "phys_hit", m.x, m.y, a.h * (tg.crit ? 1.2 : 0.9), { flip })
       sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
       flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
@@ -8363,6 +8729,10 @@ void main(){
           if (src) {
             play1(src, "cast")
             light(src.x0, src.y0 - src.h * 0.4, COLOR.heal, src.h, 600)
+            circle(src, "heal", 900)
+            // the heal's own sheet: one over a whole side, else on each
+            const spec = Stage.fxSpec(e.ab) || { ground: "heal", h: 1.5 }
+            later(300, () => (tgs.length > 1 && groupAt(spec, tgs.map(([a]) => a), { dur: 1000 })) || tgs.forEach(([a]) => specAt(spec, a, { dur: 900 })))
           }
           tgs.forEach(([a, tg]) => later(src ? 300 : 0, () => heal(a, tg)))
           continue
@@ -8370,6 +8740,11 @@ void main(){
         if (e.effect !== "damage") {
           if (src) {
             play1(src, "cast")
+            circle(src, "buff", 900)
+            // the buff's own sheet: over the whole side for an aura, else on the caster
+            const spec = Stage.fxSpec(e.ab) || { ground: "buff", h: 1.4 }
+            const allies = e.ab?.target === "allAllies" ? units[e.actor.side].filter(a => !a.dead) : [src]
+            later(260, () => (allies.length > 1 && groupAt(spec, allies, { dur: 1000 })) || specAt(spec, src, { dur: 900 }))
             if (src.off === "relic") later(300, () => relicGlow(src))
             // the sword held high catches the light
             later(300, () => {
@@ -8392,6 +8767,9 @@ void main(){
         // (a skill on every foe: "skill:all" where the set has one)
         const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : e.ab.target === "allEnemies" && actionOf(src.kind, "skill:all") ? "skill:all" : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
         const act = play1(src, name)
+        const spec = isSkill ? Stage.fxSpec(e.ab) : null
+        // a spell: a magic circle turns under the caster while it gathers
+        if (e.style === "magic") circle(src, e.element, (act?.hit ?? 300) + 300)
         // a relic in the off hand flares as the blow lands
         if (src.off === "relic") later(act?.hit ?? 300, () => relicGlow(src))
         const at = act?.hit ?? 300
@@ -8433,9 +8811,31 @@ void main(){
         if (act?.shot != null) {
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
-          const opt = { color: kind === "orb" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h }
+          // bolts and skill arrows fly as their own sheets (a plain spell as its element's orb)
+          const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, art: spec?.proj || (kind !== "arrow" && ORB[e.element]) || null }
+          const fromOf = () => (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
+          // earlier shots of a volley (shots: [ms, …]): each flies as long as the last, the foe flinches where it lands
+          for (const t of act.shots || [])
+            later(t, () =>
+              tgs.forEach(([a]) => {
+                shoot(kind, fromOf(), mid(a), flight, opt)
+                later(flight, () => {
+                  flash(a, 0xffffff, 160)
+                  a.jig = 0.7
+                })
+              }),
+            )
           later(act.shot, () => {
-            const from = (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
+            const from = fromOf()
+            muzzle(from, src, opt.color, isSkill)
+            if (act.pierce) later(flight, () => tgs.forEach(([a]) => beam(from, mid(a), opt.color, src.h)))
+            // a piercing shot carries on past the foe, straight, off the side of the stage
+            if (act.pierce)
+              return tgs.forEach(([a]) => {
+                const m = mid(a)
+                const far = { x: m.x + src.dir * app.screen.width, y: m.y + ((m.y - from.y) * app.screen.width) / Math.max(1, Math.abs(m.x - from.x)) }
+                shoot(kind, from, far, (flight * Math.hypot(far.x - from.x, far.y - from.y)) / Math.max(1, Math.hypot(m.x - from.x, m.y - from.y)), { ...opt, arc: 0 })
+              })
             if (!act.rain) return tgs.forEach(([a]) => shoot(kind, from, mid(a), flight, opt))
             for (let n = 0; n < 3; n++) shoot(kind, from, { x: from.x + src.dir * src.h * (0.3 + n * 0.15), y: from.y - src.h * 2.5 }, flight * 0.4, { ...opt, arc: 0 })
             tgs.forEach(([a]) => {
@@ -8462,7 +8862,9 @@ void main(){
           later(act.dur, () => (src.cont.zIndex = src.y0))
         }
         later(at, () => {
-          tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill))
+          // a skill on every foe: one big sheet over the whole row
+          const shown = isSkill && !spec?.proj && (e.ab.target === "allEnemies" || tgs.length > 1) && groupAt(spec, tgs.map(([a]) => a), { flip: src.dir < 0 })
+          tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
           // a skill's blow freezes both sides for a moment and punches the camera in
           if (isSkill) {
             for (const u of [src, ...tgs.map(([a]) => a)]) if (u.act) u.act.t0 += 90
