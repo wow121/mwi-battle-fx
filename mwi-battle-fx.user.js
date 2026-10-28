@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.20.1
+// @version      0.20.2
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6571,8 +6571,8 @@ void main(){
             { t: 1100, a: { arm: 4, fore: -52, barm: 30 } },
           ],
         },
-        // falls on the back, the sword lying along the body
-        dead: { dur: 650, keys: [{ t: 0, a: { arm: 4, fore: -52, barm: 30 } }, { t: 180, a: { body: -20, arm: 10, fore: -60, barm: 10 } }, { t: 650, e: "in", a: { body: -84, arm: -40, fore: -145, barm: -20 } }] },
+        // falls on the back, the shield on the chest, the sword (back hand) lying along the body
+        dead: { dur: 650, keys: [{ t: 0, a: {} }, { t: 180, a: { body: -20, arm: 20, fore: 10, barm: 10, bfore: 20 } }, { t: 650, e: "in", a: { body: -84, arm: 40, fore: 20, barm: 0, bfore: -60 } }] },
       },
       magnetic_golem: {
         idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
@@ -6609,8 +6609,7 @@ void main(){
     // stand in for an action without a clip or before the library has loaded.
     const MOCAP = {
       player: {
-        // the clip holds the sword upright in front of the face: tilt the blade forward
-        idle: ["sword and shield idle (4)", 1, { fore: -30 }],
+        idle: ["sword and shield idle (4)", 1],
         attack: ["sword and shield slash", 1.6],
         attack2: ["sword and shield slash (3)", 1.6],
         attack3: ["sword and shield attack (4)", 1.2],
@@ -6620,7 +6619,8 @@ void main(){
         skill: ["sword and shield slash (4)", 1.3],
         hurt: ["sword and shield block", 1],
         cast: ["sword and shield power up", 1.4],
-        // dead stays hand-made: the clip ends with the sword standing up, it should lie along the body
+        // the clip ends with the sword standing up from the hand: turned so it lies along the body
+        dead: ["sword and shield death", 1.3, { bfore: 50 }],
       },
     }
     let lib = null // clip name -> { dur, hit, keys }
@@ -6899,13 +6899,19 @@ void main(){
       const w = await piece(u.items?.main_hand || u.items?.two_hand || "holy_sword")
       if (w) {
         tex.weapon = w.tex
-        def.parts.weapon = { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
+        // the main weapon in the back hand (the character's left), drawn between the body and the front arm
+        def.parts.weapon = base.parts.bfore
+          ? // the back forearm is drawn pointing ~135° round from the front one: the grip turns with it
+            { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: 58 - base.armAngle - 40 + 135, scale: base.scale }
+          : { pivot: w.grip, at: base.fist, parent: base.parts.fore ? "fore" : "arm", z: 5, rot: 58 - base.armAngle - 40, scale: base.scale }
       }
       const off = await piece(u.items?.off_hand)
       if (off) {
         tex.off = off.tex
-        // in the back hand, in front of the body (a guard's shield); the back arm swings it
-        def.parts.off = base.parts.barm ? { pivot: off.grip, at: base.back, parent: "barm", z: 2.5, scale: base.scale } : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
+        // the off-hand in the front hand, held upright (it follows the hand, not the forearm's turn), over everything
+        def.parts.off = base.parts.bfore
+          ? { pivot: off.grip, at: base.fist, parent: "fore", z: 4.5, upright: true, scale: base.scale }
+          : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
       }
       return { def, tex }
     }
@@ -6971,7 +6977,8 @@ void main(){
     function rigFrame(a, t) {
       const R = a.rig
       if (R.fallen) return rigDebris(a)
-      const A = a.act
+      // a.still = [action, ms]: held on one frame (Arena.still, for checking poses)
+      const A = a.still ? { name: a.still[0], def: actionOf(a.kind, a.still[0]), t0: t - a.still[1] } : a.act
       let at = A ? t - A.t0 : 0
       if (A && at >= A.def.dur) {
         if (A.def.loop) at %= A.def.dur
@@ -7011,7 +7018,8 @@ void main(){
           const s = Math.sin(par.wr)
           q.x = par.x + dx * c - dy * s
           q.y = par.y + dx * s + dy * c
-          q.wr = par.wr + r + q.rest
+          // upright: keeps the body's tilt only (a shield held level with the body, whatever the arm does)
+          q.wr = q.p.upright ? (R.by.body || R.by.torso || par).wr + q.rest : par.wr + r + q.rest
         } else {
           // forward is -x in the art for a left-facing rig
           const fwd = R.def.face === "right" ? 1 : -1
@@ -7435,7 +7443,8 @@ void main(){
       bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
     }
 
-    return { open, sync, play, background, units: () => units }
+    const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
+    return { open, sync, play, background, units: () => units, still }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------

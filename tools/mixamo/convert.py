@@ -1,8 +1,8 @@
 # Mixamo joint dump (dump.py) -> 2D rig actions for the player rig (assets/rig/player) + stick-figure previews.
 # usage: convert.py <dump.json> <out actions.json> [preview dir]
-# Side view from the character's right: screen x = its forward, screen y = down. The sword hand (right) is our front
-# arm; the shield hand (left) our back arm (barm). Angles follow the rig: arm / barm + raises, fore + turns the
-# blade back, body + leans forward.
+# Side view: screen x = the character's forward, screen y = down. The main weapon is held in the back hand (barm /
+# bfore, the clip's sword hand) and the off-hand in the front hand (arm / fore, the clip's shield hand). Angles follow
+# the rig: + raises an arm / turns a forearm up, body + leans forward (from the idle stance's lean, so standing is upright).
 import json, math, sys, os
 
 dump, out = sys.argv[1], sys.argv[2]
@@ -11,7 +11,9 @@ D = json.load(open(dump))
 # rest directions of the drawn rig parts (screen degrees, clockwise from +x), see tools/rig-cut-player.py
 ARM0 = math.degrees(math.atan2(770 - 712, 772 - 705))   # shoulder -> elbow
 FORE0 = math.degrees(math.atan2(760 - 770, 873 - 772))  # elbow -> fist
-BARM0 = math.degrees(math.atan2(812 - 672, 412 - 585))  # back shoulder -> back fist
+BARM0 = math.degrees(math.atan2(742 - 672, 478 - 585))  # back shoulder -> back elbow
+BFORE0 = math.degrees(math.atan2(812 - 742, 412 - 478))  # back elbow -> back fist
+IDLE = "sword and shield idle (4)" 
 STEP = 2  # frames per key (30 fps -> 15 keys a second)
 
 
@@ -60,12 +62,14 @@ def convert(name, clip):
     rows = []
     for fr in F:
         body = ang(fr["Hips"], fr["Neck"]) + 90
-        a_arm = limb(fr["RightArm"], fr["RightForeArm"])
-        a_fore = limb(fr["RightForeArm"], fr["RightHand"])
-        a_barm = limb(fr["LeftArm"], fr["LeftHand"])
-        rows.append({"body": body, "arm": ARM0 + body - a_arm, "fore": a_arm + (FORE0 - ARM0) - a_fore, "barm": BARM0 + body - a_barm,
+        a_arm = limb(fr["LeftArm"], fr["LeftForeArm"])
+        a_fore = limb(fr["LeftForeArm"], fr["LeftHand"])
+        a_barm = limb(fr["RightArm"], fr["RightForeArm"])
+        a_bfore = limb(fr["RightForeArm"], fr["RightHand"])
+        rows.append({"body": body - LEAN, "arm": ARM0 + body - a_arm, "fore": a_arm + (FORE0 - ARM0) - a_fore,
+                     "barm": BARM0 + body - a_barm, "bfore": a_barm + (BFORE0 - BARM0) - a_bfore,
                      "x": max(-0.2, min(0.2, 0.35 * (sx(fr["Hips"]) - hx0) / H)), "y": max(-0.1, min(0.4, (fr["Hips"][2] - hz0) / H))})
-    for k in ("body", "arm", "fore", "barm"):
+    for k in ("body", "arm", "fore", "barm", "bfore"):
         col = unwrap([r[k] for r in rows])
         for r, v in zip(rows, col): r[k] = v
     fps = clip["fps"]
@@ -76,10 +80,28 @@ def convert(name, clip):
     keys = []
     for i in list(range(0, len(rows), STEP)) + ([len(rows) - 1] if (len(rows) - 1) % STEP else []):
         r = rows[i]
-        keys.append({"t": round(i * 1000 / fps), "e": "linear", "a": {k: round(r[k]) for k in ("body", "arm", "fore", "barm")}, "x": round(r["x"], 3), "y": round(r["y"], 3)})
+        keys.append({"t": round(i * 1000 / fps), "e": "linear", "a": {k: round(r[k]) for k in ("body", "arm", "fore", "barm", "bfore")}, "x": round(r["x"], 3), "y": round(r["y"], 3)})
     return {"dur": keys[-1]["t"], "hit": hit, "keys": keys}, rows, F, sx, sy, H
 
 
+# the idle stance's forward lean counts as upright
+_f = D[IDLE]["frames"]
+LEAN = 0
+
+
+def _lean():
+    r = []
+    for fr in _f:
+        r2l = sub(fr["LeftArm"], fr["RightArm"])
+        n = math.hypot(r2l[1], r2l[0]) or 1
+        fw = [r2l[1] / n, -r2l[0] / n]
+        v = sub(fr["Neck"], fr["Hips"])
+        r.append(math.degrees(math.atan2(-v[2], v[0] * fw[0] + v[1] * fw[1])) + 90)
+    return sum(r) / len(r)
+
+
+LEAN = _lean()
+print("idle lean", round(LEAN, 1))
 lib = {}
 for name, clip in D.items():
     if name == "X Bot": continue
