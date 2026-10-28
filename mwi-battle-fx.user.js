@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.20.0
+// @version      0.20.1
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -972,19 +972,6 @@
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
 .bfx-arena{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
 .bfx-lab-stage{display:none}
-.bfx-ed{display:flex;flex-direction:column;gap:4px}
-.bfx-ed .hint{opacity:.6}
-.bfx-ed input[type=number]{width:64px;font:12px sans-serif;background:#1d2440;color:#dfe6ff;border:1px solid #3a4470;border-radius:4px;padding:1px 4px}
-.bfx-tl{position:relative;flex:1;min-width:240px;height:34px}
-.bfx-tl input{position:absolute;left:0;right:0;bottom:0;width:100%;margin:0}
-.bfx-lab .bfx-tl button.key{position:absolute;top:0;transform:translateX(-50%);padding:0 5px;font-size:11px;line-height:16px}
-.bfx-tl i.hit{position:absolute;top:0;bottom:12px;width:2px;background:#ff5a5a;transform:translateX(-1px)}
-.bfx-key{display:flex;flex-direction:column;gap:4px;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px}
-.bfx-sl{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}
-.bfx-sl label{display:flex;align-items:center;gap:6px}
-.bfx-sl label span{min-width:30px;opacity:.75}
-.bfx-sl label input{flex:1}
-.bfx-sl label b{min-width:38px;text-align:right;font-weight:400}
 /* #dev-end */`
       document.head.appendChild(st)
     }
@@ -6264,7 +6251,7 @@
   // ---------- 动画测试: a sandbox for any location, line-up, skill and pose ----------
   const MONSTERS = {"abyssal_imp":["深渊小鬼","magic","fire"],"acrobat":["杂技师","smash","physical"],"alligator":["夏洛克","slash","physical"],"anchor_shark":["持锚鲨","smash","physical"],"aquahorse":["水马","ranged","water"],"black_bear":["黑熊","stab","physical"],"brine_marksman":["海盐射手","ranged","physical"],"butterjerry":["蝶鼠","stab","physical"],"captain_fishhook":["鱼钩船长","slash","physical"],"centaur_archer":["半人马弓箭手","ranged","physical"],"chronofrost_sorcerer":["霜时巫师","magic","water"],"crab":["螃蟹","smash","physical"],"crystal_colossus":["水晶巨像","stab","physical"],"cyclops":["独眼巨人","smash","physical"],"demonic_overlord":["恶魔霸主","magic","fire"],"deranged_jester":["小丑皇","smash","physical"],"dodocamel":["渡渡驼","smash","physical"],"dryad":["树精","magic","nature"],"dusk_revenant":["黄昏亡灵","ranged","physical"],"elementalist":["元素法师","magic","fire"],"enchanted_bishop":["秘法主教","magic","nature"],"enchanted_king":["秘法国王","slash","physical"],"enchanted_knight":["秘法骑士","slash","physical"],"enchanted_pawn":["秘法士兵","smash","physical"],"enchanted_queen":["秘法王后","magic","water"],"enchanted_rook":["秘法堡垒","ranged","physical"],"eye":["独眼","slash","physical"],"eyes":["叠眼","slash","physical"],"flame_sorcerer":["火焰巫师","magic","fire"],"fly":["苍蝇","smash","physical"],"frog":["青蛙","smash","physical"],"frost_sniper":["霜冻狙击手","ranged","water"],"giant_mantis":["巨螳螂","slash","physical"],"giant_scorpion":["巨蝎","stab","physical"],"giant_shoebill":["鲸头鹳","smash","physical"],"gobo_boomy":["轰轰","magic","fire"],"gobo_chieftain":["哥布林酋长","stab","physical"],"gobo_shooty":["咻咻","ranged","physical"],"gobo_slashy":["砍砍","slash","physical"],"gobo_smashy":["锤锤","smash","physical"],"gobo_stabby":["刺刺","stab","physical"],"granite_golem":["花岗岩魔像","smash","physical"],"griffin":["狮鹫","slash","physical"],"grizzly_bear":["棕熊","slash","physical"],"gummy_bear":["软糖熊","smash","physical"],"ice_sorcerer":["冰霜巫师","magic","water"],"infernal_warlock":["地狱术士","magic","fire"],"jackalope":["鹿角兔","magic","nature"],"juggler":["杂耍者","ranged","physical"],"jungle_sprite":["丛林精灵","magic","nature"],"luna_empress":["月神之蝶","magic","nature"],"magician":["魔术师","magic","fire"],"magnetic_golem":["磁力魔像","smash","physical"],"manticore":["狮蝎兽","ranged","physical"],"marine_huntress":["海洋猎手","ranged","water"],"mimic":["宝箱怪","stab","physical"],"myconid":["蘑菇人","magic","nature"],"nom_nom":["咬咬鱼","stab","physical"],"novice_sorcerer":["新手巫师","magic","water"],"panda":["熊猫","smash","physical"],"polar_bear":["北极熊","smash","physical"],"porcupine":["豪猪","ranged","physical"],"pyre_hunter":["火焰猎手","ranged","fire"],"rabid_rabbit":["疯魔兔","slash","physical"],"rat":["杰瑞","stab","physical"],"red_panda":["小熊猫","slash","physical"],"salamander":["火蜥蜴","magic","fire"],"sea_snail":["蜗牛","smash","physical"],"shadow_archer":["暗影弓手","ranged","physical"],"siren":["海妖","magic","water"],"skunk":["臭鼬","slash","physical"],"slimy":["史莱姆","magic","water"],"snake":["蛇","stab","physical"],"soul_hunter":["灵魂猎手","ranged","physical"],"squawker":["鹦鹉","magic","nature"],"stalactite_golem":["钟乳石魔像","stab","physical"],"swampy":["沼泽虫","smash","physical"],"the_kraken":["克拉肯","ranged","physical"],"the_watcher":["观察者","ranged","physical"],"tidal_conjuror":["潮汐召唤师","magic","water"],"treant":["树人","magic","nature"],"trial_badger":["试炼獾","slash","physical"],"trial_beetle":["试炼甲虫","smash","physical"],"trial_chameleon":["试炼变色龙","ranged","physical"],"trial_dragonfly":["试炼蜻蜓","ranged","physical"],"trial_firefly":["试炼萤火虫","magic","fire"],"trial_hedgehog":["试炼刺猬","magic","nature"],"trial_jellyfish":["试炼水母","magic","water"],"trial_wasp":["试炼黄蜂","stab","physical"],"turtle":["忍者龟","smash","physical"],"vampire":["吸血鬼","stab","physical"],"veyes":["复眼","slash","physical"],"werewolf":["狼人","slash","physical"],"zombie":["僵尸","slash","physical"],"zombie_bear":["僵尸熊","stab","physical"]}
   const LOCATIONS = {"aqua_planet":["海洋星球",["sea_snail","crab","aquahorse","nom_nom","turtle","marine_huntress"]],"bear_with_it":["熊熊星球",["gummy_bear","panda","black_bear","grizzly_bear","polar_bear","red_panda"]],"chimerical_den":["奇幻洞穴",["rat","skunk","porcupine","slimy","frog","snake","swampy","alligator","sea_snail","crab","aquahorse","jungle_sprite","myconid","nom_nom","turtle","centaur_archer","gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","eye","butterjerry","eyes","veyes","jackalope","dodocamel","manticore","griffin"]],"enchanted_fortress":["秘法要塞",["novice_sorcerer","ice_sorcerer","flame_sorcerer","panda","black_bear","magnetic_golem","abyssal_imp","elementalist","grizzly_bear","polar_bear","stalactite_golem","soul_hunter","enchanted_pawn","enchanted_knight","enchanted_bishop","enchanted_rook","enchanted_queen","enchanted_king"]],"gobo_planet":["哥布林星球",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","gobo_chieftain"]],"golem_cave":["魔像洞穴",["magnetic_golem","stalactite_golem","granite_golem","crystal_colossus"]],"infernal_abyss":["地狱深渊",["abyssal_imp","soul_hunter","infernal_warlock","demonic_overlord"]],"jungle_planet":["丛林星球",["jungle_sprite","myconid","treant","centaur_archer","luna_empress"]],"pirate_cove":["海盗基地",["eye","eyes","veyes","zombie","magnetic_golem","abyssal_imp","vampire","stalactite_golem","soul_hunter","squawker","werewolf","granite_golem","infernal_warlock","anchor_shark","brine_marksman","tidal_conjuror","captain_fishhook","the_kraken"]],"planet_of_the_eyes":["眼球星球",["eye","eyes","veyes","the_watcher"]],"sinister_circus":["阴森马戏团",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","novice_sorcerer","gummy_bear","ice_sorcerer","flame_sorcerer","panda","black_bear","grizzly_bear","polar_bear","zombie","vampire","rabid_rabbit","elementalist","werewolf","zombie_bear","acrobat","juggler","magician","deranged_jester"]],"smelly_planet":["臭臭星球",["fly","rat","skunk","porcupine","slimy"]],"sorcerers_tower":["巫师之塔",["novice_sorcerer","ice_sorcerer","flame_sorcerer","elementalist","chronofrost_sorcerer"]],"swamp_planet":["沼泽星球",["frog","snake","swampy","alligator","giant_shoebill"]],"twilight_zone":["暮光之地",["zombie","vampire","werewolf","dusk_revenant"]]}
-  // ---------- 动画测试: the rigged battle (PixiJS) with an auto battle and the action editor ----------
+  // ---------- 动画测试: the rigged battle (PixiJS) with an auto battle ----------
   // Only units that have a rig take part: 1号 is the drawn player pilot (blue hair, warrior outfit, holy sword +
   // knight's aegis, sword skills), the monsters are every rigged monster. The DOM stage still hangs in a hidden slot
   // (Stage.attach(Lab.render(), "test")) but gets no events.
@@ -6333,7 +6320,6 @@
         }, 2200)
     }
     function autoTick() {
-      if (Arena.editing()) return
       const who = [...alive("p").map(i => ["p", i]), ...alive("m").map(i => ["m", i])]
       if (!who.length) return
       const [side, i] = pick(who)
@@ -6409,7 +6395,6 @@
         button("重置", reset),
       )
       lab.p.forEach((u, i) => row(u.name).append(button("普攻", () => act("p", i, null)), ...u.skills.map(k => button(zh(k), () => act("p", i, k), "skill"))))
-      root.appendChild(Arena.editorPanel())
     }
 
     // builds the controls and the PixiJS view in the tab panel; returns the (hidden) slot the DOM stage hangs in
@@ -6440,8 +6425,8 @@
   })()
 
   // ---------- Arena: rigged units in WebGL (PixiJS + pixi-filters) ----------
-  // Bodies are cutout rigs (assets/rig/): parts on joints, moved by keyframed actions (ACTIONS, editable in the lab's
-  // action editor and kept per viewer). Effects: bloom on effect sheets and sparks, a per-body shader that flashes on
+  // Bodies are cutout rigs (assets/rig/): parts on joints, moved by keyframed actions (Mixamo clips via MOCAP, hand-made
+  // ACTIONS). Effects: bloom on effect sheets and sparks, a per-body shader that flashes on
   // a hit and burns the body away on death, shockwave + camera punch on crits, lights that dim the scene around a cast.
   const Arena = (() => {
     const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
@@ -6618,9 +6603,6 @@ void main(){
         cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
       },
     }
-    // the viewer's edits (action editor) replace whole actions: { kind: { action: {...} } }
-    const edits = GM_getValue("battle_fx_actions_v1", {})
-    const saveEdits = () => GM_setValue("battle_fx_actions_v1", edits)
     // ----- motion library: Mixamo clips converted to this rig (tools/mixamo: dump.py in Blender, convert.py), kept in
     // assets/rig/anims/<pack>.json. MOCAP picks the clip (and its speed-up) behind each action; the hand-made ACTIONS
     // above still give the action's stage behaviour (lunge, run-through, trail colour, landing ring, looping) and
@@ -6677,7 +6659,7 @@ void main(){
       if (!mocapCache.has(key)) mocapCache.set(key, fromClip(clip, m[1], 1, metaOf(ACTIONS[kind]?.[name]), m[2]))
       return mocapCache.get(key)
     }
-    const actionOf = (kind, name) => edits[kind]?.[name] || mocapAction(kind, name) || ACTIONS[kind]?.[name] || null
+    const actionOf = (kind, name) => mocapAction(kind, name) || ACTIONS[kind]?.[name] || null
     const EASE = {
       linear: p => p,
       in: p => p * p * p,
@@ -6785,11 +6767,6 @@ void main(){
       partLayer.filters = [bloom]
       world.addChild(bg, lights, unitsLayer, fxLayer, partLayer, textLayer)
       app.stage.addChild(world)
-      app.stage.eventMode = "static"
-      app.stage.hitArea = app.screen
-      app.stage.on("globalpointermove", dragMove)
-      app.stage.on("pointerup", dragEnd)
-      app.stage.on("pointerupoutside", dragEnd)
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
       for (const n of Assets.list("fx")) sheet(n)
@@ -6823,7 +6800,6 @@ void main(){
           if (run !== syncing) return
           if (r) buildRig(a, r)
         }
-      editorRefresh()
     }
     function makeUnit(side, i, u) {
       const a = { side, i, u, kind: side === "p" ? "player" : (u.hrid || "").split("/").pop(), dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null }
@@ -6948,9 +6924,6 @@ void main(){
             sp.scale.set(p.scale || 1)
             s.addChild(sp)
           }
-          s.eventMode = "static"
-          s.cursor = "grab"
-          s.on("pointerdown", e => dragStart(a, name, e))
           root.addChild(s)
           const w = layers[0]?.width || 0
           const h = layers[0]?.height || 0
@@ -6998,30 +6971,26 @@ void main(){
     function rigFrame(a, t) {
       const R = a.rig
       if (R.fallen) return rigDebris(a)
-      let pose
-      if (ed.on && ed.unit === a) pose = sample(ed.act, ed.t)
-      else {
-        const A = a.act
-        let at = A ? t - A.t0 : 0
-        if (A && at >= A.def.dur) {
-          if (A.def.loop) at %= A.def.dur
-          else if (A.name === "dead") at = A.def.dur
-          else {
-            play1(a, "idle")
-            return rigFrame(a, t)
-          }
+      const A = a.act
+      let at = A ? t - A.t0 : 0
+      if (A && at >= A.def.dur) {
+        if (A.def.loop) at %= A.def.dur
+        else if (A.name === "dead") at = A.def.dur
+        else {
+          play1(a, "idle")
+          return rigFrame(a, t)
         }
-        pose = A ? sample(A.def, at) : { a: {}, x: 0, y: 0 }
-        if (a.from && A && t - A.t0 < a.blend) {
-          const p = ease((t - A.t0) / a.blend)
-          const b = pose
-          const short = (from, to) => to + ((((from || 0) - to) % 360) + 540) % 360 - 180
-          pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p), r: lerp(short(a.from.r, b.r || 0), b.r || 0, p) }
-          // the short way round: an action may end a whole turn (or more) away from where the next starts
-          for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) {
-            const to = b.a[n] || 0
-            pose.a[n] = lerp(short(a.from.a[n], to), to, p)
-          }
+      }
+      let pose = A ? sample(A.def, at) : { a: {}, x: 0, y: 0 }
+      if (a.from && A && t - A.t0 < a.blend) {
+        const p = ease((t - A.t0) / a.blend)
+        const b = pose
+        const short = (from, to) => to + ((((from || 0) - to) % 360) + 540) % 360 - 180
+        pose = { a: {}, x: lerp(a.from.x, b.x, p), y: lerp(a.from.y, b.y, p), r: lerp(short(a.from.r, b.r || 0), b.r || 0, p) }
+        // the short way round: an action may end a whole turn (or more) away from where the next starts
+        for (const n of new Set([...Object.keys(a.from.a), ...Object.keys(b.a)])) {
+          const to = b.a[n] || 0
+          pose.a[n] = lerp(short(a.from.a[n], to), to, p)
         }
       }
       a.pose = pose
@@ -7241,7 +7210,7 @@ void main(){
         for (const a of units[side]) {
           const T = a.trail
           if (!T) continue
-          if (T.on && !(ed.on && ed.unit === a)) {
+          if (T.on) {
             const o = tipOf(a)
             const i = tipOf(a, 0.35)
             const last = T.pts[T.pts.length - 1]
@@ -7256,7 +7225,7 @@ void main(){
             const age = 1 - (t - B.t) / T.life
             const ii = { x: lerp(B.o.x, B.i.x, T.w), y: lerp(B.o.y, B.i.y, T.w) }
             const ia = { x: lerp(A.o.x, A.i.x, T.w), y: lerp(A.o.y, A.i.y, T.w) }
-            trailG.poly([A.o.x, A.o.y, B.o.x, B.o.y, ii.x, ii.y, ia.x, ia.y]).fill({ color: T.color, alpha: 0.75 * age * age })
+            trailG.poly([A.o.x, A.o.y, B.o.x, B.o.y, ii.x, ii.y, ia.x, ia.y]).fill({ color: T.color, alpha: 0.6 * age * age })
           }
         }
     }
@@ -7372,7 +7341,7 @@ void main(){
             )
         // the blade leaves a light trail while it swings: thin and white for an attack, broad and coloured for a skill
         const tcol = act?.color != null ? act.color : isSkill ? (e.element && e.element !== "physical" ? color : 0xffd84a) : 0xeef4ff
-        src.trail = { on: true, color: tcol, w: isSkill ? 1 : 0.45, life: isSkill ? 260 : 150, pts: src.trail?.pts || [] }
+        src.trail = { on: true, color: tcol, w: isSkill ? 0.6 : 0.4, life: isSkill ? 220 : 150, pts: src.trail?.pts || [] }
         later(act?.dur || 800, () => src.trail && (src.trail.on = false))
         if (isSkill) {
           // the skill's name pops up, the blade gathers light before the release
@@ -7466,338 +7435,7 @@ void main(){
       bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
     }
 
-    // ----- action editor -----
-    // Pick a unit and an action; the unit freezes on the timeline. Drag a body part on the stage (or its slider) to
-    // turn it at the selected key; + adds a key at the playhead. Edits are kept per viewer (GM storage) and override
-    // the built-in actions; 导出 copies them as JSON (send it to Claude to make them the defaults).
-    const ed = { on: false, side: "p", i: 0, name: "attack", act: null, t: 0, key: 0, playing: 0, unit: null, drag: null }
-    let panelEl = null
-    const editUnit = () => units[ed.side]?.[ed.i] || null
-    const kindOf = () => editUnit()?.kind || (ed.side === "p" ? "player" : Lab.units.m[ed.i] && (Lab.units.m[ed.i].hrid || "").split("/").pop())
-    function editAct() {
-      const kind = kindOf()
-      const own = edits[kind]?.[ed.name]
-      return own || structuredClone(actionOf(kind, ed.name) || { dur: 800, keys: [{ t: 0, a: {} }] })
-    }
-    // writes the action being edited into the viewer's edits
-    function commit() {
-      const kind = kindOf()
-      ed.act.keys.sort((x, y) => x.t - y.t)
-      ;(edits[kind] ||= {})[ed.name] = ed.act
-      saveEdits()
-    }
-    function editorRefresh() {
-      ed.unit = ed.on ? editUnit() : null
-      if (ed.on) ed.act = editAct()
-      drawPanel()
-    }
-    const partNames = () => (editUnit()?.rig?.parts || []).filter(q => q.name !== "weapon" && q.name !== "off").map(q => q.name)
-    function setEditing(on) {
-      ed.on = on
-      cancelAnimationFrame(ed.playing)
-      ed.playing = 0
-      if (on) {
-        ed.act = editAct()
-        ed.key = Math.min(ed.key, ed.act.keys.length - 1)
-        ed.t = ed.act.keys[ed.key]?.t || 0
-      }
-      ed.unit = on ? editUnit() : null
-      drawPanel()
-    }
-    function playEdited() {
-      cancelAnimationFrame(ed.playing)
-      const t0 = now()
-      const step = () => {
-        ed.t = Math.min(ed.act.dur, now() - t0)
-        drawTime()
-        ed.playing = ed.t < ed.act.dur ? requestAnimationFrame(step) : 0
-      }
-      ed.playing = requestAnimationFrame(step)
-    }
-    // dragging a part turns it around its joint at the selected key
-    function dragStart(a, name, e) {
-      if (!ed.on || a !== ed.unit || name === "weapon" || name === "off") return
-      const q = a.rig.by[name]
-      const g = a.rig.root.toGlobal(q.s.position)
-      ed.drag = { q, a, g, ang: Math.atan2(e.global.y - g.y, e.global.x - g.x), base: ed.act.keys[ed.key].a[name] || 0 }
-      selectKeyAt()
-    }
-    function dragMove(e) {
-      const d = ed.drag
-      if (!d) return
-      const ang = Math.atan2(e.global.y - d.g.y, e.global.x - d.g.x)
-      let delta = ((ang - d.ang) * 180) / Math.PI
-      delta = ((delta + 540) % 360) - 180
-      const mirror = d.a.rig.root.scale.x < 0 ? -1 : 1
-      ed.act.keys[ed.key].a[d.q.name] = Math.round(d.base + delta * mirror * d.q.sign)
-      commit()
-      drawKey()
-    }
-    function dragEnd() {
-      ed.drag = null
-    }
-    // the playhead snaps onto the selected key so edits land where they show
-    function selectKeyAt() {
-      const k = ed.act.keys[ed.key]
-      if (k) ed.t = k.t
-      drawTime()
-    }
-
-    const mk = (tag, cls, text) => {
-      const e = document.createElement(tag)
-      if (cls) e.className = cls
-      if (text != null) e.textContent = text
-      return e
-    }
-    const btn = (label, onClick, cls) => {
-      const b = mk("button", cls, label)
-      b.addEventListener("click", onClick)
-      return b
-    }
-    let timeEl, keyEl
-    function editorPanel() {
-      panelEl = panelEl || mk("div", "bfx-ed")
-      drawPanel()
-      return panelEl
-    }
-    function drawPanel() {
-      if (!panelEl) return
-      panelEl.replaceChildren()
-      const top = mk("div", "row")
-      top.append(mk("span", "lbl", "动作编辑"))
-      top.append(btn(ed.on ? "结束编辑" : "开始编辑", () => setEditing(!ed.on), ed.on ? "on" : ""))
-      if (!ed.on) {
-        top.append(mk("span", "hint", "（编辑时这个角色停在时间轴上，在画面上拖动身体部位就能转动它）"))
-        panelEl.append(top)
-        return
-      }
-      const who = mk("select")
-      const opts = [...Lab.units.p.map((u, i) => ["p:" + i, u.name]), ...Lab.units.m.map((u, i) => ["m:" + i, u.name])]
-      for (const [v, n] of opts) {
-        const o = mk("option", null, n)
-        o.value = v
-        who.append(o)
-      }
-      who.value = ed.side + ":" + ed.i
-      who.onchange = () => {
-        ;[ed.side, ed.i] = [who.value[0], +who.value.slice(2)]
-        ed.key = 0
-        setEditing(true)
-      }
-      const what = mk("select")
-      // the attack sets, then one action per damage skill a player carries (技能·<name>); 其他技能 is the generic one
-      const sets = ["attack", "attack2", "attack3", "attack4"].filter(n => ACTIONS[kindOf()]?.[n] || edits[kindOf()]?.[n]).map((n, k, all) => [n, all.length > 1 ? NAMES.attack + (k + 1) : NAMES.attack])
-      const own = ed.side === "p" ? (Lab.units.p[ed.i]?.skills || []).filter(k => ABILITIES[k]?.[1] === "damage").map(k => ["skill:" + k, "技能·" + ABILITIES[k][0]]) : []
-      const list = [["idle", NAMES.idle], ...sets, ...own, ["skill", own.length ? "其他技能" : NAMES.skill], ["hurt", NAMES.hurt], ["cast", NAMES.cast], ...(ed.side === "p" ? [["dead", NAMES.dead]] : [])]
-      for (const [v, n] of list) {
-        const o = mk("option", null, n)
-        o.value = v
-        what.append(o)
-      }
-      what.value = ed.name
-      what.onchange = () => {
-        ed.name = what.value
-        ed.key = 0
-        setEditing(true)
-      }
-      top.append(who, what, btn("▶ 播放", playEdited))
-      const dur = mk("input")
-      dur.type = "number"
-      dur.step = 50
-      dur.value = ed.act.dur
-      dur.title = "总时长（毫秒）"
-      dur.onchange = () => ((ed.act.dur = Math.max(100, +dur.value || 800)), commit(), drawPanel())
-      top.append(mk("span", "lbl", "时长"), dur)
-      if (ed.name.startsWith("attack") || ed.name.startsWith("skill")) {
-        const hit = mk("input")
-        hit.type = "number"
-        hit.step = 10
-        hit.value = ed.act.hit ?? 300
-        hit.title = "打中的时刻（毫秒）"
-        hit.onchange = () => ((ed.act.hit = +hit.value || 0), commit())
-        top.append(mk("span", "lbl", "命中"), hit)
-      }
-      panelEl.append(top)
-
-      // timeline: keys as markers, the playhead as a slider
-      const line = mk("div", "row")
-      line.append(mk("span", "lbl", "时间轴"))
-      const bar = mk("div", "bfx-tl")
-      ed.act.keys.forEach((k, i) => {
-        const m = btn(String(i + 1), () => ((ed.key = i), selectKeyAt(), drawPanel()), "key" + (i === ed.key ? " on" : ""))
-        m.style.left = (k.t / ed.act.dur) * 100 + "%"
-        m.title = k.t + " ms"
-        bar.append(m)
-      })
-      if (ed.act.hit != null) {
-        const h = mk("i", "hit")
-        h.style.left = (ed.act.hit / ed.act.dur) * 100 + "%"
-        h.title = "命中"
-        bar.append(h)
-      }
-      timeEl = mk("input")
-      timeEl.type = "range"
-      timeEl.min = 0
-      timeEl.max = ed.act.dur
-      timeEl.value = ed.t
-      timeEl.oninput = () => ((ed.t = +timeEl.value), drawTime())
-      bar.append(timeEl)
-      line.append(bar)
-      line.append(
-        btn("+ 关键帧", () => {
-          const pose = sample(ed.act, ed.t)
-          const t = Math.round(ed.t)
-          const k = { t, a: Object.fromEntries(Object.entries(pose.a).map(([n, v]) => [n, Math.round(v)])), x: +pose.x.toFixed(3), y: +pose.y.toFixed(3) }
-          ed.act.keys = ed.act.keys.filter(x => x.t !== t)
-          ed.act.keys.push(k)
-          commit()
-          ed.key = ed.act.keys.indexOf(k)
-          drawPanel()
-        }),
-        btn("删除这帧", () => {
-          if (ed.act.keys.length <= 1) return
-          ed.act.keys.splice(ed.key, 1)
-          ed.key = Math.max(0, ed.key - 1)
-          commit()
-          selectKeyAt()
-          drawPanel()
-        }),
-      )
-      panelEl.append(line)
-      keyEl = mk("div", "bfx-key")
-      panelEl.append(keyEl)
-      drawKey()
-
-      // the motion library: put a Mixamo clip on this action (speed up, swing scaled), then adjust it here
-      if (lib && Object.keys(lib).length && (kindOf() === "player" || MOCAP[kindOf()])) {
-        const libRow = mk("div", "row")
-        const clipSel = mk("select")
-        const cur = MOCAP[kindOf()]?.[ed.name]
-        for (const n of Object.keys(lib).sort()) {
-          const o = mk("option", null, n.replace(/^sword and shield /, ""))
-          o.value = n
-          clipSel.append(o)
-        }
-        clipSel.value = ed.act.clip || cur?.[0] || clipSel.value
-        clipSel.style.maxWidth = "200px"
-        const speed = mk("input")
-        speed.type = "number"
-        speed.step = 0.1
-        speed.value = ed.act.speed || cur?.[1] || 1
-        speed.title = "播放速度倍率"
-        const amp = mk("input")
-        amp.type = "number"
-        amp.step = 0.1
-        amp.value = ed.act.amp || 1
-        amp.title = "动作幅度倍率（Q 版可以放大一些）"
-        libRow.append(
-          mk("span", "lbl", "动作库"),
-          clipSel,
-          mk("span", "lbl", "速度"),
-          speed,
-          mk("span", "lbl", "幅度"),
-          amp,
-          btn("套用到这个动作", () => {
-            ed.act = { ...fromClip(lib[clipSel.value], +speed.value || 1, +amp.value || 1, metaOf(ed.act)), clip: clipSel.value, speed: +speed.value || 1, amp: +amp.value || 1 }
-            ed.key = 0
-            ed.t = 0
-            commit()
-            drawPanel()
-          }),
-        )
-        panelEl.append(libRow)
-      }
-      const io = mk("div", "row")
-      io.append(
-        mk("span", "lbl", "保存"),
-        btn("导出全部（复制）", () => {
-          GM_setClipboard(JSON.stringify(edits))
-          alert("已复制你改过的动作（JSON），发给 Claude 就能设成默认")
-        }),
-        btn("导入", () => {
-          const s = prompt("粘贴动作 JSON")
-          if (!s) return
-          try {
-            Object.assign(edits, JSON.parse(s))
-            saveEdits()
-            setEditing(true)
-          } catch (e) {
-            alert("JSON 不对：" + e.message)
-          }
-        }),
-        btn("这个动作恢复默认", () => {
-          delete edits[kindOf()]?.[ed.name]
-          saveEdits()
-          setEditing(true)
-        }),
-      )
-      panelEl.append(io)
-    }
-    // the selected key: its time, easing and one slider per part (+ forward / up)
-    function drawKey() {
-      if (!keyEl) return
-      keyEl.replaceChildren()
-      const k = ed.act.keys[ed.key]
-      if (!k) return
-      const head = mk("div", "row")
-      const t = mk("input")
-      t.type = "number"
-      t.step = 10
-      t.value = k.t
-      t.onchange = () => {
-        k.t = Math.max(0, Math.min(ed.act.dur, +t.value || 0))
-        commit()
-        ed.key = ed.act.keys.indexOf(k)
-        selectKeyAt()
-        drawPanel()
-      }
-      const e = mk("select")
-      for (const [v, n] of [["inout", "缓入缓出"], ["out", "快起慢停"], ["in", "慢起快停"], ["linear", "匀速"]]) {
-        const o = mk("option", null, n)
-        o.value = v
-        e.append(o)
-      }
-      e.value = k.e || "inout"
-      e.onchange = () => ((k.e = e.value), commit())
-      head.append(mk("span", "lbl", `第 ${ed.key + 1} 帧`), t, mk("span", "lbl", "毫秒"), e)
-      keyEl.append(head)
-      const sliders = mk("div", "bfx-sl")
-      const slider = (label, get, set, min, max, step) => {
-        const w = mk("label")
-        const r = mk("input")
-        r.type = "range"
-        r.min = min
-        r.max = max
-        r.step = step
-        r.value = get()
-        const v = mk("b", null, String(get()))
-        r.oninput = () => {
-          set(+r.value)
-          v.textContent = r.value
-          commit()
-        }
-        w.append(mk("span", null, label), r, v)
-        sliders.append(w)
-      }
-      const ZH = { body: "身体", arm: "大臂", fore: "小臂", barm: "副手臂", torso: "躯干", head: "头", arm_f: "前臂", arm_b: "后臂", leg_f: "前腿", leg_b: "后腿" }
-      for (const n of partNames())
-        slider(
-          ZH[n] || n,
-          () => k.a[n] || 0,
-          v => (k.a[n] = v),
-          -180,
-          180,
-          1,
-        )
-      slider("前移", () => k.x || 0, v => (k.x = v), -0.3, 0.3, 0.005)
-      slider("上移", () => k.y || 0, v => (k.y = v), -0.2, 0.3, 0.005)
-      keyEl.append(sliders)
-    }
-    function drawTime() {
-      if (timeEl) timeEl.value = ed.t
-    }
-
-    return { open, sync, play, background, editorPanel, editing: () => ed.on, units: () => units, ed }
+    return { open, sync, play, background, units: () => units }
   })()
 
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
