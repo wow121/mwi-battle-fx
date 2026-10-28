@@ -35,5 +35,23 @@ for k, L in sorted(idx["layers"].items()):
     t = pts @ ax
     lo, hi = np.percentile(t, 0.5), np.percentile(t, 99.5)
     b, hd = c + ax * lo, c + ax * hi
-    out[k] = [round(float(x)) for x in (*b, *hd)]
+    row = [round(float(x)) for x in (*b, *hd)]
+    # a break in the art along the shaft (a trident's loose butt spike): the middle of the widest empty stretch, as a
+    # share of the length from the butt, for the hand to cover
+    n = int(hi - lo) + 1
+    filled = np.zeros(n, bool)
+    filled[np.clip((t - lo).astype(int), 0, n - 1)] = True
+    best, run, start = (0, 0), 0, 0
+    for i in range(int(n * 0.05), int(n * 0.95)):
+        if filled[i]:
+            run = 0
+            continue
+        if run == 0:
+            start = i
+        run += 1
+        if run > best[0]:
+            best = (run, start)
+    if best[0] >= 3:
+        row.append(round((best[1] + best[0] / 2) / n, 3))
+    out[k] = row
 print(json.dumps(out, separators=(",", ":")))
