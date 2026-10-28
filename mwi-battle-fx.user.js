@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.28
+// @version      0.21.29
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8409,7 +8409,7 @@ void main(){
     // ----- drawn effects (no sprite sheets): fire, water, ice, nature, blows, light, circles -----
     // particle sizes are tuned for a body 120 px tall
     const K = h => h / 120
-    const ELEM_COL = { fire: 0xff7a2a, water: 0x5ac8ff, nature: 0x62d65a, heal: 0x6cff9a, buff: 0xffd84a, physical: 0xffe3a3 }
+    const ELEM_COL = { mana: 0x8f9cff, fire: 0xff7a2a, water: 0x5ac8ff, nature: 0x62d65a, heal: 0x6cff9a, buff: 0xffd84a, physical: 0xffe3a3 }
     // fire is big soft motes on the glowing layer: white-yellow when born, cooling through orange to a dark red
     // (thin and translucent: piled up on the glowing layer they burn white)
     const FIRE = [0xffb848, 0xff8a2a, 0xff6a1a, 0xffd070]
@@ -8442,7 +8442,7 @@ void main(){
     }
     // water: a column of water bursting up out of the ground (a translucent body with a paler core and white streaks
     // of flow running up it), spray thrown off its crown, falling back
-    function waterColumn(x, y, w, h, dur) {
+    function waterColumn(x, y, w, h, dur, { body = 0x2f8fe8, core = 0x9fd8ff, spray = [0x5ab8ff, 0xbfe8ff, 0xffffff] } = {}) {
       light(x, y - h * 0.4, 0x3fb4ff, Math.max(w, h) * 0.5, dur, 0.7)
       const g = new P.Graphics()
       smokeLayer.addChild(g)
@@ -8455,15 +8455,55 @@ void main(){
         const W = w * 0.5 * (p > 0.7 ? 1 - (p - 0.7) / 0.3 * 0.7 : 1)
         const a = p > 0.8 ? (1 - p) / 0.2 : 1
         const top = y - H
-        g.moveTo(x - W, y).bezierCurveTo(x - W * 0.8, y - H * 0.5, x - W * 0.6, top + W * 0.3, x, top).bezierCurveTo(x + W * 0.6, top + W * 0.3, x + W * 0.8, y - H * 0.5, x + W, y).closePath().fill({ color: 0x2f8fe8, alpha: 0.5 * a })
-        g.moveTo(x - W * 0.45, y).bezierCurveTo(x - W * 0.35, y - H * 0.5, x - W * 0.2, top + W * 0.5, x, top + W * 0.3).bezierCurveTo(x + W * 0.2, top + W * 0.5, x + W * 0.35, y - H * 0.5, x + W * 0.45, y).closePath().fill({ color: 0x9fd8ff, alpha: 0.45 * a })
+        g.moveTo(x - W, y).bezierCurveTo(x - W * 0.8, y - H * 0.5, x - W * 0.6, top + W * 0.3, x, top).bezierCurveTo(x + W * 0.6, top + W * 0.3, x + W * 0.8, y - H * 0.5, x + W, y).closePath().fill({ color: body, alpha: 0.5 * a })
+        g.moveTo(x - W * 0.45, y).bezierCurveTo(x - W * 0.35, y - H * 0.5, x - W * 0.2, top + W * 0.5, x, top + W * 0.3).bezierCurveTo(x + W * 0.2, top + W * 0.5, x + W * 0.35, y - H * 0.5, x + W * 0.45, y).closePath().fill({ color: core, alpha: 0.45 * a })
         for (const f of flows) {
           const v = (f.ph + p * dur * 0.0025) % 1
           const fy = y - H * v
           g.moveTo(x + f.u * W * 1.2 * (1 - v * 0.5), fy).lineTo(x + f.u * W * 1.2 * (1 - v * 0.5), fy - H * f.len).stroke({ color: 0xffffff, width: Math.max(1.5, w * 0.03), alpha: 0.7 * a, cap: "round" })
         }
         // spray off the crown while it stands
-        if (p < 0.75 && H > h * 0.5 && Math.random() < 0.8) emit(x, top + W * 0.2, { n: 2, color: [0x5ab8ff, 0xbfe8ff, 0xffffff], alpha: 0.85, size: 0.35, speed: h * 1.4, angle: -Math.PI / 2, spread: 2.4, gravity: h * 4, life: 600 })
+        if (p < 0.75 && H > h * 0.5 && Math.random() < 0.8) emit(x, top + W * 0.2, { n: 2, color: spray, alpha: 0.85, size: 0.35, speed: h * 1.4, angle: -Math.PI / 2, spread: 2.4, gravity: h * 4, life: 600 })
+        if (p >= 1) g.destroy()
+      })
+    }
+    // a wave rolling in from dir's side, rearing up and curling over, breaking on the foe in spray
+    function waveCrash(a, dir, dur = 800) {
+      const g = new P.Graphics()
+      smokeLayer.addChild(g)
+      const y = a.y0
+      const W = a.h * 1.1
+      const H = a.h * 1.15
+      let broke = false
+      tween(dur, p => {
+        g.clear()
+        const e = 1 - Math.pow(1 - Math.min(1, p / 0.35), 3)
+        const cx = a.x0 - dir * a.h * (1.3 * (1 - e) + 0.15)
+        const hh = H * (0.35 + 0.65 * e)
+        const al = p < 0.55 ? 1 : 1 - (p - 0.55) / 0.45
+        // drawn facing right, mirrored for a wave rolling left: back slope, the crest curling over, the hollow front face
+        const X = u => cx + dir * u
+        g.moveTo(X(-W * 0.75), y)
+          .bezierCurveTo(X(-W * 0.4), y - hh * 0.2, X(-W * 0.2), y - hh * 1.05, X(W * 0.12), y - hh)
+          .bezierCurveTo(X(W * 0.38), y - hh * 0.95, X(W * 0.45), y - hh * 0.62, X(W * 0.3), y - hh * 0.55)
+          .bezierCurveTo(X(W * 0.2), y - hh * 0.5, X(W * 0.12), y - hh * 0.3, X(W * 0.25), y)
+          .closePath()
+          .fill({ color: 0x2f8fe8, alpha: 0.62 * al })
+        g.moveTo(X(-W * 0.5), y)
+          .bezierCurveTo(X(-W * 0.3), y - hh * 0.25, X(-W * 0.15), y - hh * 0.8, X(W * 0.08), y - hh * 0.82)
+          .bezierCurveTo(X(W * 0.0), y - hh * 0.5, X(W * 0.05), y - hh * 0.2, X(W * 0.12), y)
+          .closePath()
+          .fill({ color: 0x8fd0ff, alpha: 0.5 * al })
+        // white foam along the crest and its lip
+        g.moveTo(X(-W * 0.3), y - hh * 0.78)
+          .bezierCurveTo(X(-W * 0.12), y - hh * 1.04, X(W * 0.25), y - hh * 1.02, X(W * 0.36), y - hh * 0.7)
+          .stroke({ color: 0xffffff, width: a.h * 0.05, alpha: 0.9 * al, cap: "round" })
+        if (p < 0.4 && Math.random() < 0.7) emit(X(W * 0.2), y - hh * 0.95, { n: 1, color: [0xffffff, 0xbfe8ff], size: 0.35, speed: 120, angle: dir > 0 ? -0.6 : Math.PI + 0.6, spread: 0.8, gravity: 900, life: 450 })
+        if (!broke && p >= 0.35) {
+          broke = true
+          splash(a, true)
+          emit(a.x0, y - a.h * 0.5, { n: 26, color: [0x5ab8ff, 0xbfe8ff, 0xffffff], alpha: 0.9, size: 0.45, speed: a.h * 3.5, angle: dir > 0 ? -0.5 : Math.PI + 0.5, spread: 1.6, gravity: a.h * 6, life: 700 })
+        }
         if (p >= 1) g.destroy()
       })
     }
@@ -8492,34 +8532,74 @@ void main(){
       })
       later(dur * 0.8, () => sp.forEach(s => emit(s.x + s.lean * s.h * 0.5, y - s.h * 0.5, { n: 6, tex: "streak", color: [0xd8f6ff, 0xffffff], size: 0.45, speed: 320, gravity: 900, life: 450, jitter: s.h * 0.5 })))
     }
-    // nature: vines growing up out of the ground and curling round (drawn a little further each frame)
+    // nature: thick thorny vines bursting out of cracked ground and winding up round the body (a turn passing behind
+    // it is drawn behind it), tightening, then torn apart in a shower of leaves
     function vinesGrow(x, y, w, h, dur) {
-      const g = new P.Graphics()
-      smokeLayer.addChild(g)
-      const vs = Array.from({ length: 7 }, (_, k) => {
-        const bx = x + (k / 6 - 0.5) * w
-        const hh = h * (0.5 + Math.random() * 0.5)
-        const bend = (Math.random() - 0.5) * w * 0.6
-        return { bx, hh, bend, c: k % 2 ? 0x3f9a3a : 0x5fc350, t: Math.random() * 0.15 }
-      })
+      const back = new P.Graphics()
+      const front = new P.Graphics()
+      decalLayer.addChild(back)
+      smokeLayer.addChild(front)
+      decal("crack", x, y, w * 0.9, { dur: dur + 600 })
+      debris(x, y, h, 12)
+      const vs = Array.from({ length: 4 }, (_, k) => ({ ph: (k / 4) * Math.PI * 2 + Math.random() * 0.8, turns: 0.9 + Math.random() * 0.35, R: w * 0.55 * (0.85 + Math.random() * 0.3), H: h * (0.8 + Math.random() * 0.35), t0: k * 0.05 }))
+      const N = 30
+      let burst = false
       tween(dur, p => {
-        g.clear()
+        back.clear()
+        front.clear()
+        // grows up and round, then pulls tight
+        const squeeze = p < 0.45 ? 1 : 1 - 0.18 * Math.min(1, (p - 0.45) / 0.15)
         for (const v of vs) {
-          const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (p - v.t) / 0.3)), 2)
+          const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (p - v.t0) / 0.32)), 2)
           if (e <= 0) continue
-          // a quadratic curve sampled up to how far it has grown
-          const pt = u => ({ x: (1 - u) * (1 - u) * v.bx + 2 * u * (1 - u) * (v.bx + v.bend) + u * u * (v.bx - v.bend * 0.6), y: y - v.hh * (2 * u * (1 - u) * 0.6 + u * u) })
-          g.moveTo(v.bx, y)
-          for (let i = 1; i <= 12; i++) {
-            const q = pt((i / 12) * e)
-            g.lineTo(q.x, q.y)
+          const pt = t => {
+            const an = v.ph + t * v.turns * Math.PI * 2
+            return { x: x + Math.sin(an) * v.R * squeeze * (1 - t * 0.3), y: y - t * v.H, front: Math.cos(an) > 0 }
           }
-          g.stroke({ color: v.c, width: h * 0.04, cap: "round" })
-          const tip = pt(e)
-          g.ellipse(tip.x, tip.y, h * 0.05 * e, h * 0.025 * e).fill(0x9fe87a)
+          // the stem in runs (a new run where it passes in front of / behind the body, or every few points so it tapers),
+          // all its dark outline first and then its light core over that, so the joins do not show
+          const runs = []
+          let run = null
+          for (let i = 0; i <= N; i++) {
+            const q = pt((i / N) * e)
+            if (!run || run.front !== q.front || run.pts.length > 6) {
+              if (run) run.pts.push(q)
+              run = { front: q.front, pts: run ? [run.pts[run.pts.length - 2], q] : [q], wd: h * 0.075 * (1 - (i / N) * 0.75) }
+              runs.push(run)
+            } else run.pts.push(q)
+          }
+          for (const pass of [0, 1])
+            for (const r of runs) {
+              if (r.pts.length < 2) continue
+              const g = r.front ? front : back
+              g.moveTo(r.pts[0].x, r.pts[0].y)
+              for (const q of r.pts.slice(1)) g.lineTo(q.x, q.y)
+              g.stroke(pass ? { color: r.front ? 0x5fb84a : 0x3f8a36, width: r.wd, cap: "round", join: "round" } : { color: 0x24561f, width: r.wd + 3, cap: "round", join: "round" })
+            }
+          let q0 = pt(0)
+          for (let i = 1; i <= N; i++) {
+            const q = pt((i / N) * e)
+            const g = q.front ? front : back
+            const wd = h * 0.075 * (1 - (i / N) * 0.75)
+            // thorns sticking out, leaves along the stem
+            if (i % 5 === 0) g.poly([q.x - wd * 0.4, q.y, q.x + (q.x >= x ? 1 : -1) * wd * 1.4, q.y - wd * 0.8, q.x + wd * 0.4, q.y]).fill(0x24561f)
+            if (i % 7 === 3) {
+              const s2 = q.x >= x ? 1 : -1
+              g.poly([q.x, q.y, q.x + s2 * h * 0.08, q.y - h * 0.06, q.x + s2 * h * 0.16, q.y - h * 0.02, q.x + s2 * h * 0.07, q.y + h * 0.02]).fill(q.front ? 0x7fd85a : 0x4f9a40)
+            }
+            q0 = q
+          }
         }
-        g.alpha = p > 0.8 ? (1 - p) / 0.2 : 1
-        if (p >= 1) g.destroy()
+        const al = p > 0.82 ? (1 - p) / 0.18 : 1
+        back.alpha = front.alpha = al
+        if (!burst && p >= 0.82) {
+          burst = true
+          emit(x, y - h * 0.5, { n: 26, tex: "leaf", color: [0x5fd35a, 0x8fe86a, 0x3f9a3a], size: 0.55, speed: 260, up: 120, gravity: 260, drag: 0.5, life: 1300, jitter: h * 0.5 })
+        }
+        if (p >= 1) {
+          back.destroy()
+          front.destroy()
+        }
       })
     }
     // leaves and petals whirling up round a body
@@ -9371,8 +9451,7 @@ void main(){
         }),
       },
       // ----- water / ice -----
-      // 流水冲击: a burst of water over the foe, drops raining back down, ripples underfoot
-      water_strike: { hit: each(a => splash(a, true)) },
+
       // 冰枪术: frost mist and glitter trailing the shard; it shatters on the foe and frosts the ground
       ice_spear: {
         fly: q => {
@@ -9392,14 +9471,8 @@ void main(){
           shake = Math.max(shake, 0.8)
         },
       },
-      // 法力喷泉: water bursts up out of the ground under every foe and rains back down
-      mana_spring: {
-        hit: ({ tgs }) =>
-          tgs.forEach(([a]) => {
-            splash(a, false)
-            ripple(a.x0, a.y0, a.h * 1.2, 0x5ac8ff, { n: 3 })
-          }),
-      },
+      // 法力喷泉: ripples of mana spreading out under every foe
+      mana_spring: { hit: ({ tgs }) => tgs.forEach(([a]) => ripple(a.x0, a.y0, a.h * 1.2, 0x8f9cff, { n: 3 })) },
       // ----- nature -----
       // 缠绕: vines grow up round the foe's legs, leaves torn loose
       entangle: {
@@ -9595,11 +9668,17 @@ void main(){
         fireExplosion(a.x0, a.y0 - a.h * 0.3, a.h * 0.5)
       }),
       firestorm: onEach(a => fireTornado(a.x0, a.y0, a.h * 1.9, 1200)),
-      water_strike: onEach(a => waterColumn(a.x0, a.y0, a.h * 0.7, a.h * 1.6, 900)),
-      mana_spring: onEach(a => waterColumn(a.x0, a.y0, a.h * 0.8, a.h * 2, 1100)),
+      // 流水冲击: a wave rolling in from the caster's side and breaking over the foe
+      water_strike: onEach((a, src) => waveCrash(a, src.dir)),
+      // 法力喷泉: a tall blue-violet spring of mana out of a glowing circle under every foe, sparkles rising
+      mana_spring: onEach(a => {
+        circle(a, "mana", 1300)
+        waterColumn(a.x0, a.y0, a.h * 1, a.h * 2.3, 1200, { body: 0x4a62f0, core: 0xc0ccff, spray: [0x8f9cff, 0xd8d0ff, 0xffffff] })
+        tween(1100, p => p < 1 && Math.random() < 0.7 && emit(a.x0 + (Math.random() - 0.5) * a.h, a.y0, { n: 1, color: [0xc8b8ff, 0xffffff, 0x8fdcff], size: 0.3, size1: 0.05, speed: 20, up: a.h * 1.6, gravity: -a.h * 0.5, life: 900 }))
+      }),
       ice_spear: onEach(a => iceSpikes(a.x0, a.y0, a.h * 0.5, a.h * 0.6, { n: 4, dur: 900 })),
       frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
-      entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.8, a.h * 0.9, 1800)),
+      entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.75, a.h * 1.0, 1900)),
       natures_veil: onEach(a => petalVortex(a.x0, a.y0, a.h, 1000)),
       toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: [0xb6ff5a, 0x8fd14a, 0xe0ff8a], size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
       life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0x62d65a)),
