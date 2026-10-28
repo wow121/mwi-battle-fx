@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.13
+// @version      0.21.14
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "e29915ebd4"
+  const ASSET_REV = "9f24a56ca4"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -6279,7 +6279,7 @@
     spear: { at: 0.3, aim: 96, two: 0.56 },
     staff: { at: 0.3, aim: 166, gap: true },
     bow: { at: 0.5, aim: 180, hand: "ho" },
-    crossbow: { at: 0.4, aim: 90, two: 0.72, scale: 1.25 },
+    crossbow: { at: 0.4, aim: 90, scale: 1.25, z: 4.2 },
     bulwark: { at: 0.5, aim: 180, hand: "ho", two: 0.38, scale: 1.35, z: 4.3 },
     great: { at: 0.1, aim: 172, two: 0.24 },
   }
@@ -6301,9 +6301,9 @@
     // 1号's grip styles to try (the look stays the pilot's: avatar blue_person_1, outfit warrior_1)
     const PILOTS = [
       { name: "1号 剑盾", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk", "fierce_aura"], items: { main_hand: "holy_sword", off_hand: "knights_aegis" } },
-      { name: "1号 长枪", style: "stab", element: "physical", skills: ["puncture", "impale", "frenzy", "fierce_aura"], items: { main_hand: "holy_spear", off_hand: "holy_buckler" } },
+      { name: "1号 枪盾", style: "stab", element: "physical", skills: ["puncture", "impale", "frenzy", "fierce_aura"], items: { main_hand: "holy_spear", off_hand: "holy_buckler" } },
       { name: "1号 锤盾", style: "smash", element: "physical", skills: ["stunning_blow", "sweep", "shield_bash", "toughness"], items: { main_hand: "holy_mace", off_hand: "arcane_shield" } },
-      { name: "1号 弩", style: "ranged", element: "physical", skills: ["steady_shot", "rain_of_arrows", "aqua_arrow", "precision"], items: { main_hand: "arcane_crossbow" } },
+      { name: "1号 弩盾", style: "ranged", element: "physical", skills: ["steady_shot", "rain_of_arrows", "aqua_arrow", "precision"], items: { main_hand: "arcane_crossbow", off_hand: "holy_buckler" } },
       { name: "1号 法杖", style: "magic", element: "fire", skills: ["fireball", "flame_blast", "heal", "mystic_aura"], items: { main_hand: "blazing_trident", off_hand: "tome_of_the_elements" } },
       { name: "1号 剑+匕首", style: "slash", element: "physical", skills: ["cleave", "maim", "berserk"], items: { main_hand: "holy_sword", off_hand: "vampire_fang_dirk" } },
       { name: "1号 三叉戟+书", style: "magic", element: "water", skills: ["water_strike", "frost_surge", "heal"], items: { main_hand: "rippling_trident", off_hand: "bishops_codex" } },
@@ -6965,83 +6965,83 @@ void main(){
       // ----- crossbow (Lost Castle's gun_* timing: a snap shot and a kick of recoil): level in the back hand (hm), the
       // front hand under its bolt when free; the bolt flies from its tip. + raises the bolt, - drops it.
       "player:crossbow": {
-        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } }, { t: 700, a: { body: 2, hm: [0.36, -0.105, -10], ho: [0.06, -0.035, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } }] },
+        idle: { dur: 1400, loop: true, keys: [{ t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } }, { t: 700, a: { body: 2, hm: [0.36, -0.105, -10], ho: [0.06, -0.095, 2] }, y: -0.01 }, { t: 1400, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } }] },
         // 普攻 1: up to the shoulder, aimed, a shot that kicks
         attack: {
           dur: 620, shot: 260, hit: 420,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 140, e: "out", a: { body: -2, hm: [0.42, 0.06, 0], ho: [0.06, 0.05, 0] } },
-            { t: 255, a: { body: -2, hm: [0.42, 0.06, 0], ho: [0.06, 0.05, 0] } },
-            { t: 275, e: "out", a: { body: -6, hm: [0.36, 0.08, 14], ho: [0.04, 0.06, 0] }, x: -0.02 },
-            { t: 420, a: { body: -4, hm: [0.38, 0.07, 8], ho: [0.05, 0.055, 0] }, x: -0.015 },
-            { t: 620, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 140, e: "out", a: { body: -2, hm: [0.42, 0.06, 0], ho: [0.06, -0.01, 0] } },
+            { t: 255, a: { body: -2, hm: [0.42, 0.06, 0], ho: [0.06, -0.01, 0] } },
+            { t: 275, e: "out", a: { body: -6, hm: [0.36, 0.08, 14], ho: [0.04, 0, 0] }, x: -0.02 },
+            { t: 420, a: { body: -4, hm: [0.38, 0.07, 8], ho: [0.05, -0.005, 0] }, x: -0.015 },
+            { t: 620, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // 普攻 2: a snap shot from the hip
         attack2: {
           dur: 480, shot: 150, hit: 300,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 100, e: "out", a: { body: 2, hm: [0.4, -0.08, -2], ho: [0.06, -0.03, 0] } },
-            { t: 165, e: "out", a: { body: -4, hm: [0.34, -0.06, 12], ho: [0.04, -0.02, 0] }, x: -0.015 },
-            { t: 300, a: { body: -3, hm: [0.35, -0.07, 8], ho: [0.05, -0.025, 0] }, x: -0.01 },
-            { t: 480, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 100, e: "out", a: { body: 2, hm: [0.4, -0.08, -2], ho: [0.06, -0.09, 0] } },
+            { t: 165, e: "out", a: { body: -4, hm: [0.34, -0.06, 12], ho: [0.04, -0.08, 0] }, x: -0.015 },
+            { t: 300, a: { body: -3, hm: [0.35, -0.07, 8], ho: [0.05, -0.085, 0] }, x: -0.01 },
+            { t: 480, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // 普攻 3: a step back to aim, then a shot that rocks the body
         attack3: {
           dur: 800, shot: 400, hit: 560,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 180, e: "out", a: { body: -2, hm: [0.44, 0.04, 0], ho: [0.06, 0.04, 0] }, x: -0.08 },
-            { t: 395, a: { body: -3, hm: [0.44, 0.045, 0], ho: [0.06, 0.04, 0] }, x: -0.08 },
-            { t: 415, e: "out", a: { body: -8, hm: [0.38, 0.07, 16], ho: [0.04, 0.05, 0] }, x: -0.1 },
-            { t: 560, a: { body: -6, hm: [0.39, 0.06, 10], ho: [0.05, 0.045, 0] }, x: -0.09 },
-            { t: 800, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 180, e: "out", a: { body: -2, hm: [0.44, 0.04, 0], ho: [0.06, -0.02, 0] }, x: -0.08 },
+            { t: 395, a: { body: -3, hm: [0.44, 0.045, 0], ho: [0.06, -0.02, 0] }, x: -0.08 },
+            { t: 415, e: "out", a: { body: -8, hm: [0.38, 0.07, 16], ho: [0.04, -0.01, 0] }, x: -0.1 },
+            { t: 560, a: { body: -6, hm: [0.39, 0.06, 10], ho: [0.05, -0.015, 0] }, x: -0.09 },
+            { t: 800, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // any other ranged skill: a long, steady aim while it charges, a heavy recoil that throws the body back
         skill: {
           dur: 1200, shot: 860, hit: 1040,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 240, e: "out", a: { body: -3, hm: [0.44, 0.06, 0], ho: [0.06, 0.05, 0] } },
-            { t: 820, a: { body: -4, hm: [0.445, 0.06, 0], ho: [0.06, 0.05, 0] } },
-            { t: 860, e: "out", a: { body: -14, hm: [0.28, 0.14, 28], ho: [0.02, 0.08, 0] }, x: -0.08 },
-            { t: 1040, a: { body: -11, hm: [0.3, 0.12, 22], ho: [0.03, 0.07, 0] }, x: -0.07 },
-            { t: 1200, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 240, e: "out", a: { body: -3, hm: [0.44, 0.06, 0], ho: [0.06, -0.01, 0] } },
+            { t: 820, a: { body: -4, hm: [0.445, 0.06, 0], ho: [0.06, -0.01, 0] } },
+            { t: 860, e: "out", a: { body: -14, hm: [0.28, 0.14, 28], ho: [0.02, 0.02, 0] }, x: -0.08 },
+            { t: 1040, a: { body: -11, hm: [0.3, 0.12, 22], ho: [0.03, 0.01, 0] }, x: -0.07 },
+            { t: 1200, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // 箭雨: aimed high, a volley up out of sight that rains down on every foe
         "skill:rain_of_arrows": {
           dur: 1300, shot: 640, hit: 1150, rain: true,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 260, e: "out", a: { body: -8, hm: [0.36, 0.18, 45], ho: [0.04, 0.1, 0] } },
-            { t: 635, a: { body: -9, hm: [0.36, 0.18, 46], ho: [0.04, 0.1, 0] } },
-            { t: 655, e: "out", a: { body: -12, hm: [0.31, 0.22, 60], ho: [0.02, 0.12, 0] }, x: -0.03 },
-            { t: 1150, a: { body: -10, hm: [0.32, 0.21, 55], ho: [0.03, 0.11, 0] }, x: -0.025 },
-            { t: 1300, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 260, e: "out", a: { body: -8, hm: [0.36, 0.18, 45], ho: [0.04, 0.04, 0] } },
+            { t: 635, a: { body: -9, hm: [0.36, 0.18, 46], ho: [0.04, 0.04, 0] } },
+            { t: 655, e: "out", a: { body: -12, hm: [0.31, 0.22, 60], ho: [0.02, 0.06, 0] }, x: -0.03 },
+            { t: 1150, a: { body: -10, hm: [0.32, 0.21, 55], ho: [0.03, 0.05, 0] }, x: -0.025 },
+            { t: 1300, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         hurt: {
           dur: 400,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 70, e: "out", a: { body: -12, hm: [0.26, -0.07, 25], ho: [0.08, 0.06, 8] }, x: -0.05 },
-            { t: 230, a: { body: -8, hm: [0.27, -0.08, 20], ho: [0.07, 0.05, 6] }, x: -0.04 },
-            { t: 400, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 70, e: "out", a: { body: -12, hm: [0.26, -0.07, 25], ho: [0.08, 0, 8] }, x: -0.05 },
+            { t: 230, a: { body: -8, hm: [0.27, -0.08, 20], ho: [0.07, -0.01, 6] }, x: -0.04 },
+            { t: 400, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // the crossbow raised upright overhead
         cast: {
           dur: 1100,
           keys: [
-            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
-            { t: 280, e: "out", a: { hm: [0.25, 0.45, 90], ho: [0.02, 0.1, 0] }, y: 0.03 },
-            { t: 800, a: { hm: [0.25, 0.46, 90], ho: [0.02, 0.1, 0] }, y: 0.03 },
-            { t: 1100, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.05, 0] } },
+            { t: 0, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
+            { t: 280, e: "out", a: { hm: [0.25, 0.45, 90], ho: [0.02, 0.04, 0] }, y: 0.03 },
+            { t: 800, a: { hm: [0.25, 0.46, 90], ho: [0.02, 0.04, 0] }, y: 0.03 },
+            { t: 1100, a: { hm: [0.36, -0.12, -12], ho: [0.06, -0.11, 0] } },
           ],
         },
         // falls on the back, the crossbow left lying on the ground
@@ -7298,6 +7298,17 @@ void main(){
     const slowed = (set, k) =>
       Object.fromEntries(Object.entries(set).map(([n, a]) => [n, { ...a, dur: a.dur * k, hit: a.hit && a.hit * k, ring: a.ring && a.ring * k, hits: a.hits?.map(t => t * k), keys: a.keys.map(x => ({ ...x, t: x.t * k })) }]))
     ACTIONS["player:great"] = slowed(ACTIONS.player, 1.3)
+    // a spear with a shield: the shield back at the body as a guard, the spear (drawn over it) low at the hip as without one
+    const shifted = (set, dhm, dho, skip) =>
+      Object.fromEntries(
+        Object.entries(set).map(([n, a]) => [
+          n,
+          skip.includes(n)
+            ? a
+            : { ...a, keys: a.keys.map(k => ({ ...k, a: { ...k.a, ...(k.a.hm && { hm: k.a.hm.map((v, i) => v + dhm[i]) }), ...(k.a.ho && { ho: k.a.ho.map((v, i) => v + dho[i]) }) } })) },
+        ]),
+      )
+    ACTIONS["player:spear:shield"] = shifted(ACTIONS["player:spear"], [0, 0, 0], [-0.12, -0.15, 0], ["cast", "dead"])
     // ----- off hands: shields keep each set's own front-hand moves; a book, a relic or a dagger replaces them with its
     // own track (OFF_TRACKS, laid over whatever the back hand does), and a dagger adds its own strikes (OFF_ACTIONS).
     // Track keys: t = a share of the action's length, or "pre" (the wind-up before the blow), "hit", "hold" (half way
@@ -7376,6 +7387,7 @@ void main(){
     // a player's actions are its grip style's set ("player:bow" …), the sword's ("player") for styles without one yet
     const playerKind = u => {
       const g = gripOf(u.items?.main_hand || u.items?.two_hand ? u.items : null)
+      if (g === "spear" && offOf(u.items?.off_hand) === "shield") return "player:spear:shield"
       return ACTIONS["player:" + g] ? "player:" + g : "player"
     }
     const EASE = {
@@ -7612,11 +7624,13 @@ void main(){
       // the weapon pieces come with the paper-doll index
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
-        // a weapon redrawn for the rig (assets/rig/weapons: side-view crossbows), its axis in WEAPON_AXIS too
+        // an item redrawn for the rig (assets/rig/weapons: side-view crossbows, their axes in WEAPON_AXIS too; books
+        // seen from the side, held by the bottom of the spine)
         const k = String(id || "").replace(/_refined$/, "")
         if (k && Assets.list("weapons").includes(k)) {
           const t = await P.Assets.load(Assets.url(`rig/weapons/${k}.webp`))
-          return { tex: t, grip: [t.width / 2, t.height / 2], axis: WEAPON_AXIS["rig:" + k] }
+          const axis = WEAPON_AXIS["rig:" + k]
+          return { tex: t, grip: axis ? [t.width / 2, t.height / 2] : [t.width * 0.5, t.height * 0.8], axis }
         }
         const h = id && Doll.held(id)
         if (!h) return null
@@ -7637,7 +7651,7 @@ void main(){
           const ax = G.at != null && w.axis
           const ho = G.hand === "ho"
           const at = ax && G.gap && ax[4] > 0.15 && ax[4] < 0.5 ? ax[4] : G.at
-          def.parts.weapon = { pivot: ax ? along(ax, at) : w.grip, tip: ax && along(ax, 1), at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: G.z || (ho ? 3.95 : 2.9), rot: ax ? angle(ax) - G.aim : -30, scale: base.scale * (G.scale || 1) }
+          def.parts.weapon = { pivot: ax ? along(ax, at) : w.grip, tip: ax && along(ax, 1), at: ho ? base.fist : base.back, parent: ho ? "ho" : "hm", z: G.z || (G === GRIPS.spear && offOf(u.items?.off_hand) === "shield" ? 4.2 : ho ? 3.95 : 2.9), rot: ax ? angle(ax) - G.aim : -30, scale: base.scale * (G.scale || 1) }
           if (ax && G.two && !u.items?.off_hand) def.two = along(ax, G.two)
           // a bow's string runs between its two ends (pulled back by the drawing hand)
           if (ax && G === GRIPS.bow) def.string = [ax.slice(0, 2), ax.slice(2)]
