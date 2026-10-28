@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.27
+// @version      0.21.28
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2749,7 +2749,7 @@
     }
 
     const refreshArt = () => ["p", "m"].forEach(side => actors[side].forEach(a => (a.art = null, a.real = false, a.spriteKey = "", refreshSprite(a))))
-    return { sheet, fxSpec, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
+    return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
   // ---------- real battles: the stage laid over the game's unit cards ----------
@@ -6503,8 +6503,6 @@
   const Arena = (() => {
     const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
-    const BURST = { fire: "fire_burst", water: "water_burst", nature: "nature_burst" }
-    const ORB = { fire: "fire_orb", water: "ice_orb", nature: "nature_orb" }
     // per-body shader: uFlash mixes in a solid colour, uDis burns the body away along value noise (orange edge)
     const FRAG = `in vec2 vTextureCoord;
 out vec4 finalColor;
@@ -7666,7 +7664,7 @@ void main(){
     let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
     let loading = null
     let units = { p: [], m: [] }
-    let dot, glow, smokeTex, streakTex, rayTex, hazeTex, leafTex
+    let dot, glow, smokeTex, streakTex, rayTex, hazeTex, leafTex, pillarTex
     let shock = null
     // filters on the whole scene (shockwave, heat haze, zoom blur), each running for a while; the numbers and names
     // over it stay sharp
@@ -7680,7 +7678,6 @@ void main(){
     let dim = 0
     const tweens = []
     const parts = []
-    const sheets = {} // fx sheet name -> [8 textures] | "loading"
     // the arena's clock: real time, slowed for a slow-motion beat (slow()); everything animated reads it
     let clock = performance.now()
     let slowUntil = 0
@@ -7764,6 +7761,23 @@ void main(){
           c.fillRect(0, 0, n, n)
         }
       })
+      // a column of light: brightest at its foot and along its middle, fading up and out to the sides
+      pillarTex = (() => {
+        const c = document.createElement("canvas")
+        c.width = 64
+        c.height = 256
+        const x = c.getContext("2d")
+        const im = x.createImageData(64, 256)
+        for (let y = 0; y < 256; y++)
+          for (let i = 0; i < 64; i++) {
+            const v = Math.pow(y / 255, 1.4) * Math.pow(Math.max(0, 1 - Math.abs(i - 31.5) / 32), 1.6)
+            const o = (y * 64 + i) * 4
+            im.data[o] = im.data[o + 1] = im.data[o + 2] = 255
+            im.data[o + 3] = Math.round(255 * v)
+          }
+        x.putImageData(im, 0, 0)
+        return P.Texture.from(c)
+      })()
       // a leaf / petal: a pointed oval with a paler midrib
       leafTex = canvasTex(32, (c, n) => {
         c.fillStyle = "#fff"
@@ -7844,8 +7858,6 @@ void main(){
       app.stage.addChild(world)
       app.ticker.add(frame)
       new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
-      for (const n of Assets.list("fx")) sheet(n)
-      circles()
       sync()
     }
 
@@ -8394,100 +8406,253 @@ void main(){
     }
 
     // ----- effects -----
-    function sheet(name) {
-      if (!Assets.has("fx", name)) return null
-      const s = sheets[name]
-      if (s && s !== "loading") return s
-      if (!s) {
-        sheets[name] = "loading"
-        P.Assets.load(Assets.url("fx/" + name + ".webp"))
-          .then(tex => {
-            const fw = tex.width / 4
-            const fh = tex.height / 2
-            sheets[name] = Array.from({ length: 8 }, (_, f) => new P.Texture({ source: tex.source, frame: new P.Rectangle((f % 4) * fw, Math.floor(f / 4) * fh, fw, fh) }))
-          })
-          .catch(() => delete sheets[name])
-      }
-      return null
+    // ----- drawn effects (no sprite sheets): fire, water, ice, nature, blows, light, circles -----
+    // particle sizes are tuned for a body 120 px tall
+    const K = h => h / 120
+    const ELEM_COL = { fire: 0xff7a2a, water: 0x5ac8ff, nature: 0x62d65a, heal: 0x6cff9a, buff: 0xffd84a, physical: 0xffe3a3 }
+    // fire is big soft motes on the glowing layer: white-yellow when born, cooling through orange to a dark red
+    // (thin and translucent: piled up on the glowing layer they burn white)
+    const FIRE = [0xffb848, 0xff8a2a, 0xff6a1a, 0xffd070]
+    // flames licking up out of the ground over a w-wide base for dur ms
+    function flameColumn(x, y, w, h, dur, { rate = 3 } = {}) {
+      light(x, y - h * 0.4, 0xff7a2a, Math.max(w, h) * 0.8, dur, 1.2)
+      tween(dur, p => {
+        if (p >= 1) return
+        const f = p < 0.12 ? p / 0.12 : p > 0.7 ? (1 - p) / 0.3 : 1
+        for (let k = 0; k < rate * f * 0.6; k++) {
+          const off = (Math.random() - 0.5) * w
+          emit(x + off, y - Math.random() * h * 0.08, { n: 1, color: FIRE, color1: 0x5a0800, alpha: 0.42, size: 0.85 * K(h) * (1 - Math.abs(off) / w), size1: 0.15, speed: 20, angle: -Math.PI / 2, up: h * 1.1, gravity: -h * 1.1, drag: 0.5, life: 700 })
+        }
+      })
     }
-    function playSheet(name, x, y, h, { dur = 480, flip = false, tint = 0xffffff, delay = 0, anchor = "center" } = {}) {
-      const frames = sheet(name)
-      if (!frames) return false
-      const s = new P.Sprite(frames[0])
-      s.anchor.set(0.5, anchor === "bottom" ? 1 : 0.5)
-      s.tint = tint
+    // a ball of fire bursting outward from a point
+    function fireExplosion(x, y, r) {
+      light(x, y, 0xff9a3a, r * 2.4, 420, 1.3)
+      emit(x, y, { n: 22, color: FIRE, color1: 0x5a0800, alpha: 0.5, size: 0.8 * K(r * 2.4), size1: 0.2, speed: r * 5, drag: 0.02, gravity: -r * 2, life: 560 })
+      emit(x, y, { n: 6, color: 0xfff0c0, alpha: 0.7, size: 0.5 * K(r * 2.4), size1: 0.1, speed: r * 2, drag: 0.02, life: 220 })
+    }
+    // a column of fire spinning up into the air (flames orbiting round its axis, the spiral widening as it rises)
+    function fireTornado(x, y, h, dur) {
+      light(x, y - h * 0.5, 0xff7a2a, h, dur, 1.2)
+      tween(dur, p => {
+        if (p >= 1) return
+        const f = p < 0.12 ? p / 0.12 : p > 0.75 ? (1 - p) / 0.25 : 1
+        for (let k = 0; k < 3 * f; k++) emit(x, y, { n: 1, color: FIRE, color1: 0x5a0800, alpha: 0.55, size: 0.42 * K(h), size1: 0.3, life: 850, orbit: { cx: x, y, r: h * 0.2, spin: 7 + Math.random() * 2, rise: h * 1.25, widen: 1.3 } })
+      })
+    }
+    // water: a column of water bursting up out of the ground (a translucent body with a paler core and white streaks
+    // of flow running up it), spray thrown off its crown, falling back
+    function waterColumn(x, y, w, h, dur) {
+      light(x, y - h * 0.4, 0x3fb4ff, Math.max(w, h) * 0.5, dur, 0.7)
+      const g = new P.Graphics()
+      smokeLayer.addChild(g)
+      const flows = Array.from({ length: 6 }, () => ({ u: Math.random() - 0.5, ph: Math.random(), len: 0.12 + Math.random() * 0.12 }))
+      tween(dur, p => {
+        g.clear()
+        // shoots up fast, stands, then sinks back thinner
+        const up = Math.min(1, p / 0.18)
+        const H = h * (1 - Math.pow(1 - up, 3)) * (p > 0.7 ? 1 - (p - 0.7) / 0.3 * 0.6 : 1)
+        const W = w * 0.5 * (p > 0.7 ? 1 - (p - 0.7) / 0.3 * 0.7 : 1)
+        const a = p > 0.8 ? (1 - p) / 0.2 : 1
+        const top = y - H
+        g.moveTo(x - W, y).bezierCurveTo(x - W * 0.8, y - H * 0.5, x - W * 0.6, top + W * 0.3, x, top).bezierCurveTo(x + W * 0.6, top + W * 0.3, x + W * 0.8, y - H * 0.5, x + W, y).closePath().fill({ color: 0x2f8fe8, alpha: 0.5 * a })
+        g.moveTo(x - W * 0.45, y).bezierCurveTo(x - W * 0.35, y - H * 0.5, x - W * 0.2, top + W * 0.5, x, top + W * 0.3).bezierCurveTo(x + W * 0.2, top + W * 0.5, x + W * 0.35, y - H * 0.5, x + W * 0.45, y).closePath().fill({ color: 0x9fd8ff, alpha: 0.45 * a })
+        for (const f of flows) {
+          const v = (f.ph + p * dur * 0.0025) % 1
+          const fy = y - H * v
+          g.moveTo(x + f.u * W * 1.2 * (1 - v * 0.5), fy).lineTo(x + f.u * W * 1.2 * (1 - v * 0.5), fy - H * f.len).stroke({ color: 0xffffff, width: Math.max(1.5, w * 0.03), alpha: 0.7 * a, cap: "round" })
+        }
+        // spray off the crown while it stands
+        if (p < 0.75 && H > h * 0.5 && Math.random() < 0.8) emit(x, top + W * 0.2, { n: 2, color: [0x5ab8ff, 0xbfe8ff, 0xffffff], alpha: 0.85, size: 0.35, speed: h * 1.4, angle: -Math.PI / 2, spread: 2.4, gravity: h * 4, life: 600 })
+        if (p >= 1) g.destroy()
+      })
+    }
+    // ice: crystal spikes shooting up out of the ground in a row, standing a moment, then shattering
+    function iceSpikes(x, y, w, h, { n = 7, dur = 1100 } = {}) {
+      const g = new P.Graphics()
+      smokeLayer.addChild(g)
+      const sp = Array.from({ length: n }, (_, k) => {
+        const u = n > 1 ? k / (n - 1) - 0.5 : 0
+        return { x: x + u * w + (Math.random() - 0.5) * w * 0.08, h: h * (0.5 + Math.random() * 0.5) * (1 - Math.abs(u) * 0.9), lean: u * 0.6 + (Math.random() - 0.5) * 0.3, wd: h * (0.07 + Math.random() * 0.05), t: Math.random() * 0.12 }
+      })
+      light(x, y - h * 0.4, 0x9fe6ff, w * 0.7 + h * 0.3, dur, 1.1)
+      tween(dur, p => {
+        g.clear()
+        for (const s of sp) {
+          const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (p - s.t) / 0.1)), 3)
+          const hh = s.h * e
+          const tx = s.x + s.lean * hh
+          const ty = y - hh
+          g.poly([s.x - s.wd, y, tx, ty, s.x, y]).fill({ color: 0xd8f6ff, alpha: 0.95 })
+          g.poly([s.x, y, tx, ty, s.x + s.wd, y]).fill({ color: 0x5fb8e8, alpha: 0.95 })
+          g.moveTo(s.x, y).lineTo(tx, ty).stroke({ color: 0xffffff, width: 1.5, alpha: 0.9 })
+        }
+        g.alpha = p > 0.8 ? (1 - p) / 0.2 : 1
+        if (p >= 1) g.destroy()
+      })
+      later(dur * 0.8, () => sp.forEach(s => emit(s.x + s.lean * s.h * 0.5, y - s.h * 0.5, { n: 6, tex: "streak", color: [0xd8f6ff, 0xffffff], size: 0.45, speed: 320, gravity: 900, life: 450, jitter: s.h * 0.5 })))
+    }
+    // nature: vines growing up out of the ground and curling round (drawn a little further each frame)
+    function vinesGrow(x, y, w, h, dur) {
+      const g = new P.Graphics()
+      smokeLayer.addChild(g)
+      const vs = Array.from({ length: 7 }, (_, k) => {
+        const bx = x + (k / 6 - 0.5) * w
+        const hh = h * (0.5 + Math.random() * 0.5)
+        const bend = (Math.random() - 0.5) * w * 0.6
+        return { bx, hh, bend, c: k % 2 ? 0x3f9a3a : 0x5fc350, t: Math.random() * 0.15 }
+      })
+      tween(dur, p => {
+        g.clear()
+        for (const v of vs) {
+          const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (p - v.t) / 0.3)), 2)
+          if (e <= 0) continue
+          // a quadratic curve sampled up to how far it has grown
+          const pt = u => ({ x: (1 - u) * (1 - u) * v.bx + 2 * u * (1 - u) * (v.bx + v.bend) + u * u * (v.bx - v.bend * 0.6), y: y - v.hh * (2 * u * (1 - u) * 0.6 + u * u) })
+          g.moveTo(v.bx, y)
+          for (let i = 1; i <= 12; i++) {
+            const q = pt((i / 12) * e)
+            g.lineTo(q.x, q.y)
+          }
+          g.stroke({ color: v.c, width: h * 0.04, cap: "round" })
+          const tip = pt(e)
+          g.ellipse(tip.x, tip.y, h * 0.05 * e, h * 0.025 * e).fill(0x9fe87a)
+        }
+        g.alpha = p > 0.8 ? (1 - p) / 0.2 : 1
+        if (p >= 1) g.destroy()
+      })
+    }
+    // leaves and petals whirling up round a body
+    function petalVortex(x, y, h, dur) {
+      tween(dur, p => {
+        if (p < 1 && Math.random() < 0.9) emit(x, y, { n: 1, tex: "leaf", color: [0x5fd35a, 0x8fe86a, 0xffb0d0, 0xfff0f6], size: 0.55, size1: 0.3, life: 1100, orbit: { cx: x, y, r: h * 0.3, spin: 5 + Math.random() * 2, rise: h * 0.9, widen: 0.8 } })
+      })
+    }
+    // a soft column of light standing on the ground (heals, buffs, revivals, under a geyser)
+    function pillar(x, y, w, h, color, dur, peak = 1) {
+      const s = new P.Sprite(pillarTex)
+      s.anchor.set(0.5, 1)
+      s.tint = color
       s.position.set(x, y)
-      const k = h / frames[0].height
-      s.scale.set(flip ? -k : k, k)
-      s.visible = false
       fxLayer.addChild(s)
-      tween(
-        dur,
-        p => {
-          s.visible = true
-          s.texture = frames[Math.min(7, Math.floor(p * 8))]
-          if (p >= 1) s.destroy()
-        },
-        delay,
-      )
-      return true
+      tween(dur, p => {
+        const f = Math.sin(Math.PI * Math.min(1, p))
+        s.width = w * (0.4 + 0.6 * f)
+        s.height = h * (0.7 + 0.3 * Math.min(1, p * 3))
+        s.alpha = f * peak
+        if (p >= 1) s.destroy()
+      })
     }
-    // a skill's own effect the way the DOM stage drew it (Stage.fxSpec): a ground sheet rises from the feet, an "on"
-    // sheet plays over the body, h = its height in body heights
-    function specAt(spec, a, { delay = 0, dur = 820, flip = false } = {}) {
-      if (!spec || (!spec.ground && !spec.on)) return false
-      const H = a.h * spec.h * FX_K
-      if (spec.ground) return playSheet(spec.ground, a.x0 + (a.dash || 0), a.y0 + a.h * 0.04, H, { dur, delay, flip, anchor: "bottom" })
-      const m = mid(a)
-      return playSheet(spec.on, m.x, m.y, H * 0.95, { dur, delay, flip })
+    // a blade's cut: a crescent swept across the foe, white at its core; tilt turns the swing (+ flatter)
+    function slashArc(x, y, r, dir, color, { tilt = 0, dur = 300, width = 1 } = {}) {
+      const g = new P.Graphics()
+      g.position.set(x, y)
+      g.scale.x = dir
+      g.rotation = dir * tilt
+      fxLayer.addChild(g)
+      const start = -2.1
+      const sweep = 2.5
+      const arc = (e, th, color, alpha) => {
+        const N = 16
+        const out = []
+        const inn = []
+        for (let i = 0; i <= N; i++) {
+          const u = (i / N) * e
+          const an = start + sweep * u
+          const t = th * Math.sin(Math.PI * (i / N))
+          out.push(Math.cos(an) * r, Math.sin(an) * r)
+          inn.unshift(Math.cos(an) * (r - t), Math.sin(an) * (r - t))
+        }
+        for (let i = 0; i < inn.length; i += 2) out.push(inn[i], inn[i + 1])
+        g.poly(out).fill({ color, alpha })
+      }
+      tween(dur, p => {
+        g.clear()
+        const e = Math.min(1, p / 0.4)
+        const a = p < 0.4 ? 1 : 1 - (p - 0.4) / 0.6
+        arc(1 - Math.pow(1 - e, 3), r * 0.22 * width, color, a)
+        arc(1 - Math.pow(1 - e, 3), r * 0.08 * width, 0xffffff, a)
+        if (p >= 1) g.destroy()
+      })
     }
-    // a skill on a whole side: one big sheet over the row instead of a copy on every unit (3:4 frames, sized to cover
-    // the row, within the stage)
-    function groupAt(spec, list, { delay = 0, dur = 900, flip = false } = {}) {
-      if (!spec || (!spec.ground && !spec.on) || !list.length) return false
-      const xs = list.map(a => a.x0 + (a.dash || 0))
-      const s = Math.max(...list.map(a => a.h))
-      const cx = (Math.min(...xs) + Math.max(...xs)) / 2
-      const ground = Math.max(...list.map(a => a.y0))
-      const H = Math.min(app.screen.height * 0.95, Math.max(s * spec.h * FX_K * 1.2, ((Math.max(...xs) - Math.min(...xs) + s * FX_K) * 1.05) / 0.75))
-      if (spec.ground) return playSheet(spec.ground, cx, ground + s * 0.04, H, { dur, delay, flip, anchor: "bottom" })
-      return playSheet(spec.on, cx, ground - s * 0.5, H, { dur, delay, flip })
+    // a thrust: a spike of light driven forward through the foe
+    function thrust(x, y, dir, len, color, dur = 260) {
+      const g = new P.Graphics()
+      g.position.set(x, y)
+      g.scale.x = dir
+      fxLayer.addChild(g)
+      const w = len * 0.07
+      tween(dur, p => {
+        g.clear()
+        const e = Math.min(1, p / 0.3)
+        const L = len * (1 - Math.pow(1 - e, 3))
+        const a = p < 0.3 ? 1 : 1 - (p - 0.3) / 0.7
+        g.poly([0, -w, L, 0, 0, w]).fill({ color, alpha: a })
+        g.poly([L * 0.2, -w * 0.4, L, 0, L * 0.2, w * 0.4]).fill({ color: 0xffffff, alpha: a })
+        if (p >= 1) g.destroy()
+      })
     }
-    // the DOM stage's sprites were boxes a good deal taller than the body; its sizes are in those boxes
-    const FX_K = 1.35
-    // magic circles (a 2x2 sheet of round glyphs: fire, water, nature, holy), turning flat on the ground under a caster
-    let circleTex = null
-    const CIRCLE = { fire: 0, water: 1, nature: 2 }
-    function circles() {
-      if (circleTex) return circleTex === "loading" ? null : circleTex
-      if (!Assets.has("fx", "circles")) return null
-      circleTex = "loading"
-      P.Assets.load(Assets.url("fx/circles.webp"))
-        .then(tex => {
-          const cw = tex.width / 2
-          const ch = tex.height / 2
-          circleTex = [0, 1, 2, 3].map(k => new P.Texture({ source: tex.source, frame: new P.Rectangle((k % 2) * cw + (cw - ch) / 2, Math.floor(k / 2) * ch, ch, ch) }))
-        })
-        .catch(() => (circleTex = null))
-      return null
+    // a heavy blow landing: a flash, short thick rays, a ring standing across it, sparks
+    function impactStar(x, y, r, color) {
+      light(x, y, color, r * 2, 260, 1.5)
+      rays(x, y, color, r * 1.4, { n: 7, dur: 240 })
+      shockRing(x, y, r * 1.6, color)
+      emit(x, y, { n: 12, tex: "streak", color: [color, 0xffffff], size: 0.45, speed: r * 7, gravity: 600, drag: 0.08, life: 320 })
     }
+    // claws: three cuts side by side
+    const claws = (x, y, r, dir, color) => [-1, 0, 1].forEach(k => slashArc(x + dir * k * r * 0.12, y + k * r * 0.22, r, dir, color, { tilt: 0.5, width: 0.6, dur: 280 }))
+    // a magic circle turning flat on the ground under a caster: rings, ticks, a six-pointed star, in its element's colour
     function circle(a, element, dur) {
-      const tx = circles()
-      if (!tx) return
+      const color = ELEM_COL[element] ?? 0xffe680
+      const R = a.h * 0.75
       const c = new P.Container()
       c.position.set(a.x0 + (a.dash || 0), a.y0)
       c.scale.set(1, 0.32)
-      const s = new P.Sprite(tx[CIRCLE[element] ?? 3])
-      s.anchor.set(0.5)
-      s.width = s.height = a.h * 1.5
-      c.addChild(s)
+      const g = new P.Graphics()
+      g.circle(0, 0, R).stroke({ color, width: R * 0.035 })
+      g.circle(0, 0, R * 0.86).stroke({ color, width: R * 0.018 })
+      g.circle(0, 0, R * 0.5).stroke({ color, width: R * 0.02 })
+      for (let k = 0; k < 24; k++) {
+        const an = (k / 24) * Math.PI * 2
+        const r1 = R * (k % 2 ? 0.92 : 0.96)
+        g.moveTo(Math.cos(an) * R * 0.86, Math.sin(an) * R * 0.86).lineTo(Math.cos(an) * r1, Math.sin(an) * r1)
+      }
+      g.stroke({ color, width: R * 0.015 })
+      for (const off of [0, Math.PI / 3]) {
+        const pts = [0, 1, 2].flatMap(k => {
+          const an = off + (k / 3) * Math.PI * 2 - Math.PI / 2
+          return [Math.cos(an) * R * 0.86, Math.sin(an) * R * 0.86]
+        })
+        g.poly(pts).stroke({ color, width: R * 0.02 })
+      }
+      for (let k = 0; k < 6; k++) {
+        const an = (k / 6) * Math.PI * 2
+        g.circle(Math.cos(an) * R * 0.68, Math.sin(an) * R * 0.68, R * 0.06).stroke({ color, width: R * 0.015 })
+      }
+      c.addChild(g)
       fxLayer.addChild(c)
       tween(dur, p => {
-        s.rotation = (p * dur) / 900
+        g.rotation = (p * dur) / 900
+        const s = p < 0.15 ? 0.6 + 0.4 * (p / 0.15) : 1
+        g.scale.set(s)
         c.alpha = p < 0.15 ? p / 0.15 : 1 - Math.max(0, p - 0.6) / 0.4
         if (p >= 1) c.destroy({ children: true })
       })
-      sparks(a.x0, a.y0 - a.h * 0.2, COLOR[element] || COLOR.buff, 12, { speed: 60, up: 120, gravity: -120, life: dur, size: 0.35 })
+      emit(a.x0, a.y0 - a.h * 0.2, { n: 12, color: [color, 0xffffff], size: 0.35, speed: 60, up: 120, gravity: -120, life: dur, jitter: a.h * 0.4 })
+    }
+    // the blow on a foe for a hit with no drawn effect of its own: its element's burst and its style's cut
+    function hitFx(a, src, style, el, big, crit) {
+      const m = mid(a)
+      const dir = src ? src.dir : -(a.dir || 1)
+      const k = (big ? 1.25 : 1) * (crit ? 1.2 : 1)
+      if (el === "fire") fireExplosion(m.x, m.y, a.h * 0.35 * k)
+      else if (el === "water") splash(a, big)
+      else if (el === "nature") leaves(a, big)
+      const c = el !== "physical" ? ELEM_COL[el] || 0xeef4ff : 0xeef4ff
+      if (style === "slash") slashArc(m.x, m.y, a.h * 0.5 * k, dir, c, { tilt: (Math.random() - 0.5) * 0.7 })
+      else if (style === "stab") thrust(m.x - dir * a.h * 0.35, m.y, dir, a.h * 0.9 * k, c)
+      else if (style === "magic") light(m.x, m.y, c, a.h * 0.8 * k, 300, 1.4)
+      else impactStar(m.x, m.y, a.h * (style === "ranged" ? 0.3 : 0.45) * k, el !== "physical" ? c : 0xffe3a3)
     }
     // a shot leaving: a flash and a ring standing across the line of flight, sparks thrown forward
     function muzzle(pt, a, color, big) {
@@ -8575,6 +8740,7 @@ void main(){
           pull: o.pull || 0,
           spin: o.tex === "smoke" ? (Math.random() - 0.5) * 1.2 : o.tex === "leaf" ? (Math.random() - 0.5) * 8 : 0,
           stretch: o.tex === "streak" ? (o.stretch ?? 0.004) : 0,
+          orb: o.orbit && { ...o.orbit, ang: Math.random() * Math.PI * 2 },
         })
       }
     }
@@ -8791,20 +8957,12 @@ void main(){
     }
     // a missile from A to B over dur ms along an arc (arc: the rise as a share of the distance): "arrow" (a drawn shaft,
     // coloured head and fletching), "orb" (a glowing ball trailing sparks); big for a skill
-    // art: an effect sheet flown along the path instead (a bolt, a skill arrow), looping its frames; arrows and art
-    // leave a fading streak with sparks hanging in the air
-    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100, art = null, onFly = null, onLand = null } = {}) {
+    // arrows and orbs leave a fading streak with sparks hanging in the air; an orb trails its element (flames, drops,
+    // leaves)
+    function shoot(kind, A, B, dur, { color = 0xffffff, big = false, arc = 0.12, h = 100, element = "", onFly = null, onLand = null } = {}) {
       const dist = Math.hypot(B.x - A.x, B.y - A.y)
-      const frames = art && sheet(art)
       let s
-      if (frames) {
-        s = new P.Sprite(frames[0])
-        s.anchor.set(0.5)
-        const k = (h * (big ? 0.8 : 0.6)) / frames[0].height
-        s.scale.set(k)
-        partLayer.addChild(s)
-        if (kind === "shard") arc = 0
-      } else if (kind === "arrow") {
+      if (kind === "arrow") {
         s = new P.Graphics()
         const L = h * (big ? 0.42 : 0.32)
         const wd = h * (big ? 0.022 : 0.016)
@@ -8822,23 +8980,33 @@ void main(){
         partLayer.addChild(s)
         arc = 0
       } else {
-        s = new P.Sprite(glow)
-        s.anchor.set(0.5)
-        s.tint = color
-        s.width = s.height = h * (big ? 0.5 : 0.32)
+        s = new P.Container()
+        const halo = new P.Sprite(glow)
+        halo.anchor.set(0.5)
+        halo.tint = color
+        halo.width = halo.height = h * (big ? 0.62 : 0.42)
+        const core = new P.Sprite(glow)
+        core.anchor.set(0.5)
+        core.width = core.height = h * (big ? 0.26 : 0.18)
+        s.addChild(halo, core)
         partLayer.addChild(s)
       }
       s.position.set(A.x, A.y)
       const at = p => ({ x: lerp(A.x, B.x, p), y: lerp(A.y, B.y, p) - arc * dist * 4 * p * (1 - p) })
-      const streak = frames || kind === "arrow" ? new P.Graphics() : null
+      const streak = kind === "arrow" || kind === "orb" ? new P.Graphics() : null
       if (streak) fxLayer.addChild(streak)
       const pts = []
       tween(dur, p => {
         const q = at(p)
         const n = at(Math.min(1, p + 0.02))
         s.position.set(q.x, q.y)
-        if (frames) s.texture = frames[Math.floor((p * dur) / 60) % 8]
-        if (frames || kind !== "orb") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
+        if (kind !== "orb") s.rotation = Math.atan2(n.y - q.y, n.x - q.x)
+        else {
+          s.scale.set(1 + 0.12 * Math.sin(p * dur * 0.05))
+          if (element === "fire") emit(q.x, q.y, { n: 1, color: FIRE, color1: 0x5a0800, alpha: 0.55, size: 0.6 * K(h) * (big ? 1 : 0.7), size1: 0.1, speed: 30, gravity: -h * 0.8, life: 380, jitter: h * 0.08 })
+          else if (element === "water" && Math.random() < 0.7) emit(q.x, q.y, { n: 1, color: [0x8fdcff, 0xffffff], size: 0.35, speed: 40, gravity: 600, life: 400, jitter: h * 0.1 })
+          else if (element === "nature" && Math.random() < 0.5) emit(q.x, q.y, { n: 1, tex: "leaf", color: [0x5fd35a, 0x8fe86a], size: 0.35, speed: 40, gravity: 150, life: 600 })
+        }
         if (kind !== "arrow" && Math.random() < 0.8) sparks(q.x, q.y, color, 1, { speed: 30, gravity: 0, life: 350, size: big ? 0.5 : 0.35 })
         if (streak) {
           // a ribbon over the last few points, white toward the head
@@ -8933,12 +9101,8 @@ void main(){
       const m = mid(a)
       a.hp = tg.hp
       if (tg.dHP === 0) return number(a, "Miss", "#cfd6ff", false)
-      const key = e.ab?.key
-      const style = e.style || "smash"
-      const flip = src ? src.dir < 0 : false
-      const spec = isSkill && key ? Stage.fxSpec(e.ab) : null
-      if (!(shown || (spec && !spec.proj && specAt(spec, a, { flip }))))
-        playSheet(el !== "physical" ? BURST[el] || "phys_hit" : { slash: 1, stab: 1, smash: 1 }[style] ? style : "phys_hit", m.x, m.y, a.h * (tg.crit ? 1.2 : 0.9), { flip })
+      // the skill's own body was drawn already (shown); else its element's burst and its style's cut
+      if (!shown) hitFx(a, src, e.style || "smash", el, isSkill, tg.crit)
       sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
       flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
       a.jig = tg.crit ? 1.3 : 0.9
@@ -9166,7 +9330,6 @@ void main(){
       if (key === "rejuvenate") emit(a.x0, a.y0 - a.h * 0.9, { n: 10, tex: "leaf", color: [0xffb0d0, 0xfff0f6, 0x9fe88a], size: 0.4, speed: 60, gravity: 90, drag: 0.6, life: 1600, jitter: a.h * 0.8 })
     }
 
-    // sheet: false = the recipe draws the skill itself, the old stage's sheet for it is left out (no doubled volley)
     const SKILL_FX = {
       // 火球: a smoking trail behind it; it bursts in flame, scorching the ground and heating the air
       fireball: {
@@ -9181,12 +9344,9 @@ void main(){
           }),
       },
       flame_blast: { hit: blaze },
-      // 箭雨: the volley itself is drawn (rain in play), not the old sheet
-      rain_of_arrows: { sheet: false },
       firestorm: { hit: blaze },
       // 分裂斩: a crescent of light flung through the whole line; time slows on the blow, the camera leans in
       cleave: {
-        sheet: false,
         hit: ({ src, tgs, color }) => {
           if (!tgs.length) return
           const list = tgs.map(([a]) => a)
@@ -9236,7 +9396,6 @@ void main(){
       mana_spring: {
         hit: ({ tgs }) =>
           tgs.forEach(([a]) => {
-            emit(a.x0, a.y0, { n: 36, color: [0x5ac8ff, 0xbfefff, 0xffffff], size: 0.45, size1: 0.2, speed: 700, angle: -Math.PI / 2, spread: 0.35, gravity: 1400, life: 1000, jitter: a.h * 0.3 })
             splash(a, false)
             ripple(a.x0, a.y0, a.h * 1.2, 0x5ac8ff, { n: 3 })
           }),
@@ -9245,7 +9404,6 @@ void main(){
       // 缠绕: vines grow up round the foe's legs, leaves torn loose
       entangle: {
         hit: each(a => {
-          decal("vines", a.x0, a.y0, a.h * 0.9, { dur: 2800 })
           leaves(a, false)
         }),
       },
@@ -9426,6 +9584,37 @@ void main(){
       },
     }
 
+    // ----- each skill's own body (main), drawn where its blow lands on every foe it was cast at; skills without one
+    // get their element's burst and their style's cut, made bigger (hitFx) -----
+    const onEach = f => ({ all, src, color }) => all.forEach(a => f(a, src, color))
+    const MAIN = {
+      fireball: onEach(a => fireExplosion(mid(a).x, mid(a).y, a.h * 0.55)),
+      smoke_burst: onEach(a => fireExplosion(mid(a).x, mid(a).y, a.h * 0.4)),
+      flame_blast: onEach(a => {
+        flameColumn(a.x0, a.y0, a.h * 0.8, a.h * 1.7, 950, { rate: 4 })
+        fireExplosion(a.x0, a.y0 - a.h * 0.3, a.h * 0.5)
+      }),
+      firestorm: onEach(a => fireTornado(a.x0, a.y0, a.h * 1.9, 1200)),
+      water_strike: onEach(a => waterColumn(a.x0, a.y0, a.h * 0.7, a.h * 1.6, 900)),
+      mana_spring: onEach(a => waterColumn(a.x0, a.y0, a.h * 0.8, a.h * 2, 1100)),
+      ice_spear: onEach(a => iceSpikes(a.x0, a.y0, a.h * 0.5, a.h * 0.6, { n: 4, dur: 900 })),
+      frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
+      entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.8, a.h * 0.9, 1800)),
+      natures_veil: onEach(a => petalVortex(a.x0, a.y0, a.h, 1000)),
+      toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: [0xb6ff5a, 0x8fd14a, 0xe0ff8a], size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
+      life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0x62d65a)),
+      cleave: onEach((a, src, color) => slashArc(mid(a).x, mid(a).y, a.h * 0.75, src.dir, color, { width: 1.3, tilt: 0.3 })),
+      // two red cuts crossing
+      maim: onEach((a, src) => {
+        slashArc(mid(a).x, mid(a).y, a.h * 0.6, src.dir, 0xff3b3b, { tilt: -0.4 })
+        later(60, () => slashArc(mid(a).x, mid(a).y, a.h * 0.6, src.dir, 0xff3b3b, { tilt: 0.9 }))
+      }),
+      // a flat cut low across the legs
+      crippling_slash: onEach((a, src, color) => slashArc(a.x0, a.y0 - a.h * 0.15, a.h * 0.6, src.dir, color, { tilt: 1.15, width: 1.2 })),
+      scratch: onEach((a, src) => claws(mid(a).x, mid(a).y, a.h * 0.5, src.dir, 0xffe3a3)),
+    }
+    for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
+
     function play(evs) {
       if (!app) return
       for (const e of evs) {
@@ -9438,9 +9627,8 @@ void main(){
             play1(src, "cast")
             light(src.x0, src.y0 - src.h * 0.4, COLOR.heal, src.h, 600)
             circle(src, "heal", 900)
-            // the heal's own sheet: one over a whole side, else on each
-            const spec = Stage.fxSpec(e.ab) || { ground: "heal", h: 1.5 }
-            later(300, () => (tgs.length > 1 && groupAt(spec, tgs.map(([a]) => a), { dur: 1000 })) || tgs.forEach(([a]) => specAt(spec, a, { dur: 900 })))
+            // a column of light on each one healed
+            later(300, () => tgs.forEach(([a]) => pillar(a.x0, a.y0, a.h * 0.8, a.h * 1.8, e.ab?.key === "revive" ? 0xffe680 : COLOR.heal, 950)))
             later(300, () => tgs.forEach(([a]) => healFx(a, e.ab?.key)))
           }
           tgs.forEach(([a, tg]) => later(src ? 300 : 0, () => heal(a, tg)))
@@ -9450,13 +9638,11 @@ void main(){
           if (src) {
             play1(src, "cast")
             circle(src, "buff", 900)
-            // the buff's own sheet: over the whole side for an aura, else on the caster
-            const spec = Stage.fxSpec(e.ab) || { ground: "buff", h: 1.4 }
+            // on the caster, or the whole side for an aura: a column of light, its colour rising round each, and what that
+            // buff adds
             const allies = e.ab?.target === "allAllies" ? units[e.actor.side].filter(a => !a.dead) : [src]
-            later(260, () => (allies.length > 1 && groupAt(spec, allies, { dur: 1000 })) || specAt(spec, src, { dur: 900 }))
-            // its colour rising round each one it lands on, and what that buff adds
             const [bc, extra] = BUFF_FX[e.ab?.key] || [COLOR.buff]
-            later(260, () => allies.forEach(a => (buffFx(a, bc), extra?.(a))))
+            later(260, () => allies.forEach(a => (pillar(a.x0, a.y0, a.h * 0.75, a.h * 1.7, bc, 900), buffFx(a, bc), extra?.(a))))
             if (src.off === "relic") later(300, () => relicGlow(src))
             // the sword held high catches the light
             later(300, () => {
@@ -9479,7 +9665,6 @@ void main(){
         // (a skill on every foe: "skill:all" where the set has one)
         const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : e.ab.target === "allEnemies" && actionOf(src.kind, "skill:all") ? "skill:all" : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
         const act = play1(src, name)
-        const spec = isSkill ? Stage.fxSpec(e.ab) : null
         const recipe = isSkill ? SKILL_FX[e.ab.key] : null
         // a spell: a magic circle turns under the caster while it gathers
         if (e.style === "magic") circle(src, e.element, (act?.hit ?? 300) + 300)
@@ -9491,8 +9676,7 @@ void main(){
           if (t < at)
             later(t, () =>
               tgs.forEach(([a]) => {
-                const m = mid(a)
-                playSheet("slash", m.x, m.y, a.h * 0.9, { dur: 300, flip: src.dir < 0 })
+                hitFx(a, src, e.style, e.element, false, false)
                 flash(a, 0xffffff, 160)
                 a.jig = 0.7
               }),
@@ -9521,8 +9705,7 @@ void main(){
         if (act?.shot != null) {
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
-          // bolts and skill arrows fly as their own sheets (a plain spell as its element's orb)
-          const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, art: spec?.proj || (kind !== "arrow" && ORB[e.element]) || null, onFly: recipe?.fly && (q => recipe.fly(q, src)) }
+          const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, element: e.element, onFly: recipe?.fly && (q => recipe.fly(q, src)) }
           const fromOf = () => (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
           // earlier shots of a volley (shots: [ms, …]): each flies as long as the last, the foe flinches where it lands
           for (const t of act.shots || [])
@@ -9583,8 +9766,9 @@ void main(){
           later(act.dur, () => (src.cont.zIndex = src.y0))
         }
         later(at, () => {
-          // a skill on every foe: one big sheet over the whole row
-          const shown = recipe?.sheet === false || (isSkill && !spec?.proj && (e.ab.target === "allEnemies" || tgs.length > 1) && groupAt(spec, tgs.map(([a]) => a), { flip: src.dir < 0 }))
+          // the skill's own body, drawn on every foe it was cast at (then the hits leave out their plain bursts)
+          const shown = !!recipe?.main
+          if (shown) recipe.main({ src, all: tgs.map(([a]) => a), color: tcol })
           tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
           // a skill's blow: light rays and white-hot sparks out of each foe it lands on, dust and a crack under a smash
           if (isSkill)
@@ -9633,7 +9817,16 @@ void main(){
           parts.splice(k--, 1)
           continue
         }
-        // drawn toward a point (to: a function giving it), slowed by drag, sized / coloured over its life
+        // circling an axis as it rises (orbit), else drawn toward a point (to: a function giving it), slowed by drag;
+        // sized / coloured over its life
+        if (q.orb) {
+          const o = q.orb
+          o.ang += o.spin * dt
+          o.y -= o.rise * dt
+          const R = o.r * (1 + o.widen * age)
+          q.s.position.set(o.cx + Math.cos(o.ang) * R, o.y + Math.sin(o.ang) * R * 0.3)
+          q.vx = q.vy = q.g = 0
+        }
         if (q.to) {
           const T = q.to()
           if (T) {
