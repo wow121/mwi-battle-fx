@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.6
+// @version      0.21.7
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6259,6 +6259,8 @@
   const MONSTERS = {"abyssal_imp":["深渊小鬼","magic","fire"],"acrobat":["杂技师","smash","physical"],"alligator":["夏洛克","slash","physical"],"anchor_shark":["持锚鲨","smash","physical"],"aquahorse":["水马","ranged","water"],"black_bear":["黑熊","stab","physical"],"brine_marksman":["海盐射手","ranged","physical"],"butterjerry":["蝶鼠","stab","physical"],"captain_fishhook":["鱼钩船长","slash","physical"],"centaur_archer":["半人马弓箭手","ranged","physical"],"chronofrost_sorcerer":["霜时巫师","magic","water"],"crab":["螃蟹","smash","physical"],"crystal_colossus":["水晶巨像","stab","physical"],"cyclops":["独眼巨人","smash","physical"],"demonic_overlord":["恶魔霸主","magic","fire"],"deranged_jester":["小丑皇","smash","physical"],"dodocamel":["渡渡驼","smash","physical"],"dryad":["树精","magic","nature"],"dusk_revenant":["黄昏亡灵","ranged","physical"],"elementalist":["元素法师","magic","fire"],"enchanted_bishop":["秘法主教","magic","nature"],"enchanted_king":["秘法国王","slash","physical"],"enchanted_knight":["秘法骑士","slash","physical"],"enchanted_pawn":["秘法士兵","smash","physical"],"enchanted_queen":["秘法王后","magic","water"],"enchanted_rook":["秘法堡垒","ranged","physical"],"eye":["独眼","slash","physical"],"eyes":["叠眼","slash","physical"],"flame_sorcerer":["火焰巫师","magic","fire"],"fly":["苍蝇","smash","physical"],"frog":["青蛙","smash","physical"],"frost_sniper":["霜冻狙击手","ranged","water"],"giant_mantis":["巨螳螂","slash","physical"],"giant_scorpion":["巨蝎","stab","physical"],"giant_shoebill":["鲸头鹳","smash","physical"],"gobo_boomy":["轰轰","magic","fire"],"gobo_chieftain":["哥布林酋长","stab","physical"],"gobo_shooty":["咻咻","ranged","physical"],"gobo_slashy":["砍砍","slash","physical"],"gobo_smashy":["锤锤","smash","physical"],"gobo_stabby":["刺刺","stab","physical"],"granite_golem":["花岗岩魔像","smash","physical"],"griffin":["狮鹫","slash","physical"],"grizzly_bear":["棕熊","slash","physical"],"gummy_bear":["软糖熊","smash","physical"],"ice_sorcerer":["冰霜巫师","magic","water"],"infernal_warlock":["地狱术士","magic","fire"],"jackalope":["鹿角兔","magic","nature"],"juggler":["杂耍者","ranged","physical"],"jungle_sprite":["丛林精灵","magic","nature"],"luna_empress":["月神之蝶","magic","nature"],"magician":["魔术师","magic","fire"],"magnetic_golem":["磁力魔像","smash","physical"],"manticore":["狮蝎兽","ranged","physical"],"marine_huntress":["海洋猎手","ranged","water"],"mimic":["宝箱怪","stab","physical"],"myconid":["蘑菇人","magic","nature"],"nom_nom":["咬咬鱼","stab","physical"],"novice_sorcerer":["新手巫师","magic","water"],"panda":["熊猫","smash","physical"],"polar_bear":["北极熊","smash","physical"],"porcupine":["豪猪","ranged","physical"],"pyre_hunter":["火焰猎手","ranged","fire"],"rabid_rabbit":["疯魔兔","slash","physical"],"rat":["杰瑞","stab","physical"],"red_panda":["小熊猫","slash","physical"],"salamander":["火蜥蜴","magic","fire"],"sea_snail":["蜗牛","smash","physical"],"shadow_archer":["暗影弓手","ranged","physical"],"siren":["海妖","magic","water"],"skunk":["臭鼬","slash","physical"],"slimy":["史莱姆","magic","water"],"snake":["蛇","stab","physical"],"soul_hunter":["灵魂猎手","ranged","physical"],"squawker":["鹦鹉","magic","nature"],"stalactite_golem":["钟乳石魔像","stab","physical"],"swampy":["沼泽虫","smash","physical"],"the_kraken":["克拉肯","ranged","physical"],"the_watcher":["观察者","ranged","physical"],"tidal_conjuror":["潮汐召唤师","magic","water"],"treant":["树人","magic","nature"],"trial_badger":["试炼獾","slash","physical"],"trial_beetle":["试炼甲虫","smash","physical"],"trial_chameleon":["试炼变色龙","ranged","physical"],"trial_dragonfly":["试炼蜻蜓","ranged","physical"],"trial_firefly":["试炼萤火虫","magic","fire"],"trial_hedgehog":["试炼刺猬","magic","nature"],"trial_jellyfish":["试炼水母","magic","water"],"trial_wasp":["试炼黄蜂","stab","physical"],"turtle":["忍者龟","smash","physical"],"vampire":["吸血鬼","stab","physical"],"veyes":["复眼","slash","physical"],"werewolf":["狼人","slash","physical"],"zombie":["僵尸","slash","physical"],"zombie_bear":["僵尸熊","stab","physical"]}
   const LOCATIONS = {"aqua_planet":["海洋星球",["sea_snail","crab","aquahorse","nom_nom","turtle","marine_huntress"]],"bear_with_it":["熊熊星球",["gummy_bear","panda","black_bear","grizzly_bear","polar_bear","red_panda"]],"chimerical_den":["奇幻洞穴",["rat","skunk","porcupine","slimy","frog","snake","swampy","alligator","sea_snail","crab","aquahorse","jungle_sprite","myconid","nom_nom","turtle","centaur_archer","gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","eye","butterjerry","eyes","veyes","jackalope","dodocamel","manticore","griffin"]],"enchanted_fortress":["秘法要塞",["novice_sorcerer","ice_sorcerer","flame_sorcerer","panda","black_bear","magnetic_golem","abyssal_imp","elementalist","grizzly_bear","polar_bear","stalactite_golem","soul_hunter","enchanted_pawn","enchanted_knight","enchanted_bishop","enchanted_rook","enchanted_queen","enchanted_king"]],"gobo_planet":["哥布林星球",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","gobo_chieftain"]],"golem_cave":["魔像洞穴",["magnetic_golem","stalactite_golem","granite_golem","crystal_colossus"]],"infernal_abyss":["地狱深渊",["abyssal_imp","soul_hunter","infernal_warlock","demonic_overlord"]],"jungle_planet":["丛林星球",["jungle_sprite","myconid","treant","centaur_archer","luna_empress"]],"pirate_cove":["海盗基地",["eye","eyes","veyes","zombie","magnetic_golem","abyssal_imp","vampire","stalactite_golem","soul_hunter","squawker","werewolf","granite_golem","infernal_warlock","anchor_shark","brine_marksman","tidal_conjuror","captain_fishhook","the_kraken"]],"planet_of_the_eyes":["眼球星球",["eye","eyes","veyes","the_watcher"]],"sinister_circus":["阴森马戏团",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","novice_sorcerer","gummy_bear","ice_sorcerer","flame_sorcerer","panda","black_bear","grizzly_bear","polar_bear","zombie","vampire","rabid_rabbit","elementalist","werewolf","zombie_bear","acrobat","juggler","magician","deranged_jester"]],"smelly_planet":["臭臭星球",["fly","rat","skunk","porcupine","slimy"]],"sorcerers_tower":["巫师之塔",["novice_sorcerer","ice_sorcerer","flame_sorcerer","elementalist","chronofrost_sorcerer"]],"swamp_planet":["沼泽星球",["frog","snake","swampy","alligator","giant_shoebill"]],"twilight_zone":["暮光之地",["zombie","vampire","werewolf","dusk_revenant"]]}
   // ---------- 动画测试: the rigged battle (PixiJS) with an auto battle ----------
+  // the abilities each monster has in the game (game data: combatMonsterDetailMap[].abilities)
+  const MONSTER_SKILLS = {"abyssal_imp":["quick_aid","firestorm","fireball"],"acrobat":["speed_aura","elusiveness","precision","smack","stunning_blow"],"alligator":["scratch"],"anchor_shark":["invincible","toughness","berserk","stunning_blow","shield_bash"],"aquahorse":["aqua_arrow"],"black_bear":["frenzy"],"brine_marksman":["critical_aura","rain_of_arrows","aqua_arrow","penetrating_shot","quick_shot"],"butterjerry":["fierce_aura","frenzy","poke","impale"],"captain_fishhook":["fierce_aura","frenzy","cleave","maim","fracturing_impact"],"centaur_archer":["elusiveness","rain_of_arrows","quick_shot"],"chronofrost_sorcerer":["mystic_aura","heal","elemental_affinity","frost_surge","ice_spear"],"crab":["smack"],"crystal_colossus":["invincible","toughness","spike_shell","puncture","impale"],"cyclops":["guardian_aura","toughness","sweep","stunning_blow","fracturing_impact"],"demonic_overlord":["mystic_aura","toughness","firestorm","flame_blast","fireball"],"deranged_jester":["insanity","vampirism","smoke_burst","sweep","stunning_blow"],"dodocamel":["invincible","toughness","berserk","sweep","shield_bash"],"dryad":["guardian_aura","toxic_pollen","natures_veil","life_drain","entangle"],"dusk_revenant":["critical_aura","vampirism","steady_shot","silencing_shot","rain_of_arrows"],"elementalist":["revive","elemental_affinity","ice_spear","flame_blast"],"enchanted_bishop":["revive","retribution","rejuvenate","heal","natures_veil"],"enchanted_king":["invincible","toughness","elusiveness","crippling_slash","cleave"],"enchanted_knight":["fierce_aura","toughness","frenzy","crippling_slash","maim"],"enchanted_pawn":["promote","elusiveness","precision","stunning_blow"],"enchanted_queen":["speed_aura","toxic_pollen","mana_spring","flame_blast","water_strike"],"enchanted_rook":["critical_aura","precision","rain_of_arrows","silencing_shot","penetrating_shot"],"eye":["precision"],"eyes":["precision"],"flame_sorcerer":["flame_blast","fireball"],"frog":["smack"],"frost_sniper":["critical_aura","silencing_shot","rain_of_arrows","aqua_arrow","quick_shot"],"giant_mantis":["fierce_aura","precision","cleave","maim","crippling_slash"],"giant_scorpion":["fierce_aura","berserk","impale","puncture","penetrating_strike"],"giant_shoebill":["speed_aura","elusiveness","sweep","smack"],"gobo_boomy":["revive","fireball"],"gobo_chieftain":["fierce_aura","berserk","puncture","impale","poke"],"gobo_shooty":["flame_arrow"],"gobo_slashy":["cleave"],"gobo_smashy":["berserk"],"gobo_stabby":["impale"],"granite_golem":["invincible","provoke","stunning_blow","sweep"],"griffin":["fierce_aura","berserk","frenzy","rain_of_arrows","crippling_slash"],"grizzly_bear":["frenzy"],"gummy_bear":["frenzy"],"ice_sorcerer":["ice_spear","water_strike"],"infernal_warlock":["mystic_aura","firestorm","flame_blast"],"jackalope":["guardian_aura","heal","natures_veil","entangle"],"juggler":["critical_aura","precision","frenzy","pestilent_shot","steady_shot"],"jungle_sprite":["rejuvenate","heal","entangle"],"luna_empress":["guardian_aura","rejuvenate","elusiveness","natures_veil","toxic_pollen"],"magician":["mystic_aura","elemental_affinity","rejuvenate","firestorm","fireball"],"magnetic_golem":["stunning_blow"],"manticore":["critical_aura","precision","pestilent_shot","steady_shot","rain_of_arrows"],"marine_huntress":["mystic_aura","silencing_shot","aqua_arrow","rain_of_arrows"],"mimic":["speed_aura","frenzy","elusiveness","impale","penetrating_strike"],"myconid":["toxic_pollen"],"nom_nom":["impale"],"novice_sorcerer":["quick_aid","water_strike"],"panda":["toughness"],"polar_bear":["fierce_aura","frenzy"],"porcupine":["quick_shot"],"pyre_hunter":["critical_aura","precision","steady_shot","rain_of_arrows","flame_arrow"],"rabid_rabbit":["insanity","berserk","frenzy","scratch"],"rat":["poke"],"red_panda":["insanity","berserk","frenzy","maim","cleave"],"salamander":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"sea_snail":["toughness"],"shadow_archer":["critical_aura","elusiveness","rain_of_arrows","penetrating_shot","steady_shot"],"siren":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"skunk":["scratch"],"slimy":["minor_heal","water_strike"],"snake":["poke"],"soul_hunter":["critical_aura","silencing_shot","flame_arrow"],"squawker":["guardian_aura","life_drain","natures_veil","entangle"],"stalactite_golem":["guardian_aura","spike_shell","toughness"],"swampy":["sweep"],"the_kraken":["critical_aura","frenzy","aqua_arrow","penetrating_shot","fracturing_impact"],"the_watcher":["speed_aura","precision","steady_shot","aqua_arrow","flame_arrow"],"tidal_conjuror":["mystic_aura","elemental_affinity","frost_surge","ice_spear","water_strike"],"treant":["guardian_aura","toxic_pollen","entangle"],"trial_badger":["fierce_aura","berserk","maim","cleave","scratch"],"trial_beetle":["invincible","toughness","fracturing_impact","stunning_blow","sweep"],"trial_chameleon":["critical_aura","precision","penetrating_shot","rain_of_arrows","steady_shot"],"trial_dragonfly":["critical_aura","precision","steady_shot","rain_of_arrows","pestilent_shot"],"trial_firefly":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"trial_hedgehog":["guardian_aura","toughness","spike_shell","natures_veil","fracturing_impact"],"trial_jellyfish":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"trial_wasp":["fierce_aura","frenzy","penetrating_strike","puncture","impale"],"turtle":["taunt","toughness"],"vampire":["fierce_aura","vampirism","puncture"],"veyes":["precision"],"werewolf":["insanity","berserk","maim"],"zombie":["toughness","maim","natures_veil"],"zombie_bear":["fierce_aura","berserk","puncture","penetrating_strike"]}
   // Only units that have a rig take part: 1号 is the drawn player pilot (blue hair, warrior outfit, holy sword +
   // knight's aegis, sword skills), the monsters are every rigged monster. The DOM stage still hangs in a hidden slot
   // (Stage.attach(Lab.render(), "test")) but gets no events.
@@ -6326,11 +6328,12 @@
           lab.p.forEach((u, j) => show([{ actor: null, ab: null, effect: "regen", style: "", element: "heal", targets: [change("p", j, u.maxHp)] }]))
         }, 2200)
     }
+    const skillsOf = j => MONSTER_SKILLS[(lab.m[j]?.hrid || "").split("/").pop()] || []
     function autoTick() {
       const who = [...alive("p").map(i => ["p", i]), ...alive("m").map(i => ["m", i])]
       if (!who.length) return
       const [side, i] = pick(who)
-      const skills = side === "p" ? lab.p[i].skills : []
+      const skills = side === "p" ? lab.p[i].skills : skillsOf(i)
       act(side, i, skills.length && Math.random() < 0.4 ? pick(skills) : null)
     }
     function setAuto(on) {
@@ -6383,9 +6386,11 @@
       )
       row("操作").append(
         button("怪物普攻", () => alive("m").length && act("m", pick(alive("m")), null)),
+        // a monster uses one of its own abilities (MONSTER_SKILLS); one without any just attacks
         button("怪物放技能", () => {
-          const dmg = Object.keys(ABILITIES).filter(k => ABILITIES[k][1] === "damage")
-          if (alive("m").length) act("m", pick(alive("m")), pick(dmg))
+          if (!alive("m").length) return
+          const j = pick(alive("m"))
+          act("m", j, pick(skillsOf(j)) || null)
         }),
         button("全部击杀", () => {
           alive("m").forEach(j => show([{ actor: null, ab: null, effect: "damage", style: "dot", element: "physical", targets: [change("m", j, -99999)] }]))
@@ -6610,28 +6615,29 @@ void main(){
             { t: 1150, a: {} },
           ],
         },
-        // 普攻 2: both fists raised, brought down together
+        // 普攻 2: both fists raised in front up over the head, brought down together (+ is forward: 220 is
+        // overhead reached the front way, so the slam comes over the top, not round from behind)
         attack2: {
           dur: 1200, hit: 650, ring: 650, lunge: true,
           keys: [
             { t: 0, a: {} },
-            { t: 480, e: "out", a: { torso: -12, head: -12, arm_f: -140, arm_b: -150 }, y: 0.03 },
-            { t: 570, a: { torso: -13, head: -13, arm_f: -145, arm_b: -155 }, y: 0.04 },
+            { t: 480, e: "out", a: { torso: -12, head: -12, arm_f: 220, arm_b: 210 }, y: 0.03 },
+            { t: 570, a: { torso: -13, head: -13, arm_f: 225, arm_b: 215 }, y: 0.04 },
             { t: 650, e: "in", a: { torso: 20, head: 12, arm_f: 45, arm_b: 40, leg_f: 8, leg_b: -8 }, x: 0.05 },
             { t: 920, a: { torso: 18, head: 10, arm_f: 42, arm_b: 38, leg_f: 7, leg_b: -7 }, x: 0.045 },
             { t: 1200, a: {} },
           ],
         },
-        // skill: a twist to one side, both arms windmilling a whole turn, both fists slammed down
-        skill: {
-          dur: 1650, hit: 1050, ring: 1050, lunge: true,
+        // 眩晕重击 (its only ability): the red fist raised high and held, then hammered down on the target's head
+        "skill:stunning_blow": {
+          dur: 1550, hit: 850, ring: 850, lunge: true,
           keys: [
             { t: 0, a: {} },
-            { t: 400, e: "out", a: { torso: -14, head: -10, arm_f: -70, arm_b: -45 }, x: -0.03 },
-            { t: 900, e: "linear", a: { torso: 6, head: 2, arm_f: 290, arm_b: 315 }, y: 0.03 },
-            { t: 1050, e: "in", a: { torso: 20, head: 12, arm_f: 405, arm_b: 400, leg_f: 8, leg_b: -8 }, x: 0.06 },
-            { t: 1350, a: { torso: 18, head: 10, arm_f: 402, arm_b: 398 }, x: 0.055 },
-            { t: 1650, a: { arm_f: 360, arm_b: 360 } },
+            { t: 550, e: "out", a: { torso: -14, head: -12, arm_f: 200, arm_b: -25, leg_f: -6 }, x: -0.04, y: 0.02 },
+            { t: 720, a: { torso: -16, head: -14, arm_f: 205, arm_b: -28, leg_f: -7 }, x: -0.045, y: 0.03 },
+            { t: 850, e: "in", a: { torso: 24, head: 14, arm_f: 70, arm_b: 10, leg_f: 12, leg_b: -8 }, x: 0.09 },
+            { t: 1200, a: { torso: 22, head: 12, arm_f: 66, arm_b: 8, leg_f: 11, leg_b: -7 }, x: 0.085 },
+            { t: 1550, a: {} },
           ],
         },
         hurt: { dur: 520, keys: [{ t: 0, a: {} }, { t: 90, e: "out", a: { torso: -14, head: -18, arm_f: -25, arm_b: 30, leg_f: -6 }, x: -0.04 }, { t: 240, a: { torso: -10, head: -12, arm_f: 15, arm_b: -20 }, x: -0.035 }, { t: 520, a: {} }] },
@@ -7353,12 +7359,31 @@ void main(){
       a.jig = tg.crit ? 1.3 : 0.9
       number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
       if (tg.crit) crit(a)
+      if (/stun/.test(key || "") && !tg.died) stun(a)
       drawHp(a)
       if (tg.died) die(a)
       else if (a.rig && !a.act?.def.hit) play1(a, "hurt")
     }
     // a.life counts deaths and revivals: a burn-away or rebuild still running from an earlier one leaves the body
     // alone (a revival during the 2.4 s burn used to be burnt away again, the unit invisible until its next death)
+    // stunned: three stars circling over the head for a while
+    function stun(a) {
+      const stars = [0, 1, 2].map(() => {
+        const t = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18, fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
+        t.anchor.set(0.5)
+        textLayer.addChild(t)
+        return t
+      })
+      tween(1800, p => {
+        stars.forEach((t, k) => {
+          const an = p * Math.PI * 6 + (k * Math.PI * 2) / 3
+          t.position.set(a.x0 + (a.dash || 0) + Math.cos(an) * a.h * 0.28, a.y0 - a.h * 1.02 + Math.sin(an) * a.h * 0.07)
+          t.alpha = p < 0.85 ? 1 : (1 - p) / 0.15
+          t.scale.set(Math.sin(an) > 0 ? 1 : 0.75)
+        })
+        if (p >= 1) stars.forEach(t => t.destroy())
+      })
+    }
     function die(a) {
       a.dead = true
       const life = ++a.life
