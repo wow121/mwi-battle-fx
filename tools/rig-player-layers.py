@@ -86,7 +86,8 @@ def fill_skin(im, skin):
 
 
 def save(img, name):
-    img.save(os.path.join(OUT, name + ".webp"), lossless=True)
+    # (lossy colour, exact alpha: flat art looks the same at a third of the size; jsDelivr serves a repo of 50 MB at most)
+    img.save(os.path.join(OUT, name + ".webp"), quality=90, alpha_quality=100, method=6)
 
 
 def cut_body(name, im):

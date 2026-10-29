@@ -483,7 +483,7 @@ for k, c in enumerate(floats):
     z[n] = 7
     pix[n] = (c, im)
 # (its height leaves out what floats above it)
-rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()) if not QUAD else int(max(foot_y - np.where(fg)[0].min(), 0.6 * H)), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": False, "parts": {}}
+rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()) if not QUAD else int(max(foot_y - np.where(fg)[0].min(), 0.6 * H)), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": bool(OVER.get("crumble", False)), "parts": {}}
 if two:
     rig["two"] = True
 # a flier hangs this far (in heights) above the ground
@@ -549,7 +549,8 @@ for n, (m, src_im) in pix.items():
     mm = m if n == "trunk" else grow(m, 1) & fg
     layer[mm] = src_im[mm]
     nm = role[n]
-    Image.fromarray(layer[y0:y1, x0:x1].astype(np.uint8)).save(f"{A.out}/{nm}.webp", lossless=True)
+    # (lossy colour, exact alpha: flat art looks the same at a third of the size; jsDelivr serves a repo of 50 MB at most)
+    Image.fromarray(layer[y0:y1, x0:x1].astype(np.uint8)).save(f"{A.out}/{nm}.webp", quality=90, alpha_quality=100, method=6)
     piv = pivots[n]
     q = {"img": nm + ".webp", "pivot": [int(piv[0] - x0), int(piv[1] - y0)], "at": [int(piv[0]), int(piv[1])], "z": z[n]}
     if parent.get(n):

@@ -5,7 +5,7 @@
  ],
  "h": 222,
  "tmpl": "biped",
- "crumble": false,
+ "crumble": true,
  "parts": {
   "torso": {
    "img": "torso.webp",
