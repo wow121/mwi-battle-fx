@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.55
+// @version      0.21.56
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -9004,7 +9004,9 @@ void main(){
       root.filters = [a.filter]
       a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
       a.glowKey = ""
-      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.crumble ?? def.face !== "right" }
+      // every monster shatters when it dies (its pieces tumble back, bounce and burn away); a player falls (its rig
+      // faces right). (rig.json crumble, written false by tools/rig-monster.py, is not asked any more)
+      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.face !== "right" }
       enchGlow(a)
       layout()
       if (a.dead) {
