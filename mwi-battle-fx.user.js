@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.57
+// @version      0.21.58
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -291,6 +291,10 @@
         c.hits = c.struck ? e.dmgCounter - u.counters.dmgCounter : 0
         c.crit = tick("critCounter")
         for (const key of ["atkCounter", "dmgCounter", "critCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
+        // stunned: the server flags a unit while it is stunned (isStunned, sent only while true, as isBlinded is). The
+        // time it began is kept; an update for the unit without the flag, or its death, ends it.
+        if (e.isStunned && !c.died) u.stunned ||= Date.now()
+        else u.stunned = 0
         // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
         if (TANK_ABILITIES.has(shortId(e.abilityHrid))) u.tank = true
@@ -10185,7 +10189,9 @@ void main(){
         slow(280, 0.25)
         focusOn(m.x, m.y, 0.08, 600)
       }
-      if (tg.stunned && !tg.died) stun(a, tg.stunned)
+      // (the test page's own stun lasts its set time; a real one shows from the blow that brought it)
+      if (tg.stunned && !tg.died) a.stunUntil = now() + tg.stunned
+      if (a.u.stunned) a.stunSeen = a.u.stunned
       if (isSkill && !tg.died) afflict(a, e.ab)
       drawHp(a)
       if (tg.died) die(a)
@@ -10193,22 +10199,39 @@ void main(){
     }
     // a.life counts deaths and revivals: a burn-away or rebuild still running from an earlier one leaves the body
     // alone (a revival during the 2.4 s burn used to be burnt away again, the unit invisible until its next death)
-    // stunned: three stars circling over the head for the stun's duration
-    function stun(a, ms) {
-      const stars = [0, 1, 2].map(() => {
-        const t = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18, fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
-        t.anchor.set(0.5)
-        textLayer.addChild(t)
-        return t
-      })
-      tween(ms, p => {
-        stars.forEach((t, k) => {
-          const an = (p * ms * Math.PI) / 300 + (k * Math.PI * 2) / 3
-          t.position.set(a.x0 + (a.dash || 0) + Math.cos(an) * a.h * 0.28, a.y0 - a.h * 1.02 + Math.sin(an) * a.h * 0.07)
-          t.alpha = p < 0.9 ? 1 : (1 - p) / 0.1
-          t.scale.set(Math.sin(an) > 0 ? 1 : 0.75)
-        })
-        if (p >= 1) stars.forEach(t => t.destroy())
+    // stunned: three stars circling over the head while it lasts. A real stun (the battle flags the unit) shows from
+    // the blow that brought it (a second at the latest, when that blow was not drawn) until the flag goes, and never
+    // longer than the game's longest stun (stunning blow, 3 s) since its start, in case the update ending it is missed.
+    const STUN_MAX = 3300
+    function isStunned(a, t) {
+      if (a.dead) return false
+      if (a.stunUntil > t) return true
+      const s = a.u.stunned
+      if (!s) return false
+      const age = Date.now() - s
+      return age < STUN_MAX && (a.stunSeen === s || age > 1000)
+    }
+    function stunFrame(a, t) {
+      const on = isStunned(a, t)
+      if (!on && !a.stars?.visible) return
+      if (!a.stars) {
+        a.stars = new P.Container()
+        for (let k = 0; k < 3; k++) {
+          const s = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18, fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
+          s.anchor.set(0.5)
+          a.stars.addChild(s)
+        }
+        a.cont.addChild(a.stars)
+        a.stars.alpha = 0
+      }
+      // (fading in and out over a fifth of a second)
+      a.stars.visible = true
+      a.stars.alpha = Math.max(0, Math.min(1, a.stars.alpha + (on ? dt : -dt) * 5))
+      if (!on && a.stars.alpha <= 0) return void (a.stars.visible = false)
+      a.stars.children.forEach((s, k) => {
+        const an = (t * Math.PI) / 300 + (k * Math.PI * 2) / 3
+        s.position.set(Math.cos(an) * a.h * 0.28, -a.h * 1.02 + Math.sin(an) * a.h * 0.07)
+        s.scale.set(Math.sin(an) > 0 ? 1 : 0.75)
       })
     }
     function die(a) {
@@ -11121,6 +11144,7 @@ void main(){
             if (a.rig.arms.length) rigArms(a)
           }
           statusFrame(a, t)
+          stunFrame(a, t)
         }
       trails(t)
       // camera: shake and a short zoom punch toward the middle
