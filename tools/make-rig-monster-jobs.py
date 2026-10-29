@@ -117,6 +117,9 @@ BLOB_TRUNK = (
 )
 PROMPT[("seg", "blob")] = HEAD + REF + BLOB
 PROMPT[("trunk", "blob")] = HEAD + REF + BLOB_TRUNK
+# a fish (tmpl fish): cut the same way, its fins and tail the appendages
+PROMPT[("seg", "fish")] = PROMPT[("seg", "blob")]
+PROMPT[("trunk", "fish")] = PROMPT[("trunk", "blob")]
 PROMPT[("seg", "fly")] = HEAD + REF + FLY
 PROMPT[("trunk", "fly")] = HEAD + REF + FLY_TRUNK
 PROMPT[("seg", "quad")] = HEAD + REF + QUAD

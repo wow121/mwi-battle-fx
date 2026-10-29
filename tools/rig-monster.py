@@ -122,7 +122,9 @@ if FLY:
 # a limbless one (tmpl blob): the map's arm colours are its loose appendages (tentacles, stalks, hands, a flag), in front
 # (blue) and behind (cyan), each piece its own part swaying on its root; yellow a top piece of its own (a lid, a cap, a
 # head on a neck) turning on where it meets the body, which is drawn without it; the rest one body
-BLOB = OVER.get("tmpl") == "blob"
+# (a fish, tmpl fish, is cut the same way: its fins and tail the appendages; it swims, turning about its middle)
+BLOB = OVER.get("tmpl") in ("blob", "fish")
+FISH = OVER.get("tmpl") == "fish"
 limbs = {}
 if BLOB:
     limbs = {"limb_n": mask["arm_l"].copy(), "limb_f": mask["arm_r"].copy()}
@@ -283,7 +285,7 @@ if QUAD and (mask["leg_l"] | mask["leg_r"]).any():
     pivots["trunk"] = [int(np.median(lx)), int(ly.min())]
 # (a limbless one's: its bottom middle, it squashes and leans from the ground)
 if BLOB:
-    pivots["trunk"] = [int(np.median(tx)), int(ty.max())]
+    pivots["trunk"] = [int(np.median(tx)), int(np.median(ty))] if FISH else [int(np.median(tx)), int(ty.max())]
 if mask["head"].any():
     b = mask["head"] & grow(trunk, 3)
     hy, hx = np.where(b if b.any() else mask["head"])
@@ -415,6 +417,8 @@ if two:
 # a flier hangs this far (in heights) above the ground
 if FLY:
     rig["hover"] = 0.35
+if FISH:
+    rig["hover"] = 0.15
 if OVER.get("hover"):
     rig["hover"] = OVER["hover"]
 # (a stiff top piece turns only this share of the way: a rook's tower)
@@ -422,11 +426,11 @@ if OVER.get("headk") is not None:
     rig["headk"] = OVER["headk"]
 # fallen on its back (the torso turned 86 degrees back about its pivot, everything on it along): how far it would
 # sink below its feet' line, in heights; the engine lifts it by that much to lie on the ground (rig.json lie)
-if not QUAD and not BLOB:
+if not QUAD and (not BLOB or FISH):
     by, bx = np.where(fg & ~mask["float"])
     px, py = pivots["trunk"]
     # (a flier falls belly up)
-    t = np.radians(170 if FLY else 86)
+    t = np.radians(170 if FLY or FISH else 86)
     low = (py + (bx - px) * np.sin(t) + (by - py) * np.cos(t)).max()
     rig["lie"] = round(float(low - foot_y) / rig["h"], 3)
 # a beast's legs as a share of its height (lying down it sinks by about that much)

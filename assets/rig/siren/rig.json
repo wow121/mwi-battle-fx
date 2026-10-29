@@ -1,0 +1,41 @@
+{
+ "foot": [
+  241,
+  331
+ ],
+ "h": 236,
+ "tmpl": "fish",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    87,
+    117
+   ],
+   "at": [
+    198,
+    210
+   ],
+   "z": 3,
+   "sign": -1
+  },
+  "limb_n1": {
+   "img": "limb_n1.webp",
+   "pivot": [
+    21,
+    16
+   ],
+   "at": [
+    241,
+    277
+   ],
+   "z": 6.0,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 0.9
+  }
+ },
+ "hover": 0.15,
+ "lie": -0.028
+}

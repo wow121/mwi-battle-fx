@@ -158,5 +158,17 @@
  "enchanted_rook": {
   "tmpl": "blob",
   "headk": 0.25
+ },
+ "nom_nom": {
+  "tmpl": "fish"
+ },
+ "aquahorse": {
+  "tmpl": "fish"
+ },
+ "marine_huntress": {
+  "tmpl": "fish"
+ },
+ "siren": {
+  "tmpl": "fish"
  }
 }
