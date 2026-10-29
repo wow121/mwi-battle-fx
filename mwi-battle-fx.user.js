@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.39
+// @version      0.21.40
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "86668f9cd5"
+  const ASSET_REV = "890929430f"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -6346,6 +6346,8 @@
     const rigged = () => {
       const all = Assets.list("rig").filter(id => MONSTERS[id])
       const here = all.filter(id => LOCATIONS[st.loc]?.[1].includes(id))
+      // (st.ids: a given list, for checking a batch)
+      if (st.ids) return st.ids.filter(id => all.includes(id)).slice(0, 6)
       return (here.length ? here : all).slice(0, 6)
     }
 
@@ -7722,6 +7724,18 @@ void main(){
     }
     // a beast that rakes or slams also bites
     MT["quad:slash"].attack2 = MT["quad:smash"].attack2 = MT["quad:stab"].attack
+    // a beast that shoots or casts: the head drawn back and thrust at the foe, the shot (quills, spit, a spell) from its mouth
+    MT["quad:ranged"] = {
+      attack: {
+        dur: 950, shot: 470, hit: 690, missile: "orb", from: "head",
+        keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -10, head: -25, leg_fn: 10 }, x: -0.03 }, { t: 470, e: "in", a: { torso: 8, head: 22, leg_fn: -5, leg_bn: -8 }, x: 0.03 }, { t: 720, a: { torso: 7, head: 20 }, x: 0.03 }, { t: 950, a: {} }],
+      },
+      skill: {
+        dur: 1250, shot: 760, hit: 1000, missile: "orb", from: "head",
+        keys: [{ t: 0, a: {} }, { t: 620, e: "out", a: { torso: -20, head: -32, leg_fn: 25, leg_ff: 15 }, x: -0.04 }, { t: 760, e: "in", a: { torso: 10, head: 26, leg_fn: 5, leg_bn: -10 }, x: 0.05 }, { t: 1000, a: { torso: 9, head: 24 }, x: 0.05 }, { t: 1250, a: {} }],
+      },
+    }
+    MT["quad:magic"] = MT["quad:ranged"]
     // a monster's set: its template, its style's attacks, then its own entries. Directions become turns from its rest
     // (rig.json aim: an arm's from shoulder to fist, a weapon's from grip to tip): the arm turns to its direction and
     // the wrist turns the weapon to its own; a two-handed weapon (rig.json two) keeps its grip, the arms turn it to its
@@ -7755,6 +7769,8 @@ void main(){
           }
           if (def.two) a.arm_o = a.arm_m
           if (!act.fall && t) for (const n of Object.keys(P)) if (n.startsWith("leg")) a[n] = (a[n] || 0) + t
+          // lying down, a beast sinks by its legs' length (rig.json legs; the template's -0.2 is for a bear's)
+          if (act.fall && k.y < 0 && def.legs) k.y = (k.y * def.legs) / 0.45
         }
         // whole turns taken off so the first move leaves the rest the short way round (the rest of the action follows on)
         if (!act.rel)
@@ -8659,11 +8675,11 @@ void main(){
           const fwd = R.def.face === "right" ? 1 : -1
           // a floating hand also moves by its own [forward, up]
           q.x = q.p.at[0] - R.def.foot[0] + (pose.x + v[0]) * h * fwd
-          // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead (an action's
-          // lift, in heights: less for a body turning about the hem of a robe)
+          // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead (in a fall by
+          // rig.json lie, worked out from its shape, which a body on long legs may make negative; else the action's lift)
           const tip = Math.max(0, Math.min(1, (Math.abs(pose.a.body || pose.a.torso || 0) - 30) / 58))
           // (a fall may sink below the feet' line: a beast lying down with its legs folded)
-          q.y = q.p.at[1] - R.def.foot[1] - ((A?.def.fall ? pose.y : Math.max(0, pose.y)) + v[1] + (A?.def.lift ?? 0.3) * tip) * h
+          q.y = q.p.at[1] - R.def.foot[1] - ((A?.def.fall ? pose.y : Math.max(0, pose.y)) + v[1] + (A?.def.fall && R.def.lie != null ? R.def.lie : A?.def.lift ?? 0.3) * tip) * h
           q.wr = r + q.rest
           // something floating round a monster (rig.json float = its phase): bobs on its own, gone when it falls
           if (q.p.float != null) {
@@ -9495,6 +9511,14 @@ void main(){
       const g = sp.toGlobal(new P.Point(q.p.pivot[0] + (q.tip[0] - q.p.pivot[0]) * inner, q.p.pivot[1] + (q.tip[1] - q.p.pivot[1]) * inner))
       return world.toLocal(g)
     }
+    // a beast's mouth (act.from "head": what it spits or breathes leaves from there): the front of its head piece, low
+    function mouthOf(a) {
+      const q = a.rig?.by.head
+      if (!q || a.rig.fallen) return null
+      const sp = q.s.children[0]
+      // (rig art faces left: the front is the piece's left edge)
+      return world.toLocal(sp.toGlobal(new P.Point(sp.texture.width * 0.1, sp.texture.height * 0.6)))
+    }
     // a hand's place in world coordinates (a bow's grip: where its arrows leave from)
     function handOf(a, name) {
       const q = a.rig?.by[name]
@@ -10240,7 +10264,7 @@ void main(){
           // the skill's name pops up, the blade gathers light before the release
           banner(src, e.ab.name || "", tcol)
           const charge = Math.max(200, at * 0.6)
-          gather(() => (act?.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src), tcol, src.h, charge)
+          gather(() => (act?.from === "ho" ? handOf(src, "ho") : act?.from === "head" ? mouthOf(src) : tipOf(src)) || mid(src), tcol, src.h, charge)
           later(charge * 0.5, () => {
             const tp = tipOf(src)
             if (tp) light(tp.x, tp.y, tcol, src.h * 0.5, charge, 1.2)
@@ -10258,7 +10282,7 @@ void main(){
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
           const opt = { color: kind !== "arrow" ? (isSkill ? tcol : color) : tcol, big: isSkill, h: src.h, element: e.element, onFly: recipe?.fly && (q => recipe.fly(q, src)) }
-          const fromOf = () => (act.from === "ho" ? handOf(src, "ho") : tipOf(src)) || mid(src)
+          const fromOf = () => (act.from === "ho" ? handOf(src, "ho") : act.from === "head" ? mouthOf(src) : tipOf(src)) || mid(src)
           // earlier shots of a volley (shots: [ms, …]): each flies as long as the last, the foe flinches where it lands
           for (const t of act.shots || [])
             later(t, () =>
