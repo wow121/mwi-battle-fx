@@ -90,6 +90,33 @@ FLY_TRUNK = (
     "Background: perfectly flat {bg} everywhere outside the creature. No text, no shadow, no floor. Do not use {bg} on the creature.\n"
     "Output: square, same framing as image 1.\n"
 )
+# a limbless one (tmpl blob: slimes, eyes, jellyfish, a snake, a chest): one body that squashes and stretches, maybe a top
+# piece of its own (a lid, a cap, a head on a long neck) and loose appendages swaying on their roots; which is which
+# this monster's note (hints.tsv) says
+BLOB = (
+    "Task: make a PART MAP of it for a cutout puppet (Spine-style rig). Trace the creature EXACTLY: same outline, same size, same position, "
+    "so the map lies over image 1 pixel for pixel. Fill every part of it with ONE perfectly flat colour by which part it belongs to "
+    "(no shading, no outlines, no details, no anti-aliasing between parts):\n"
+    "- RED #FF0000: the main body, everything not named below.\n"
+    "- YELLOW #FFFF00: the TOP PIECE named in the note below, whole (only if the note names one; else do not use yellow).\n"
+    "- BLUE #0000FF: each loose APPENDAGE named in the note (tentacle, stalk, antenna, thin leg, hand, flag) that is drawn IN FRONT of "
+    "the body or beside it, each one whole from where it joins the body to its tip.\n"
+    "- CYAN #00FFFF: each such appendage drawn BEHIND the body (partly hidden by it).\n"
+    "- ORANGE #FF8000: anything floating in the air around it, not touching it (drops, sparks), each whole.\n"
+    "Where one part covers another, paint only the part on top (as it appears in image 1).\n"
+    "Background: perfectly flat black #000000 everywhere outside the creature. No text, no labels.\n"
+    "Output: square, same framing as image 1.\n"
+)
+BLOB_TRUNK = (
+    "Task: redraw it as the BODY PIECE of a cutout puppet: the same creature with the parts named in the note below taken off (and "
+    "anything floating around it removed). Keep everything else exactly as in image 1, pixel for pixel where it is visible. Where the "
+    "removed parts covered the body, complete the body naturally: continue its colours, pattern, shading and outline, with a smooth "
+    "rounded edge where they joined it. Same size, same position, same view; nothing new added.\n"
+    "Background: perfectly flat {bg} everywhere outside the creature. No text, no shadow, no floor. Do not use {bg} on the creature.\n"
+    "Output: square, same framing as image 1.\n"
+)
+PROMPT[("seg", "blob")] = HEAD + REF + BLOB
+PROMPT[("trunk", "blob")] = HEAD + REF + BLOB_TRUNK
 PROMPT[("seg", "fly")] = HEAD + REF + FLY
 PROMPT[("trunk", "fly")] = HEAD + REF + FLY_TRUNK
 PROMPT[("seg", "quad")] = HEAD + REF + QUAD

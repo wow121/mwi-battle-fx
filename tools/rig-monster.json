@@ -107,5 +107,56 @@
  },
  "luna_empress": {
   "tmpl": "fly"
+ },
+ "slimy": {
+  "tmpl": "blob"
+ },
+ "eye": {
+  "tmpl": "blob"
+ },
+ "eyes": {
+  "tmpl": "blob"
+ },
+ "veyes": {
+  "tmpl": "blob"
+ },
+ "the_watcher": {
+  "tmpl": "blob"
+ },
+ "snake": {
+  "tmpl": "blob"
+ },
+ "trial_jellyfish": {
+  "tmpl": "blob",
+  "hover": 0.25
+ },
+ "the_kraken": {
+  "tmpl": "blob"
+ },
+ "swampy": {
+  "tmpl": "blob"
+ },
+ "sea_snail": {
+  "tmpl": "blob"
+ },
+ "soul_hunter": {
+  "tmpl": "blob"
+ },
+ "stalactite_golem": {
+  "tmpl": "blob"
+ },
+ "myconid": {
+  "tmpl": "blob"
+ },
+ "mimic": {
+  "tmpl": "blob",
+  "hinge": "back"
+ },
+ "deranged_jester": {
+  "tmpl": "blob"
+ },
+ "enchanted_rook": {
+  "tmpl": "blob",
+  "headk": 0.25
  }
 }

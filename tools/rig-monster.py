@@ -119,6 +119,17 @@ if FLY:
     for n in ("leg_l", "leg_r", "weapon", "head"):
         mask["trunk"] |= mask[n]
         mask[n][:] = False
+# a limbless one (tmpl blob): the map's arm colours are its loose appendages (tentacles, stalks, hands, a flag), in front
+# (blue) and behind (cyan), each piece its own part swaying on its root; yellow a top piece of its own (a lid, a cap, a
+# head on a neck) turning on where it meets the body, which is drawn without it; the rest one body
+BLOB = OVER.get("tmpl") == "blob"
+limbs = {}
+if BLOB:
+    limbs = {"limb_n": mask["arm_l"].copy(), "limb_f": mask["arm_r"].copy()}
+    mask["arm_l"][:] = mask["arm_r"][:] = False
+    for n in ("leg_l", "leg_r", "weapon"):
+        mask["trunk"] |= mask[n]
+        mask[n][:] = False
 print("parts", {n: int(m.sum()) for n, m in mask.items() if m.any()})
 
 # ----- roles -----
@@ -221,7 +232,14 @@ if QUAD:
 
 # ----- the trunk completed under what covers it: the Codex trunk piece (the monster with arms, held object and
 # legs taken off), its colours matched to the original; the original pixels wherever the trunk shows -----
-trunk = mask["trunk"] | (mask["head"] if not QUAD else False)
+# (a small scrap of an appendage stays on the body)
+if BLOB:
+    for g in limbs.values():
+        for c in pieces(g) if g.any() else []:
+            if c.sum() < fg.sum() * 0.004:
+                g &= ~c
+                mask["trunk"] |= c
+trunk = mask["trunk"] | (mask["head"] if not (QUAD or BLOB) else False)
 tp = Image.open(A.trunk).convert("RGB").resize((W, H), Image.LANCZOS)
 tq = np.asarray(tp).astype(np.float32)
 # its background: the key colour of its corners
@@ -237,9 +255,9 @@ if both.sum() > 200:
         fit[..., c] = np.clip(tq[..., c] * a_ + b_, 0, 255)
 # only what something covered and the piece fills, near the trunk (the piece may be off by a few pixels)
 cover = np.zeros_like(fg)
-for n in arms + ["weapon", "weapon2", "leg_l", "leg_r", "float"] + (["head"] if QUAD else []):
+for n in arms + ["weapon", "weapon2", "leg_l", "leg_r", "float"] + (["head"] if QUAD or BLOB else []):
     cover |= mask[n]
-for m in wings.values():
+for m in [*wings.values(), *limbs.values()]:
     cover |= m
 f = sil & ~trunk & (cover | ~fg) & grow(trunk, 40)
 tr = im.copy()
@@ -263,10 +281,17 @@ if FLY:
 if QUAD and (mask["leg_l"] | mask["leg_r"]).any():
     ly, lx = np.where(mask["leg_l"] | mask["leg_r"])
     pivots["trunk"] = [int(np.median(lx)), int(ly.min())]
+# (a limbless one's: its bottom middle, it squashes and leans from the ground)
+if BLOB:
+    pivots["trunk"] = [int(np.median(tx)), int(ty.max())]
 if mask["head"].any():
     b = mask["head"] & grow(trunk, 3)
     hy, hx = np.where(b if b.any() else mask["head"])
     pivots["head"] = [int(np.median(hx)), int(np.median(hy))]
+    # (a lid turns on its hinge: the back end of where it meets the body)
+    if OVER.get("hinge") == "back" and b.any():
+        sel = hx >= hx.max() - 4
+        pivots["head"] = [int(hx.max()), int(np.median(hy[sel]))]
 for n in arms if not QUAD else []:
     ay, ax = np.where(mask[n])
     top = ay.min() + (ay.max() - ay.min()) * 0.18
@@ -342,6 +367,26 @@ for pre, group in wings.items():
         z[n] = 6 + k * 0.1 if pre == "wing_n" else 1 + k * 0.1
         parent[n] = "trunk"
         pix[n] = (c, im)
+# a limbless one's appendages: each piece its own part on its root (limb_n*, in front of the body; limb_f*, behind),
+# swaying in the engine (rig.json sway = its phase); sign: + swings its tip toward the foe, hanging or standing up
+limb_sign = {}
+for pre, group in limbs.items():
+    for k, c in enumerate(pieces(group) if group.any() else []):
+        n = f"{pre}{k + 1}"
+        root = c & grow(trunk | mask["head"], 3)
+        cy, cx = np.where(c)
+        if root.any():
+            ry, rx = np.where(root)
+            pivots[n] = [int(np.median(rx)), int(np.median(ry))]
+        else:
+            j = np.argmin((cx - pivots["trunk"][0]) ** 2 + (cy - pivots["trunk"][1]) ** 2)
+            pivots[n] = [int(cx[j]), int(cy[j])]
+        role[n] = n
+        z[n] = 6 + k * 0.1 if pre == "limb_n" else 1 + k * 0.1
+        # (one growing from the top piece moves with it)
+        parent[n] = "head" if mask["head"].any() and (c & grow(mask["head"], 3)).sum() > (c & grow(trunk, 3)).sum() else "trunk"
+        pix[n] = (c, im)
+        limb_sign[n] = 1 if cy.mean() > pivots[n][1] else -1
 # things floating round it: each piece its own part (float1, float2 …), bobbing on its own (rig.json float = its phase)
 # (a floating thing stands apart from the monster in the original, mostly empty round it; anything else marked so is
 # the map's blend of two parts, red and yellow anti-alias to orange, and goes to the part it borders most)
@@ -370,9 +415,14 @@ if two:
 # a flier hangs this far (in heights) above the ground
 if FLY:
     rig["hover"] = 0.35
+if OVER.get("hover"):
+    rig["hover"] = OVER["hover"]
+# (a stiff top piece turns only this share of the way: a rook's tower)
+if OVER.get("headk") is not None:
+    rig["headk"] = OVER["headk"]
 # fallen on its back (the torso turned 86 degrees back about its pivot, everything on it along): how far it would
 # sink below its feet' line, in heights; the engine lifts it by that much to lie on the ground (rig.json lie)
-if not QUAD:
+if not QUAD and not BLOB:
     by, bx = np.where(fg & ~mask["float"])
     px, py = pivots["trunk"]
     # (a flier falls belly up)
@@ -384,6 +434,11 @@ if QUAD:
     tops = [pivots[n][1] for n in ("arm_l", "arm_r", "leg_l", "leg_r") if n in pivots]
     if tops:
         rig["legs"] = round((foot_y - float(np.mean(tops))) / rig["h"], 3)
+
+
+def k_sway(n):
+    # each appendage a little behind the one before it (a wave along a row of tentacles), the far ones on the other beat
+    return int(n[6:]) * 0.9 + (0 if n.startswith("limb_n") else 2.2)
 
 
 def aim(piv, m):
@@ -433,10 +488,13 @@ for n, (m, src_im) in pix.items():
     if n == "trunk":
         q["sign"] = -1
     # a beast's head nods down with +
-    if QUAD and n == "head":
+    if (QUAD or BLOB) and n == "head":
         q["sign"] = -1
     if n.startswith("wing"):
         q["wing"] = 0 if n.startswith("wing_n") else 0.7
+    if n.startswith("limb"):
+        q["sign"] = limb_sign[n]
+        q["sway"] = round(k_sway(n), 2)
     if n.startswith("float"):
         q["float"] = round(float(np.random.default_rng(len(rig["parts"])).uniform(0, 6.28)), 2)
     rig["parts"][nm] = q

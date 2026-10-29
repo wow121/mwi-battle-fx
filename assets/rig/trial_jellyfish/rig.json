@@ -1,0 +1,175 @@
+{
+ "foot": [
+  174,
+  336
+ ],
+ "h": 248,
+ "tmpl": "blob",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    98,
+    184
+   ],
+   "at": [
+    224,
+    269
+   ],
+   "z": 3,
+   "sign": -1
+  },
+  "limb_n1": {
+   "img": "limb_n1.webp",
+   "pivot": [
+    101,
+    23
+   ],
+   "at": [
+    207,
+    179
+   ],
+   "z": 6.0,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 0.9
+  },
+  "limb_n2": {
+   "img": "limb_n2.webp",
+   "pivot": [
+    46,
+    11
+   ],
+   "at": [
+    171,
+    159
+   ],
+   "z": 6.1,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 1.8
+  },
+  "limb_n3": {
+   "img": "limb_n3.webp",
+   "pivot": [
+    8,
+    24
+   ],
+   "at": [
+    245,
+    204
+   ],
+   "z": 6.2,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 2.7
+  },
+  "limb_n4": {
+   "img": "limb_n4.webp",
+   "pivot": [
+    2,
+    21
+   ],
+   "at": [
+    256,
+    269
+   ],
+   "z": 6.3,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 3.6
+  },
+  "limb_n5": {
+   "img": "limb_n5.webp",
+   "pivot": [
+    6,
+    4
+   ],
+   "at": [
+    233,
+    180
+   ],
+   "z": 6.4,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 4.5
+  },
+  "limb_f1": {
+   "img": "limb_f1.webp",
+   "pivot": [
+    17,
+    6
+   ],
+   "at": [
+    238,
+    179
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 3.1
+  },
+  "limb_f2": {
+   "img": "limb_f2.webp",
+   "pivot": [
+    56,
+    7
+   ],
+   "at": [
+    187,
+    153
+   ],
+   "z": 1.1,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 4.0
+  },
+  "limb_f3": {
+   "img": "limb_f3.webp",
+   "pivot": [
+    14,
+    74
+   ],
+   "at": [
+    168,
+    284
+   ],
+   "z": 1.2,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 4.9
+  },
+  "limb_f4": {
+   "img": "limb_f4.webp",
+   "pivot": [
+    5,
+    47
+   ],
+   "at": [
+    199,
+    240
+   ],
+   "z": 1.3,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 5.8
+  },
+  "limb_f5": {
+   "img": "limb_f5.webp",
+   "pivot": [
+    20,
+    7
+   ],
+   "at": [
+    127,
+    206
+   ],
+   "z": 1.4,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 6.7
+  }
+ },
+ "hover": 0.25
+}

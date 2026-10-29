@@ -1,0 +1,63 @@
+{
+ "foot": [
+  239,
+  332
+ ],
+ "h": 201,
+ "tmpl": "blob",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    128,
+    203
+   ],
+   "at": [
+    206,
+    332
+   ],
+   "z": 3,
+   "sign": -1
+  },
+  "float1": {
+   "img": "float1.webp",
+   "pivot": [
+    14,
+    15
+   ],
+   "at": [
+    88,
+    166
+   ],
+   "z": 7,
+   "float": 3.21
+  },
+  "float2": {
+   "img": "float2.webp",
+   "pivot": [
+    14,
+    14
+   ],
+   "at": [
+    238,
+    319
+   ],
+   "z": 7,
+   "float": 1.64
+  },
+  "float3": {
+   "img": "float3.webp",
+   "pivot": [
+    14,
+    13
+   ],
+   "at": [
+    293,
+    145
+   ],
+   "z": 7,
+   "float": 0.54
+  }
+ }
+}

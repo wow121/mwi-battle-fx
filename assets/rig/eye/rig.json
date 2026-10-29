@@ -1,0 +1,24 @@
+{
+ "foot": [
+  216,
+  331
+ ],
+ "h": 229,
+ "tmpl": "blob",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    98,
+    231
+   ],
+   "at": [
+    207,
+    331
+   ],
+   "z": 3,
+   "sign": -1
+  }
+ }
+}
