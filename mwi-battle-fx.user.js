@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.52
+// @version      0.21.53
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "1fb57d3514"
+  const ASSET_REV = "30fb139b64"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -8507,7 +8507,15 @@ void main(){
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
-      resizer = new ResizeObserver(() => requestAnimationFrame(layout))
+      // (the canvas follows its box whenever the box changes size: PixiJS's own resizeTo only listens for the window's
+      // resize event, and the game lays its battle panel out by itself, before or after that event or without one)
+      resizer = new ResizeObserver(() =>
+        requestAnimationFrame(() => {
+          if (!app || !host) return
+          if (app.screen.width !== host.clientWidth || app.screen.height !== host.clientHeight) app.renderer.resize(host.clientWidth, host.clientHeight)
+          layout()
+        }),
+      )
       resizer.observe(view)
       // (closed while PixiJS was loading)
       if (host !== view) return close()
@@ -8537,7 +8545,6 @@ void main(){
     function freshen() {
       if (!stale || !onScreen()) return
       stale = false
-      tweens.length = 0
       sync()
     }
     // the real battle's actions: its line-up first brought up to date (a unit joined, a wave came in)
@@ -8591,12 +8598,41 @@ void main(){
       if (name) P.Assets.load(Assets.url("bg/" + name + ".webp")).then(tex => ((bg.texture = tex), layout()))
     }
     let syncing = 0
+    // a unit taken down with its GPU filters (its body shader, buff glows, enhancement glows): left behind, every
+    // set-up again would pile more of them up until the WebGL context gives out
+    function teardown(a) {
+      const fs = new Set([a.filter, ...(a.rig?.root.filters || []), ...(a.ench || []).map(g => g.f)])
+      a.cont.destroy({ children: true })
+      for (const f of fs) f?.destroy?.()
+    }
+    // every effect still on the stage finished at once and swept away (its last step is what removes it: an effect
+    // left half way, or whose unit is gone, would stay on the stage for good)
+    function clearFx() {
+      for (const w of tweens.splice(0))
+        if (w.dur)
+          try {
+            w.f(1)
+          } catch (e) {}
+      for (const q of parts.splice(0)) q.s.destroy()
+      for (const layer of [fxLayer, shotLayer, partLayer, textLayer, lights, decalLayer, smokeLayer])
+        for (const c of layer.removeChildren()) if (c !== trailG) c.destroy({ children: true })
+      if (trailG) fxLayer.addChild(trailG)
+      worldFx.clear()
+      setWorldFx()
+      hazeFx.clear()
+      setHazeFx()
+      shock = null
+      focus = null
+      slowUntil = 0
+      punch = shake = dim = 0
+    }
     async function sync() {
       if (!app || !source) return
       const run = ++syncing
       background()
+      clearFx()
       for (const side of ["p", "m"]) {
-        units[side].forEach(a => a.cont.destroy({ children: true }))
+        units[side].forEach(teardown)
         units[side] = []
       }
       for (const side of ["p", "m"]) source.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
@@ -8900,6 +8936,8 @@ void main(){
       return { def, tex }
     }
     function buildRig(a, { def, tex }) {
+      // (the old body's glow filters freed with it; its body shader a.filter goes on to the new one)
+      for (const f of [...(a.rig?.root.filters || []), ...(a.ench || []).map(g => g.f)]) if (f !== a.filter) f?.destroy?.()
       a.rig?.root.destroy({ children: true })
       const root = new P.Container()
       const list = Object.entries(def.parts)
@@ -10413,6 +10451,7 @@ void main(){
       const key = glows.join()
       if (key !== a.glowKey) {
         a.glowKey = key
+        for (const f of a.rig.root.filters || []) if (f !== a.filter) f.destroy()
         a.rig.root.filters = [a.filter, ...glows.map((k, n) => new F.GlowFilter({ distance: 10 + n * 6, outerStrength: 2.2, color: BUFF_C[k], quality: 0.2 }))]
       }
       // the enhancement glow breathes from +10, cycles the rainbow from +15
@@ -11019,7 +11058,9 @@ void main(){
         try {
           w.f(p)
         } catch (e) {
-          console.warn("[动画测试]", e)
+          console.warn("[战斗动画]", e)
+          tweens.splice(k--, 1)
+          continue
         }
         if (p >= 1) tweens.splice(k--, 1)
       }
@@ -11105,7 +11146,9 @@ void main(){
     }
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
-    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn }
+    // (what is on the stage right now: for checking that effects go away and nothing piles up)
+    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started }
+    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats }
   })()
 
   // #dev-start
