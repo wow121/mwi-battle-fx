@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.51
+// @version      0.21.52
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "6a982837f0"
+  const ASSET_REV = "1fb57d3514"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7577,49 +7577,6 @@ void main(){
           ],
         },
       },
-      // a heavy monster after Lost Castle's granite giant: a slow wind-up, a fast blow, a long hold
-      magnetic_golem: {
-        idle: { dur: 2000, loop: true, keys: [{ t: 0, a: { arm_f: 3, arm_b: -2 } }, { t: 1000, a: { torso: 2, head: -3, arm_f: -2, arm_b: 3 }, y: -0.01 }, { t: 2000, a: { arm_f: 3, arm_b: -2 } }] },
-        // 普攻 1: the red fist drawn back to the chest, then a straight punch with the whole body behind it
-        attack: {
-          dur: 1150, hit: 620, lunge: true,
-          keys: [
-            { t: 0, a: {} },
-            { t: 450, e: "out", a: { torso: -10, head: -6, arm_f: -55, arm_b: 12, leg_f: -5 }, x: -0.03 },
-            { t: 540, a: { torso: -11, head: -7, arm_f: -60, arm_b: 14, leg_f: -6 }, x: -0.035 },
-            { t: 620, e: "in", a: { torso: 16, head: 10, arm_f: 95, arm_b: -15, leg_f: 10, leg_b: -6 }, x: 0.08 },
-            { t: 880, a: { torso: 15, head: 9, arm_f: 92, arm_b: -14, leg_f: 9, leg_b: -5 }, x: 0.075 },
-            { t: 1150, a: {} },
-          ],
-        },
-        // 普攻 2: both fists raised in front up over the head, brought down together (+ is forward: 220 is
-        // overhead reached the front way, so the slam comes over the top, not round from behind)
-        attack2: {
-          dur: 1200, hit: 650, ring: 650, lunge: true,
-          keys: [
-            { t: 0, a: {} },
-            { t: 480, e: "out", a: { torso: -12, head: -12, arm_f: 220, arm_b: 210 }, y: 0.03 },
-            { t: 570, a: { torso: -13, head: -13, arm_f: 225, arm_b: 215 }, y: 0.04 },
-            { t: 650, e: "in", a: { torso: 20, head: 12, arm_f: 45, arm_b: 40, leg_f: 8, leg_b: -8 }, x: 0.05 },
-            { t: 920, a: { torso: 18, head: 10, arm_f: 42, arm_b: 38, leg_f: 7, leg_b: -7 }, x: 0.045 },
-            { t: 1200, a: {} },
-          ],
-        },
-        // 眩晕重击 (its only ability): the red fist raised high and held, then hammered down on the target's head
-        "skill:stunning_blow": {
-          dur: 1550, hit: 850, ring: 850, lunge: true,
-          keys: [
-            { t: 0, a: {} },
-            { t: 550, e: "out", a: { torso: -14, head: -12, arm_f: 200, arm_b: -25, leg_f: -6 }, x: -0.04, y: 0.02 },
-            { t: 720, a: { torso: -16, head: -14, arm_f: 205, arm_b: -28, leg_f: -7 }, x: -0.045, y: 0.03 },
-            { t: 850, e: "in", a: { torso: 24, head: 14, arm_f: 70, arm_b: 10, leg_f: 12, leg_b: -8 }, x: 0.09 },
-            { t: 1200, a: { torso: 22, head: 12, arm_f: 66, arm_b: 8, leg_f: 11, leg_b: -7 }, x: 0.085 },
-            { t: 1550, a: {} },
-          ],
-        },
-        hurt: { dur: 520, keys: [{ t: 0, a: {} }, { t: 90, e: "out", a: { torso: -14, head: -18, arm_f: -25, arm_b: 30, leg_f: -6 }, x: -0.04 }, { t: 240, a: { torso: -10, head: -12, arm_f: 15, arm_b: -20 }, x: -0.035 }, { t: 520, a: {} }] },
-        cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -10, arm_f: -90, arm_b: -100 } }, { t: 700, a: { torso: -6, head: -10, arm_f: -95, arm_b: -105 } }, { t: 1000, a: {} }] },
-      },
     }
     ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
     // ----- monster templates (rig.json tmpl, cut by tools/rig-monster.py): one set per body shape, the attacks by the
@@ -10002,8 +9959,10 @@ void main(){
     // the weapon's tip and grip in world coordinates (null without a weapon)
     function tipOf(a, inner = 1) {
       const q = a.rig?.by[a.act?.def.tip === "off" ? "off" : "weapon"]
-      if (!q?.tip || a.rig.fallen) return null
+      // (a unit set up again while something still follows it, a skill's motes drawn to its blade: gone)
+      if (!q?.tip || a.rig.fallen || q.s.destroyed) return null
       const sp = q.s.children[0]
+      if (!sp) return null
       const g = sp.toGlobal(new P.Point(q.p.pivot[0] + (q.tip[0] - q.p.pivot[0]) * inner, q.p.pivot[1] + (q.tip[1] - q.p.pivot[1]) * inner))
       return world.toLocal(g)
     }
@@ -10011,15 +9970,16 @@ void main(){
     function mouthOf(a) {
       // (a fish without a head of its own: the front of its body)
       const q = a.rig?.by.head || (a.rig?.def.tmpl === "fish" && a.rig.by.torso)
-      if (!q || a.rig.fallen) return null
+      if (!q || a.rig.fallen || q.s.destroyed) return null
       const sp = q.s.children[0]
+      if (!sp) return null
       // (rig art faces left: the front is the piece's left edge)
       return world.toLocal(sp.toGlobal(new P.Point(sp.texture.width * 0.1, sp.texture.height * 0.6)))
     }
     // a hand's place in world coordinates (a bow's grip: where its arrows leave from)
     function handOf(a, name) {
       const q = a.rig?.by[name]
-      if (!q || a.rig.fallen) return null
+      if (!q || a.rig.fallen || q.s.destroyed) return null
       return world.toLocal(q.s.toGlobal(new P.Point(0, 0)))
     }
     // a missile from A to B over dur ms along an arc (arc: the rise as a share of the distance): "arrow" (a drawn shaft,
@@ -11037,7 +10997,16 @@ void main(){
       }
     }
 
+    // one frame; an error in it is logged and the next frame goes on (thrown out of the ticker's listener, it would stop
+    // the ticker for good: the stage frozen)
     function frame() {
+      try {
+        frameBody()
+      } catch (e) {
+        console.warn("[战斗动画] frame", e)
+      }
+    }
+    function frameBody() {
       if (stale) freshen()
       const k = performance.now() < slowUntil ? slowK : 1
       clock += Math.min(50, app.ticker.deltaMS) * k
