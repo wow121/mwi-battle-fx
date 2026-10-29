@@ -186,5 +186,14 @@
  },
  "trial_beetle": {
   "tmpl": "bug"
+ },
+ "centaur_archer": {
+  "tmpl": "centaur",
+  "two": false,
+  "z": {
+   "arm_m": 6,
+   "arm_o": 6.2
+  },
+  "reclaim": true
  }
 }

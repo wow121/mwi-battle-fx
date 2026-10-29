@@ -142,6 +142,32 @@ BUG_TRUNK = (
     "Background: perfectly flat {bg} everywhere outside the creature. No text, no shadow, no floor. Do not use {bg} on the creature.\n"
     "Output: square, same framing as image 1.\n"
 )
+# a centaur (tmpl centaur): the human upper body yellow, its arms and bow as a biped's, each horse leg apart
+CENT = (
+    "Task: make a PART MAP of it for a cutout puppet (Spine-style rig). Trace the centaur EXACTLY: same outline, same size, same position, "
+    "so the map lies over image 1 pixel for pixel. Fill every part of it with ONE perfectly flat colour by which part it belongs to "
+    "(no shading, no outlines, no details, no anti-aliasing between parts):\n"
+    "- RED #FF0000: the HORSE body (barrel, rump, chest of the horse) and its tail.\n"
+    "- YELLOW #FFFF00: the HUMAN upper body from the waist up: belly, chest, shoulders, neck, head, face and hair (but not the arms).\n"
+    "- BLUE #0000FF: the arm on the LEFT side of the picture, from the shoulder to the hand.\n"
+    "- CYAN #00FFFF: the arm on the RIGHT side of the picture, from the shoulder to the hand.\n"
+    "- WHITE #FFFFFF: the bow (or whatever it holds), the whole object with its string.\n"
+    "- GREEN #00FF00: each horse leg NEARER to the viewer (drawn over the body), each whole from the body to the hoof.\n"
+    "- MAGENTA #FF00FF: each horse leg FARTHER from the viewer (partly hidden).\n"
+    "Where one part covers another, paint only the part on top (as it appears in image 1).\n"
+    "Background: perfectly flat black #000000 everywhere outside the centaur. No text, no labels.\n"
+    "Output: square, same framing as image 1.\n"
+)
+CENT_TRUNK = (
+    "Task: redraw it as the BODY PIECE of a cutout puppet: the same centaur with its ARMS, the BOW and all FOUR horse LEGS taken off. Keep "
+    "the human upper body (head, face, hair, chest, belly) and the horse body with its tail exactly as in image 1, pixel for pixel where "
+    "they are visible. Where the arms, the bow and the legs covered them, complete them naturally: the bare chest and belly, the shoulders "
+    "rounded off, the horse's side and a smooth belly line where the legs were. Same size, same position, same view; nothing new added.\n"
+    "Background: perfectly flat {bg} everywhere outside the centaur. No text, no shadow, no floor. Do not use {bg} on the centaur.\n"
+    "Output: square, same framing as image 1.\n"
+)
+PROMPT[("seg", "centaur")] = HEAD + REF + CENT
+PROMPT[("trunk", "centaur")] = HEAD + REF + CENT_TRUNK
 PROMPT[("seg", "bug")] = HEAD + REF + BUG
 PROMPT[("trunk", "bug")] = HEAD + REF + BUG_TRUNK
 # a fish (tmpl fish): cut the same way, its fins and tail the appendages
