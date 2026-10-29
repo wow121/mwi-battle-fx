@@ -231,7 +231,7 @@
   5. **Greasy Fork 规定**：确认发布版从 jsDelivr 动态加载 PixiJS（`Arena` 里 `LIBS` + `loadScript`）是否违反 Greasy Fork 规则；
      不允许就改成 `@require`（`tools/build-release.py` 管发布版头部，要和开发版一致地处理），并确认发布版能跑（`SCRIPT=release/... run-mock.sh`）。
 - 测试工具（都不在仓库里）：`~/mwi-art-raw/rig/mon/` 的 `shot.sh` / `shotp.sh` / `drive-mon.mjs` / `drive-pl.mjs` / `drive-fx.mjs`（测试页定格、
-  按按钮连拍）；会话草稿目录里的 `drive-hide.mjs`（切标签）、`drive-stress.mjs`（切 15 轮 + `stats()`）、`drive-resize.mjs` 可以照抄。
+  按按钮连拍）；`~/mwi-art-raw/rig/test/` 的 `drive-hide.mjs`（切标签）、`drive-stress.mjs`（切 15 轮 + `stats()`）、`drive-resize.mjs` 可以照抄。
 
 ## 3. 建议的顺序
 1. A 的武器分组 + 剑盾以外的 2~3 种握法（各自先用试点形象），给用户看。
