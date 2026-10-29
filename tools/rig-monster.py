@@ -123,12 +123,30 @@ if FLY:
 # (blue) and behind (cyan), each piece its own part swaying on its root; yellow a top piece of its own (a lid, a cap, a
 # head on a neck) turning on where it meets the body, which is drawn without it; the rest one body
 # (a fish, tmpl fish, is cut the same way: its fins and tail the appendages; it swims, turning about its middle)
-BLOB = OVER.get("tmpl") in ("blob", "fish")
+# (an arthropod, tmpl bug, too, with more kinds: its pincers / scythe arms in the arm colours, each walking leg its own
+# piece in the leg colours, a scorpion's tail in white; each kind turned by its own action channel)
+BLOB = OVER.get("tmpl") in ("blob", "fish", "bug")
 FISH = OVER.get("tmpl") == "fish"
+BUG = OVER.get("tmpl") == "bug"
 limbs = {}
+# each kind: the map colour, z of its first piece, the action channel all of them follow, the sway's size (degrees) and
+# period (ms / radian), the phase step from one piece to the next
+GROUPS = {
+    "limb_n": ("arm_l", 6, "limbs", None, None, 0.9),
+    "limb_f": ("arm_r", 1, "limbs", None, None, 0.9),
+}
+if BUG:
+    GROUPS = {
+        "claw_n": ("arm_l", 6, "claws", 4, 500, 0.6),
+        "claw_f": ("arm_r", 1, "claws", 4, 500, 0.6),
+        "leg_n": ("leg_l", 5, "legs", 3, 400, 2.0),
+        "leg_f": ("leg_r", 0.5, "legs", 3, 400, 2.0),
+        "tail": ("weapon", 2, "tail", 5, 600, 0.5),
+    }
 if BLOB:
-    limbs = {"limb_n": mask["arm_l"].copy(), "limb_f": mask["arm_r"].copy()}
-    mask["arm_l"][:] = mask["arm_r"][:] = False
+    limbs = {pre: mask[g[0]].copy() for pre, g in GROUPS.items()}
+    for g in GROUPS.values():
+        mask[g[0]][:] = False
     for n in ("leg_l", "leg_r", "weapon"):
         mask["trunk"] |= mask[n]
         mask[n][:] = False
@@ -371,8 +389,9 @@ for pre, group in wings.items():
         pix[n] = (c, im)
 # a limbless one's appendages: each piece its own part on its root (limb_n*, in front of the body; limb_f*, behind),
 # swaying in the engine (rig.json sway = its phase); sign: + swings its tip toward the foe, hanging or standing up
-limb_sign = {}
+limb_meta = {}
 for pre, group in limbs.items():
+    _, z0, ch, amp, per, step = GROUPS[pre]
     for k, c in enumerate(pieces(group) if group.any() else []):
         n = f"{pre}{k + 1}"
         root = c & grow(trunk | mask["head"], 3)
@@ -384,11 +403,21 @@ for pre, group in limbs.items():
             j = np.argmin((cx - pivots["trunk"][0]) ** 2 + (cy - pivots["trunk"][1]) ** 2)
             pivots[n] = [int(cx[j]), int(cy[j])]
         role[n] = n
-        z[n] = 6 + k * 0.1 if pre == "limb_n" else 1 + k * 0.1
+        z[n] = z0 + k * 0.1
         # (one growing from the top piece moves with it)
         parent[n] = "head" if mask["head"].any() and (c & grow(mask["head"], 3)).sum() > (c & grow(trunk, 3)).sum() else "trunk"
         pix[n] = (c, im)
-        limb_sign[n] = 1 if cy.mean() > pivots[n][1] else -1
+        # (the far ones on the other beat)
+        meta = {"sign": 1 if cy.mean() > pivots[n][1] else -1, "sway": round((k + 1) * step + (2.2 if pre.endswith("_f") else 0), 2)}
+        # (a claw: - raises it up past the front, + brings it down on the foe, whichever way it points: by its tip)
+        if ch == "claws":
+            j = np.argmax((cx - pivots[n][0]) ** 2 + (cy - pivots[n][1]) ** 2)
+            meta["sign"] = -1 if cx[j] < pivots[n][0] else 1
+            # (a claw held up and back, a crab's, cocks back with - and slams forward: clawsign -1)
+            meta["sign"] = OVER.get("clawsign", meta["sign"])
+        if ch != "limbs":
+            meta.update(ch=ch, amp=amp, per=per)
+        limb_meta[n] = meta
 # things floating round it: each piece its own part (float1, float2 …), bobbing on its own (rig.json float = its phase)
 # (a floating thing stands apart from the monster in the original, mostly empty round it; anything else marked so is
 # the map's blend of two parts, red and yellow anti-alias to orange, and goes to the part it borders most)
@@ -422,15 +451,20 @@ if FISH:
 if OVER.get("hover"):
     rig["hover"] = OVER["hover"]
 # (a stiff top piece turns only this share of the way: a rook's tower)
+# (an action channel turned only this share of the way: {"claws": 0.5} for a claw already raised high)
+if OVER.get("chk"):
+    rig["chk"] = OVER["chk"]
 if OVER.get("headk") is not None:
     rig["headk"] = OVER["headk"]
 # fallen on its back (the torso turned 86 degrees back about its pivot, everything on it along): how far it would
 # sink below its feet' line, in heights; the engine lifts it by that much to lie on the ground (rig.json lie)
-if not QUAD and (not BLOB or FISH):
-    by, bx = np.where(fg & ~mask["float"])
+if not QUAD and (not BLOB or FISH or BUG):
+    # (a bug by its body alone: its thin legs and claws bend, the tip of one does not hold it up)
+    by, bx = np.where(trunk_full if BUG else fg & ~mask["float"])
     px, py = pivots["trunk"]
     # (a flier falls belly up)
-    t = np.radians(170 if FLY or FISH else 86)
+    # (and a fish, and a bug on its back, legs up)
+    t = np.radians(170 if FLY or FISH or BUG else 86)
     low = (py + (bx - px) * np.sin(t) + (by - py) * np.cos(t)).max()
     rig["lie"] = round(float(low - foot_y) / rig["h"], 3)
 # a beast's legs as a share of its height (lying down it sinks by about that much)
@@ -438,11 +472,6 @@ if QUAD:
     tops = [pivots[n][1] for n in ("arm_l", "arm_r", "leg_l", "leg_r") if n in pivots]
     if tops:
         rig["legs"] = round((foot_y - float(np.mean(tops))) / rig["h"], 3)
-
-
-def k_sway(n):
-    # each appendage a little behind the one before it (a wave along a row of tentacles), the far ones on the other beat
-    return int(n[6:]) * 0.9 + (0 if n.startswith("limb_n") else 2.2)
 
 
 def aim(piv, m):
@@ -496,9 +525,9 @@ for n, (m, src_im) in pix.items():
         q["sign"] = -1
     if n.startswith("wing"):
         q["wing"] = 0 if n.startswith("wing_n") else 0.7
-    if n.startswith("limb"):
-        q["sign"] = limb_sign[n]
-        q["sway"] = round(k_sway(n), 2)
+    # (each appendage a little behind the one before it: a wave along a row of tentacles, legs stepping in turn)
+    if n in limb_meta:
+        q.update(limb_meta[n])
     if n.startswith("float"):
         q["float"] = round(float(np.random.default_rng(len(rig["parts"])).uniform(0, 6.28)), 2)
     rig["parts"][nm] = q

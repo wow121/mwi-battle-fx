@@ -170,5 +170,21 @@
  },
  "siren": {
   "tmpl": "fish"
+ },
+ "crab": {
+  "tmpl": "bug",
+  "chk": {
+   "claws": 0.5
+  },
+  "clawsign": -1
+ },
+ "giant_scorpion": {
+  "tmpl": "bug"
+ },
+ "giant_mantis": {
+  "tmpl": "bug"
+ },
+ "trial_beetle": {
+  "tmpl": "bug"
  }
 }

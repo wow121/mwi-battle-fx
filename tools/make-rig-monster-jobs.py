@@ -117,6 +117,33 @@ BLOB_TRUNK = (
 )
 PROMPT[("seg", "blob")] = HEAD + REF + BLOB
 PROMPT[("trunk", "blob")] = HEAD + REF + BLOB_TRUNK
+# an arthropod (tmpl bug): its pincers / scythe arms, each walking leg, a scorpion's tail and a head of its own apart
+BUG = (
+    "Task: make a PART MAP of it for a cutout puppet (Spine-style rig). Trace the creature EXACTLY: same outline, same size, same position, "
+    "so the map lies over image 1 pixel for pixel. Fill every part of it with ONE perfectly flat colour by which part it belongs to "
+    "(no shading, no outlines, no details, no anti-aliasing between parts):\n"
+    "- RED #FF0000: the body (shell, thorax, abdomen), and the head too unless the note below says the head is yellow.\n"
+    "- YELLOW #FFFF00: the HEAD, only if the note below says so, whole (with its eyes, antennae, horns).\n"
+    "- BLUE #0000FF: the PINCER / CLAW / SCYTHE ARM nearer to the viewer (drawn over the body, or the one on the LEFT), whole from where it "
+    "joins the body to its tip.\n"
+    "- CYAN #00FFFF: the other pincer / claw / scythe arm (farther, partly hidden, or on the RIGHT).\n"
+    "- GREEN #00FF00: each thin WALKING LEG nearer to the viewer (in front of the body), each one whole from the body to its foot.\n"
+    "- MAGENTA #FF00FF: each walking leg farther from the viewer (behind the body).\n"
+    "- WHITE #FFFFFF: a scorpion's TAIL with its stinger, only if the note below says so, whole from where it leaves the body.\n"
+    "Where one part covers another, paint only the part on top (as it appears in image 1).\n"
+    "Background: perfectly flat black #000000 everywhere outside the creature. No text, no labels.\n"
+    "Output: square, same framing as image 1.\n"
+)
+BUG_TRUNK = (
+    "Task: redraw it as the BODY PIECE of a cutout puppet: the same creature with its pincers / claws / scythe arms, ALL its walking legs, "
+    "and the other parts named in the note below taken off. Keep the rest of the body exactly as in image 1, pixel for pixel where it is "
+    "visible. Where the removed parts covered the body, complete it naturally: continue its colours, shell pattern, shading and outline, "
+    "with a smooth edge where they joined it and a smooth belly line where the legs were. Same size, same position, same view; nothing new added.\n"
+    "Background: perfectly flat {bg} everywhere outside the creature. No text, no shadow, no floor. Do not use {bg} on the creature.\n"
+    "Output: square, same framing as image 1.\n"
+)
+PROMPT[("seg", "bug")] = HEAD + REF + BUG
+PROMPT[("trunk", "bug")] = HEAD + REF + BUG_TRUNK
 # a fish (tmpl fish): cut the same way, its fins and tail the appendages
 PROMPT[("seg", "fish")] = PROMPT[("seg", "blob")]
 PROMPT[("trunk", "fish")] = PROMPT[("trunk", "blob")]
