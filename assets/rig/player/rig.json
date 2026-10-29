@@ -2020,14 +2020,14 @@
   },
   "o_halloween_ghost": {
    "armf": {
-    "fill": "#000000",
-    "line": "#000000",
-    "cover": 0.0
+    "fill": "#fafafb",
+    "line": "#89898a",
+    "cover": 0.98
    },
    "armb": {
-    "fill": "#000000",
-    "line": "#000000",
-    "cover": 0.0
+    "fill": "#fafafb",
+    "line": "#89898a",
+    "cover": 0.93
    }
   },
   "a_frog_2": {
