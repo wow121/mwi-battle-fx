@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.40
+// @version      0.21.41
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "890929430f"
+  const ASSET_REV = "7138ca37e4"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7649,6 +7649,51 @@ void main(){
           keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: 6, head: 5, leg_fn: -15, leg_bn: 15 }, x: -0.03 }, { t: 600, e: "out", a: { torso: -30, head: -20, leg_fn: 80, leg_ff: 65, leg_bn: -20 }, x: 0.05, y: 0.25 }, { t: 720, a: { torso: -32, head: -22, leg_fn: 82, leg_ff: 67, leg_bn: -20 }, x: 0.07, y: 0.26 }, { t: 820, e: "in", a: { torso: 14, head: 22, leg_fn: 20, leg_ff: 15 }, x: 0.12 }, { t: 1150, a: { torso: 12, head: 20, leg_fn: 18, leg_ff: 13 }, x: 0.115 }, { t: 1400, a: {} }],
         },
       },
+      // fly: a flier (insects, the butterfly-mouse, the moth). One body (torso, turning about its middle: + dips the head)
+      // and wings beating on their own; it hangs in the air (rig.json hover), bobbing. Attacks: pull up and back, dive at
+      // the foe (stab: a sting, smash: a ram), or rise and shoot / cast; it falls belly up to the ground.
+      fly: {
+        idle: { rel: true, dur: 900, loop: true, keys: [{ t: 0, a: { torso: 2 } }, { t: 450, e: "inout", a: { torso: -2 }, y: 0.035 }, { t: 900, e: "inout", a: { torso: 2 } }] },
+        hurt: { rel: true, dur: 480, keys: [{ t: 0, a: {} }, { t: 80, e: "out", a: { torso: -25 }, x: -0.07, y: 0.04 }, { t: 240, a: { torso: -15 }, x: -0.06, y: 0.03 }, { t: 480, a: {} }] },
+        cast: { rel: true, dur: 1000, keys: [{ t: 0, a: {} }, { t: 350, e: "out", a: { torso: -15 }, y: 0.15 }, { t: 700, a: { torso: -16 }, y: 0.16 }, { t: 1000, a: {} }] },
+        dead: { rel: true, fall: true, dur: 900, keys: [{ t: 0, a: {} }, { t: 200, e: "out", a: { torso: -40 }, x: -0.04, y: 0.05 }, { t: 900, e: "in", a: { torso: -170 }, x: -0.08, g: 1 }] },
+      },
+      "fly:stab": {
+        attack: {
+          dur: 850, hit: 430, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 320, e: "out", a: { torso: -25 }, x: -0.06, y: 0.12 }, { t: 370, a: { torso: -27 }, x: -0.065, y: 0.13 }, { t: 430, e: "in", a: { torso: 35 }, x: 0.15, y: -0.05 }, { t: 650, a: { torso: 30 }, x: 0.14, y: -0.04 }, { t: 850, a: {} }],
+        },
+        attack2: {
+          dur: 950, hit: 560, hits: [330], lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { torso: -20 }, x: -0.04, y: 0.1 }, { t: 330, e: "in", a: { torso: 30 }, x: 0.12, y: -0.03 }, { t: 450, e: "out", a: { torso: -15 }, x: 0.04, y: 0.1 }, { t: 560, e: "in", a: { torso: 35 }, x: 0.15, y: -0.04 }, { t: 760, a: { torso: 30 }, x: 0.14, y: -0.03 }, { t: 950, a: {} }],
+        },
+        skill: {
+          dur: 1200, hit: 700, lunge: true, through: true,
+          keys: [{ t: 0, a: {} }, { t: 500, e: "out", a: { torso: -35 }, x: -0.08, y: 0.25 }, { t: 620, a: { torso: -37 }, x: -0.085, y: 0.26 }, { t: 700, e: "in", a: { torso: 45 }, x: 0.18, y: -0.05 }, { t: 950, a: { torso: 38 }, x: 0.17, y: -0.04 }, { t: 1200, a: {} }],
+        },
+      },
+      "fly:smash": {
+        // two rams with the whole body
+        attack: {
+          dur: 900, hit: 580, hits: [330], lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 230, e: "out", a: { torso: -15 }, x: -0.05, y: 0.06 }, { t: 330, e: "in", a: { torso: 20 }, x: 0.12 }, { t: 450, e: "out", a: { torso: -10 }, x: 0.02, y: 0.06 }, { t: 580, e: "in", a: { torso: 25 }, x: 0.14 }, { t: 760, a: { torso: 20 }, x: 0.13 }, { t: 900, a: {} }],
+        },
+        skill: {
+          dur: 1200, hit: 720, ring: 720, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 520, e: "out", a: { torso: -30 }, x: -0.04, y: 0.3 }, { t: 620, a: { torso: -32 }, y: 0.31 }, { t: 720, e: "in", a: { torso: 40 }, x: 0.14, y: -0.06 }, { t: 980, a: { torso: 35 }, x: 0.13, y: -0.05 }, { t: 1200, a: {} }],
+        },
+      },
+      "fly:ranged": {
+        // up and back, a dip of the head as it shoots
+        attack: {
+          dur: 900, shot: 470, hit: 680, missile: "orb",
+          keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -20 }, x: -0.04, y: 0.12 }, { t: 470, e: "in", a: { torso: 15 }, y: 0.08 }, { t: 700, a: { torso: 12 }, y: 0.07 }, { t: 900, a: {} }],
+        },
+        skill: {
+          dur: 1200, shot: 760, hit: 980, missile: "orb",
+          keys: [{ t: 0, a: {} }, { t: 620, e: "out", a: { torso: -28 }, x: -0.06, y: 0.25 }, { t: 760, e: "in", a: { torso: 18 }, y: 0.18 }, { t: 1000, a: { torso: 14 }, y: 0.16 }, { t: 1200, a: {} }],
+        },
+      },
       "biped:slash": {
         // an overhead chop: the blade up behind the head, brought down through the foe
         attack: {
@@ -7736,6 +7781,7 @@ void main(){
       },
     }
     MT["quad:magic"] = MT["quad:ranged"]
+    MT["fly:magic"] = MT["fly:ranged"]
     // a monster's set: its template, its style's attacks, then its own entries. Directions become turns from its rest
     // (rig.json aim: an arm's from shoulder to fist, a weapon's from grip to tip): the arm turns to its direction and
     // the wrist turns the weapon to its own; a two-handed weapon (rig.json two) keeps its grip, the arms turn it to its
@@ -7771,6 +7817,8 @@ void main(){
           if (!act.fall && t) for (const n of Object.keys(P)) if (n.startsWith("leg")) a[n] = (a[n] || 0) + t
           // lying down, a beast sinks by its legs' length (rig.json legs; the template's -0.2 is for a bear's)
           if (act.fall && k.y < 0 && def.legs) k.y = (k.y * def.legs) / 0.45
+          // a flier's fall: g of the way down from its hover
+          if (k.g) k.y = (k.y || 0) - (def.hover || 0) * k.g
         }
         // whole turns taken off so the first move leaves the rest the short way round (the rest of the action follows on)
         if (!act.rel)
@@ -8659,6 +8707,8 @@ void main(){
         // the hit wobble: on the trunk, and on a monster's own head; a player's head is cut from its body
         // drawing (long hair stays on the body) and must move with it exactly or the head looks split
         if (q.name === "body" || q.name === "torso" || (q.name === "head" && !R.def.hands)) deg -= wob
+        // a flier's wing (rig.json wing = its phase) beats all the time, folded still once it has fallen
+        if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / 38 + q.p.wing) * 28
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
         if (par) {
@@ -8679,7 +8729,8 @@ void main(){
           // rig.json lie, worked out from its shape, which a body on long legs may make negative; else the action's lift)
           const tip = Math.max(0, Math.min(1, (Math.abs(pose.a.body || pose.a.torso || 0) - 30) / 58))
           // (a fall may sink below the feet' line: a beast lying down with its legs folded)
-          q.y = q.p.at[1] - R.def.foot[1] - ((A?.def.fall ? pose.y : Math.max(0, pose.y)) + v[1] + (A?.def.fall && R.def.lie != null ? R.def.lie : A?.def.lift ?? 0.3) * tip) * h
+          // (a flier hangs rig.json hover above the ground; its fall brings it down: the action's keys say how far, g)
+          q.y = q.p.at[1] - R.def.foot[1] - ((A?.def.fall ? pose.y : Math.max(0, pose.y)) + (R.def.hover || 0) + v[1] + (A?.def.fall && R.def.lie != null ? R.def.lie : A?.def.lift ?? 0.3) * tip) * h
           q.wr = r + q.rest
           // something floating round a monster (rig.json float = its phase): bobs on its own, gone when it falls
           if (q.p.float != null) {
