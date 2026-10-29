@@ -196,10 +196,16 @@ main = hold or ("arm_l" if "arm_l" in arms else (arms[0] if arms else None))
 role = {"trunk": "torso", "head": "head", "leg_l": "leg_f", "leg_r": "leg_b", "weapon": "weapon", "weapon2": "weapon_o"}
 for n in arms:
     role[n] = "arm_m" if n == main else "arm_o"
+# a four-legged beast (tmpl quad): the map's arm colours are its front legs, nearer (blue) and farther (cyan); its leg
+# colours the back legs, nearer (green) and farther (magenta); its head turns on its own (bites), so the trunk is
+# drawn without it
+QUAD = OVER.get("tmpl") == "quad"
+if QUAD:
+    role.update({"arm_l": "leg_fn", "arm_r": "leg_ff", "leg_l": "leg_bn", "leg_r": "leg_bf"})
 
 # ----- the trunk completed under what covers it: the Codex trunk piece (the monster with arms, held object and
 # legs taken off), its colours matched to the original; the original pixels wherever the trunk shows -----
-trunk = mask["trunk"] | mask["head"]
+trunk = mask["trunk"] | (mask["head"] if not QUAD else False)
 tp = Image.open(A.trunk).convert("RGB").resize((W, H), Image.LANCZOS)
 tq = np.asarray(tp).astype(np.float32)
 # its background: the key colour of its corners
@@ -215,7 +221,7 @@ if both.sum() > 200:
         fit[..., c] = np.clip(tq[..., c] * a_ + b_, 0, 255)
 # only what something covered and the piece fills, near the trunk (the piece may be off by a few pixels)
 cover = np.zeros_like(fg)
-for n in arms + ["weapon", "weapon2", "leg_l", "leg_r", "float"]:
+for n in arms + ["weapon", "weapon2", "leg_l", "leg_r", "float"] + (["head"] if QUAD else []):
     cover |= mask[n]
 f = sil & ~trunk & (cover | ~fg) & grow(trunk, 40)
 tr = im.copy()
@@ -231,19 +237,22 @@ fx = np.where(fg & (yy > foot_y - 12))[1]
 foot = [int(np.median(fx)), foot_y]
 ty, tx = np.where(trunk_full)
 pivots = {}
-# hips: the trunk's bottom centre, a little up
+# hips: the trunk's bottom centre, a little up (a beast's: above its back legs, so it rears on them)
 pivots["trunk"] = [int(np.median(tx)), int(ty.max() - (ty.max() - ty.min()) * 0.12)]
+if QUAD and (mask["leg_l"] | mask["leg_r"]).any():
+    ly, lx = np.where(mask["leg_l"] | mask["leg_r"])
+    pivots["trunk"] = [int(np.median(lx)), int(ly.min())]
 if mask["head"].any():
     b = mask["head"] & grow(trunk, 3)
     hy, hx = np.where(b if b.any() else mask["head"])
     pivots["head"] = [int(np.median(hx)), int(np.median(hy))]
-for n in arms:
+for n in arms if not QUAD else []:
     ay, ax = np.where(mask[n])
     top = ay.min() + (ay.max() - ay.min()) * 0.18
     sel = ay <= top
     # the shoulder sits inside the top end, not on its edge
     pivots[n] = [int(np.median(ax[sel])), int(min(ay[sel].mean() + 3, top))]
-for n in ("leg_l", "leg_r"):
+for n in ("leg_l", "leg_r") + (tuple(arms) if QUAD else ()):
     if mask[n].any():
         ly, lx = np.where(mask[n])
         pivots[n] = [int(np.median(lx[ly <= ly.min() + 4])), int(ly.min())]
@@ -265,6 +274,9 @@ for k, v in OVER.get("pivot", {}).items():
 z = {"leg_r": 0, "leg_l": 1, "trunk": 3, "head": 4}
 for n in arms:
     z[n] = 6 if inside(mask[n]) > 0.25 else 2 if n == "arm_l" else 1.5
+# a beast's legs come out from under its body (their cut tops hidden by it), the far pair behind the near
+if QUAD:
+    z.update({"leg_r": 0, "arm_r": 0.5, "leg_l": 1, "arm_l": 1.5})
 for w, arm in (("weapon", hold), ("weapon2", other)):
     if not arm or not mask[w].any():
         continue
@@ -280,6 +292,7 @@ for k, v in OVER.get("z", {}).items():
 # ----- write -----
 os.makedirs(A.out, exist_ok=True)
 parent = {"head": "trunk", "weapon": hold, "weapon2": other, "arm_l": "trunk", "arm_r": "trunk", "leg_l": "trunk", "leg_r": "trunk"}
+# (rig.json h maps onto the stage's unit height: a long low beast by 0.6 of its frame, not its own short height)
 pix = {"trunk": (trunk_full, tr)}
 for n in arms + ["head", "weapon", "weapon2", "leg_l", "leg_r"]:
     if mask[n].any() and n in pivots:
@@ -306,7 +319,7 @@ for k, c in enumerate(floats):
     z[n] = 7
     pix[n] = (c, im)
 # (its height leaves out what floats above it)
-rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": False, "parts": {}}
+rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()) if not QUAD else int(max(foot_y - np.where(fg)[0].min(), 0.6 * H)), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": False, "parts": {}}
 if two:
     rig["two"] = True
 
@@ -353,6 +366,9 @@ for n, (m, src_im) in pix.items():
     # every limb turns forward the same way (the engine's guess from the piece's shape fails for a raised arm)
     if n != "trunk" and n != "head" and not n.startswith("float"):
         q["sign"] = 1
+    # a beast's head nods down with +
+    if QUAD and n == "head":
+        q["sign"] = -1
     if n.startswith("float"):
         q["float"] = round(float(np.random.default_rng(len(rig["parts"])).uniform(0, 6.28)), 2)
     rig["parts"][nm] = q

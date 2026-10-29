@@ -1,0 +1,95 @@
+{
+ "foot": [
+  206,
+  313
+ ],
+ "h": 240,
+ "tmpl": "quad",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    184,
+    93
+   ],
+   "at": [
+    283,
+    227
+   ],
+   "z": 3
+  },
+  "leg_fn": {
+   "img": "leg_fn.webp",
+   "pivot": [
+    49,
+    2
+   ],
+   "at": [
+    217,
+    234
+   ],
+   "z": 1.5,
+   "parent": "torso",
+   "aim": 30,
+   "sign": 1
+  },
+  "leg_ff": {
+   "img": "leg_ff.webp",
+   "pivot": [
+    19,
+    2
+   ],
+   "at": [
+    125,
+    235
+   ],
+   "z": 0.5,
+   "parent": "torso",
+   "aim": -19,
+   "sign": 1
+  },
+  "head": {
+   "img": "head.webp",
+   "pivot": [
+    91,
+    92
+   ],
+   "at": [
+    178,
+    201
+   ],
+   "z": 4,
+   "parent": "torso",
+   "sign": -1
+  },
+  "leg_bn": {
+   "img": "leg_bn.webp",
+   "pivot": [
+    38,
+    2
+   ],
+   "at": [
+    295,
+    227
+   ],
+   "z": 1,
+   "parent": "torso",
+   "sign": 1
+  },
+  "leg_bf": {
+   "img": "leg_bf.webp",
+   "pivot": [
+    37,
+    2
+   ],
+   "at": [
+    257,
+    271
+   ],
+   "z": 0,
+   "parent": "torso",
+   "sign": 1
+  }
+ }
+}

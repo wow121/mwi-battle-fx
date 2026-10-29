@@ -8,6 +8,7 @@ usage: make-rig-monster-jobs.py <raw_dir> seg|trunk <id> ...
 A monster Codex keeps getting wrong takes a note of its own from <raw_dir>/rig/mon/hints.tsv (id, phase, note).
 Writes <raw_dir>/rig/mon/ref/<id>.png and <raw_dir>/rig/mon/jobs-<phase>.tsv for tools/gen.sh <raw_dir>/rig/mon <jobs> <parallel>.
 """
+import json
 import os
 import sys
 
@@ -47,6 +48,32 @@ PROMPT = {
     "Background: perfectly flat {bg} everywhere outside the monster. No text, no shadow, no floor. Do not use {bg} on the monster.\n"
     "Output: square, same framing as image 1.\n",
 }
+# a four-legged beast (tools/rig-monster.json tmpl quad): its head and four legs, the trunk without them
+QUAD = (
+    "Task: make a PART MAP of it for a cutout puppet (Spine-style rig). Trace the monster EXACTLY: same outline, same size, same position, "
+    "so the map lies over image 1 pixel for pixel. Fill every part of the animal with ONE perfectly flat colour by which body part it "
+    "belongs to (no shading, no outlines, no details, no anti-aliasing between parts):\n"
+    "- RED #FF0000: the body: back, belly, chest, neck, rump and tail.\n"
+    "- YELLOW #FFFF00: the head (face, snout, ears, horns), from where it meets the neck.\n"
+    "- BLUE #0000FF: the FRONT leg nearer to the viewer (the one drawn over the body), from the shoulder to the paw.\n"
+    "- CYAN #00FFFF: the FRONT leg farther from the viewer (partly hidden), from the shoulder to the paw.\n"
+    "- GREEN #00FF00: the BACK leg nearer to the viewer, from the hip to the paw.\n"
+    "- MAGENTA #FF00FF: the BACK leg farther from the viewer, from the hip to the paw.\n"
+    "Where one part covers another, paint only the part on top (as it appears in image 1).\n"
+    "Background: perfectly flat black #000000 everywhere outside the animal. No text, no labels.\n"
+    "Output: square, same framing as image 1.\n"
+)
+QUAD_TRUNK = (
+    "Task: redraw it as the TRUNK PIECE of a cutout puppet: the same animal with its HEAD and all FOUR LEGS taken off. Keep the body, "
+    "neck, back, belly, rump and tail exactly as in image 1, pixel for pixel where they are visible. Where the head and the legs covered "
+    "the body, complete it naturally: continue its colours, fur, shading and outline, with a smooth rounded end at the neck and a smooth "
+    "belly line where the legs were. Same size, same position, same view; nothing new added.\n"
+    "Background: perfectly flat {bg} everywhere outside the animal. No text, no shadow, no floor. Do not use {bg} on the animal.\n"
+    "Output: square, same framing as image 1.\n"
+)
+PROMPT[("seg", "quad")] = HEAD + REF + QUAD
+PROMPT[("trunk", "quad")] = HEAD + REF + QUAD_TRUNK
+TMPL = {k: v.get("tmpl") for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rig-monster.json"))).items()}
 BGS = {"white #FFFFFF": (255, 255, 255), "green #00FF00": (0, 255, 0), "magenta #FF00FF": (255, 0, 255), "blue #0000FF": (0, 0, 255)}
 
 
@@ -73,7 +100,7 @@ for mid in IDS:
     prompt = os.path.join(MON, "prompts", f"{mid}_{PHASE}.txt")
     # a monster Codex keeps getting wrong: a note of its own (<raw>/rig/mon/hints.tsv: id, phase, note)
     note = "".join(f"Important for this monster: {t}\n" for i, ph, t in HINTS if i == mid and ph == PHASE)
-    open(prompt, "w").write(PROMPT[PHASE].replace("{bg}", bg) + note)
+    open(prompt, "w").write(PROMPT.get((PHASE, TMPL.get(mid)), PROMPT[PHASE]).replace("{bg}", bg) + note)
     rows.append(f"{mid}_{PHASE}\t{prompt}\t{ref}")
     print(mid, bg)
 open(os.path.join(MON, f"jobs-{PHASE}.tsv"), "w").write("\n".join(rows) + "\n")

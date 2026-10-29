@@ -16,5 +16,14 @@
  },
  "chronofrost_sorcerer": {
   "tmpl": "robed"
+ },
+ "black_bear": {
+  "tmpl": "quad"
+ },
+ "grizzly_bear": {
+  "tmpl": "quad"
+ },
+ "polar_bear": {
+  "tmpl": "quad"
  }
 }
