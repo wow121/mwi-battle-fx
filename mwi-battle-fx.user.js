@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.49
+// @version      0.21.50
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8584,8 +8584,37 @@ void main(){
         console.warn("[战斗动画] arena", e)
       }
     }
+    // the badge in the corner, as the old stage's: where we fight and the difficulty tier (coloured by band)
+    let locEl = null
+    function setLoc() {
+      if (!host || !source) return
+      if (!locEl) {
+        locEl = document.createElement("div")
+        locEl.className = "bfx-loc"
+      }
+      if (locEl.parentElement !== host) host.appendChild(locEl)
+      const title = id => (zhUI() && ZONE_ZH[id]) || (id || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+      let text = ""
+      let tier = null
+      if (!source.live) (text = title(source.loc())), (tier = source.tier())
+      else if (where.labyrinth) text = L("迷宫", "Labyrinth") + (where.floor ? L(` · 第${where.floor}层`, ` · Floor ${where.floor}`) : "")
+      else {
+        const zone = where.zone && ZONE_ZH[where.zone] ? where.zone : stageLocation()
+        text = zone ? title(zone) : ""
+        tier = where.tier ?? null
+      }
+      locEl.style.display = text ? "" : "none"
+      locEl.textContent = text
+      if (text && tier != null) {
+        const b = document.createElement("b")
+        b.textContent = " T" + tier
+        b.style.color = tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff"
+        locEl.appendChild(b)
+      }
+    }
     function background() {
       if (!app || !source) return
+      setLoc()
       const loc = source.loc()
       const t = source.tier()
       const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
@@ -8610,6 +8639,13 @@ void main(){
           if (r) buildRig(a, r)
         }
     }
+    const DUNGEON_ZONES = new Set(["chimerical_den", "enchanted_fortress", "pirate_cove", "sinister_circus"])
+    function tierOfU(u) {
+      const own = u?.raw?.difficultyTier
+      if (typeof own === "number") return own
+      if (!source?.live) return source?.tier() ?? null
+      return where.labyrinth || DUNGEON_ZONES.has(where.zone) ? null : where.tier ?? null
+    }
     function makeUnit(side, i, u) {
       const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
@@ -8624,12 +8660,26 @@ void main(){
       a.shadow.alpha = 0.45
       a.hpBar = new P.Graphics()
       // (a monster by its Chinese name on a Chinese page, as the old stage does)
-      a.label = new P.Text({ text: nameOf(side, u), style: { fontFamily: "sans-serif", fontSize: 12, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
+      // the HUD under the feet, as on the old stage: status chips, the name (a monster's tier after it), the HP bar with
+      // its numbers, the MP bar
+      a.hud = new P.Container()
+      a.label = new P.Text({ text: nameOf(side, u), style: { fontFamily: "sans-serif", fontSize: 11, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
       a.label.anchor.set(0.5, 0)
+      const tier = side === "m" ? tierOfU(u) : null
+      a.tierT = new P.Text({ text: tier != null ? " T" + tier : "", style: { fontFamily: "sans-serif", fontSize: 11, fontWeight: "700", fill: tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff", stroke: { color: "#000", width: 3 } } })
+      a.tierT.anchor.set(0, 0)
+      const numStyle = { fontFamily: "sans-serif", fontSize: 8, fontWeight: "700", fill: "#ffffff", stroke: { color: "#000", width: 2.5 } }
+      a.hpT = new P.Text({ text: "", style: numStyle })
+      a.hpT.anchor.set(0.5, 0.5)
+      a.mpT = new P.Text({ text: "", style: numStyle })
+      a.mpT.anchor.set(0.5, 0.5)
+      a.chips = new P.Container()
+      a.chipKey = ""
       // aura rings under the feet, a shield bubble over the body
       a.rings = new P.Graphics()
       a.over = new P.Graphics()
-      a.cont.addChild(a.rings, a.shadow, a.hpBar, a.label, a.over)
+      a.hud.addChild(a.chips, a.label, a.tierT, a.hpBar, a.hpT, a.mpT)
+      a.cont.addChild(a.rings, a.shadow, a.hud, a.over)
       unitsLayer.addChild(a.cont)
       return a
     }
@@ -8645,7 +8695,7 @@ void main(){
       // sized and placed as on the old stage: a box per unit by the head count (unitSize), a monster's 400 px pose frame
       // drawn at 1.375 boxes (its 512 px cell fills the box), a player's box three quarters of that and filled by the
       // figure; each side in a row on one ground line, the first nearest the middle, every other one a step back
-      const ground = Math.min(H * 0.84, H - 34)
+      const ground = Math.min(H * 0.84, H - 40) // (the HUD, with its MP numbers, fits under it)
       for (const side of ["p", "m"])
         units[side].forEach((a, i, all) => {
           const n = all.length
@@ -8659,17 +8709,36 @@ void main(){
           a.cont.zIndex = a.y0
           a.shadow.width = a.h * 0.6
           a.shadow.height = a.h * 0.12
-          a.label.position.set(0, 4)
+          a.box = box
+          a.label.position.set(-a.tierT.width / 2, 2)
+          a.tierT.position.set(a.label.x + a.label.width / 2, 2)
+          a.hudKey = ""
           drawHp(a)
           if (a.rig) rigScale(a)
         })
     }
     function drawHp(a) {
-      const w = a.h * 0.55
-      a.hpBar.clear()
-      if (a.dead) return
-      a.hpBar.rect(-w / 2, 20, w, 5).fill({ color: 0x000000, alpha: 0.6 })
-      a.hpBar.rect(-w / 2, 20, (w * Math.max(0, a.hp)) / a.maxHp, 5).fill(a.side === "p" ? 0x4fd16a : 0xe0484b)
+      // (redrawn only when something on it changed: the MP is read from the battle's unit each frame)
+      const mp = a.u.mp ?? 0
+      const maxMp = a.u.maxMp || 1
+      const key = [a.dead, a.hp, a.maxHp, mp, maxMp, a.box].join()
+      if (key === a.hudKey) return
+      a.hudKey = key
+      a.hud.visible = !a.dead
+      const w = Math.min((a.box || a.h) * 0.84, 140)
+      const g = a.hpBar
+      g.clear()
+      // (tall enough to carry their numbers)
+      const bar = (y, f, c1) => {
+        g.roundRect(-w / 2 - 1, y - 1, w + 2, 9, 2).fill({ color: 0x000000, alpha: 0.6 })
+        if (f > 0) g.roundRect(-w / 2, y, w * Math.min(1, f), 7, 2).fill(c1)
+      }
+      bar(16, Math.max(0, a.hp) / (a.maxHp || 1), 0xd93b3b)
+      bar(25, mp / maxMp, 0x2f6fd9)
+      a.hpT.text = `${fmt(Math.max(0, a.hp))}/${fmt(a.maxHp)}`
+      a.hpT.position.set(0, 19.5)
+      a.mpT.text = `${fmt(mp)}/${fmt(maxMp)}`
+      a.mpT.position.set(0, 28.5)
     }
 
     // ----- rigs (assets/rig/<id>/rig.json): parts on joints -----
@@ -10099,6 +10168,7 @@ void main(){
         focusOn(m.x, m.y, 0.08, 600)
       }
       if (tg.stunned && !tg.died) stun(a, tg.stunned)
+      if (isSkill && !tg.died) afflict(a, e.ab)
       drawHp(a)
       if (tg.died) die(a)
       else if (a.rig && !a.act?.def.hit) play1(a, "hurt")
@@ -10127,7 +10197,7 @@ void main(){
       a.dead = true
       const life = ++a.life
       drawHp(a)
-      a.label.visible = false
+      a.hud.visible = false
       if (!a.rig) return
       if (a.rig.crumble) {
         rigCrumble(a)
@@ -10139,7 +10209,8 @@ void main(){
       a.dead = false
       const life = ++a.life
       a.hp = tg.hp
-      a.label.visible = true
+      a.hud.visible = true
+      a.hudKey = ""
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.9, 900)
       if (a.rig) {
         if (a.rig.fallen) {
@@ -10308,12 +10379,45 @@ void main(){
       if (!src || !ab) return
       const until = now() + (BUFF_SECONDS[ab.key] || (AURA_C[ab.key] ? 120 : 10)) * 1000
       if (AURA_C[ab.key]) sideAuras[src.side][ab.key] = until
-      else if (BUFF_SECONDS[ab.key]) (statuses[src.side][src.i] ||= {})[ab.key] = until
+      else if (BUFF_SECONDS[ab.key]) (statuses[src.side][src.i] ||= {})[ab.key] = { until, kind: "buff" }
+    }
+    // a damage skill that lasts on the foes it hits (maim, puncture, frost surge…)
+    function afflict(a, ab) {
+      if (a && ab && BUFF_SECONDS[ab.key]) (statuses[a.side][a.i] ||= {})[ab.key] = { until: now() + BUFF_SECONDS[ab.key] * 1000, kind: "debuff" }
+    }
+    // the chips over the name: auras and buffs coloured, debuffs dark red; what doesn't fit one row folds into "+N"
+    function drawChips(a, list) {
+      const key = list.join() + "|" + Math.round(a.box || 0)
+      if (key === a.chipKey) return
+      a.chipKey = key
+      a.chips.removeChildren().forEach(c => c.destroy())
+      const size = Math.max(8, Math.min(14, Math.round((a.box || a.h) * 0.16)))
+      const fit = Math.max(1, Math.floor(((a.box || a.h) + 2) / (size + 2)))
+      const vis = list.length > fit ? list.slice(0, fit - 1) : list
+      const items = vis.map(([k, kind]) => [kind, kind === "debuff" ? 0x5a1a24 : AURA_C[k] ?? 0xffd76a, (abilityInfo("/abilities/" + k)?.name || "?")[0]])
+      if (list.length > vis.length) items.push(["more", 0x141828, "+" + (list.length - vis.length)])
+      const total = items.length * (size + 2) - 2
+      items.forEach(([kind, bg, text], n) => {
+        const c = new P.Container()
+        const g = new P.Graphics()
+        const x = -total / 2 + n * (size + 2) + size / 2
+        if (kind === "more") g.roundRect(-size / 2 - 2, -size / 2, size + 4, size, size / 2).fill({ color: bg, alpha: 0.85 }).stroke({ color: 0xffffff, width: 1, alpha: 0.35 })
+        else g.circle(0, 0, size / 2).fill(bg).stroke(kind === "debuff" ? { color: 0xff5a6a, width: 1 } : { color: 0x000000, width: 1, alpha: 0.5 })
+        const t = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: Math.round(size * 0.64), fontWeight: "700", fill: kind === "buff" ? "#1a1a1a" : "#ffffff" } })
+        t.anchor.set(0.5)
+        c.position.set(x, 0)
+        c.addChild(g, t)
+        a.chips.addChild(c)
+      })
+      a.chips.y = -size / 2 - 1
     }
     function statusFrame(a, t) {
       const st = statuses[a.side][a.i] || {}
       const auras = a.dead ? [] : Object.keys(AURA_C).filter(k => sideAuras[a.side][k] > t)
-      const buffs = a.dead ? [] : Object.keys(st).filter(k => st[k] > t)
+      const live = a.dead ? [] : Object.keys(st).filter(k => st[k].until > t)
+      const buffs = live.filter(k => st[k].kind === "buff")
+      drawChips(a, [...auras.map(k => [k, "buff"]), ...live.map(k => [k, st[k].kind])])
+      drawHp(a)
       a.rings.clear()
       auras.forEach((k, n) => {
         const w = a.h * (0.8 + n * 0.2)
