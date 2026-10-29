@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.50
+// @version      0.21.51
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "2a8d8b3286"
+  const ASSET_REV = "6a982837f0"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -8573,9 +8573,21 @@ void main(){
       statuses.m = {}
       if (liveOn()) sync()
     }
+    // not on screen (the browser tab in the background, another game tab open): nothing is played, or it would all
+    // be queued on the stopped clock and go off at once on coming back; set up again from the battle as it is then
+    let stale = false
+    const onScreen = () => !document.hidden && !!host?.offsetParent
+    function freshen() {
+      if (!stale || !onScreen()) return
+      stale = false
+      tweens.length = 0
+      sync()
+    }
     // the real battle's actions: its line-up first brought up to date (a unit joined, a wave came in)
     function playLive(actions) {
       if (!liveOn()) return
+      if (!onScreen()) return void (stale = true)
+      if (stale) return freshen()
       const U = source.units
       if (["p", "m"].some(side => units[side].length !== U[side].length || units[side].some((a, i) => a.u !== U[side][i]))) sync()
       try {
@@ -8841,6 +8853,7 @@ void main(){
     // a player: the shared 3/4 battle-view template with this avatar's and outfit's registered layers (body, upper
     // arm, forearm), the paper-doll weapon piece in the fist (turned from the doll's arm angle) and the off-hand behind
     let playerBase = null
+    const FULL_OUTFITS = new Set(["halloween_ghost"])
     async function loadPlayerRig(u) {
       if (!Assets.has("rig", "player")) return null
       if (!playerBase)
@@ -8853,7 +8866,10 @@ void main(){
       const def = { ...base, parts: { ...base.parts } }
       const L = n => P.Assets.load(Assets.url(`rig/player/${n}.webp`))
       const tex = {}
-      for (const part of Object.keys(base.parts)) tex[part] = [await L(`a_${avatar}_${part}`), outfit && (await L(`o_${outfit}_${part}`))]
+      // (an outfit that covers the whole figure, the ghost sheet, is drawn alone: no hair, skin or limbs of the avatar
+      // under it to show through)
+      const whole = FULL_OUTFITS.has(outfit)
+      for (const part of Object.keys(base.parts)) tex[part] = [!whole && (await L(`a_${avatar}_${part}`)), outfit && (await L(`o_${outfit}_${part}`))]
       // the weapon pieces come with the paper-doll index
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
@@ -8903,7 +8919,7 @@ void main(){
         // the drawn upper arm and forearm of each arm (avatar + outfit layers), laid along the arm by the stage
         def.armTex = {}
         for (const arm of Object.keys(base.arms))
-          for (const seg of ["up", "lo"]) def.armTex[arm + "_" + seg] = [await L(`a_${avatar}_${arm}_${seg}`).catch(() => null), outfit && (await L(`o_${outfit}_${arm}_${seg}`).catch(() => null))].filter(Boolean)
+          for (const seg of ["up", "lo"]) def.armTex[arm + "_" + seg] = [!whole && (await L(`a_${avatar}_${arm}_${seg}`).catch(() => null)), outfit && (await L(`o_${outfit}_${arm}_${seg}`).catch(() => null))].filter(Boolean)
         const C = base.armColors || {}
         const sleeve = outfit && C["o_" + outfit]?.armf?.cover > 0.5 ? C["o_" + outfit].armf : C["a_" + avatar]?.armf
         def.armColor = sleeve || { fill: "#c8c8c8", line: "#6e6e6e" }
@@ -11022,6 +11038,7 @@ void main(){
     }
 
     function frame() {
+      if (stale) freshen()
       const k = performance.now() < slowUntil ? slowK : 1
       clock += Math.min(50, app.ticker.deltaMS) * k
       const t = now()
