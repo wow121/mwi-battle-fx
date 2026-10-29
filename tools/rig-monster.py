@@ -27,7 +27,7 @@ ap.add_argument("id")
 ap.add_argument("seg")
 ap.add_argument("trunk")
 ap.add_argument("out")
-ap.add_argument("--tmpl", default="biped")
+ap.add_argument("--tmpl", default="biped")  # (or "tmpl" in tools/rig-monster.json)
 ap.add_argument("--over", default="{}")
 ap.add_argument("--check")
 ap.add_argument("--assets", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets"))
@@ -53,6 +53,7 @@ KEYS = {
     "weapon": (255, 255, 255),
     "leg_l": (0, 255, 0),
     "leg_r": (255, 0, 255),
+    "float": (255, 128, 0),
 }
 names = list(KEYS)
 seg = np.asarray(Image.open(A.seg).convert("RGB").resize((W, H), Image.BOX)).astype(np.int32)
@@ -99,8 +100,9 @@ for _ in range(60):
 L[L == -2] = names.index("trunk")
 mask = {n: (L == names.index(n)) for n in names[1:]}
 # specks: a part under 0.3% of the monster is the map's noise, given to the trunk
+# (not things floating round it: a snowflake is small)
 for n in list(mask):
-    if n != "trunk" and mask[n].sum() < fg.sum() * 0.003:
+    if n not in ("trunk", "float") and mask[n].sum() < fg.sum() * 0.003:
         mask["trunk"] |= mask[n]
         mask[n][:] = False
 print("parts", {n: int(m.sum()) for n, m in mask.items() if m.any()})
@@ -213,7 +215,7 @@ if both.sum() > 200:
         fit[..., c] = np.clip(tq[..., c] * a_ + b_, 0, 255)
 # only what something covered and the piece fills, near the trunk (the piece may be off by a few pixels)
 cover = np.zeros_like(fg)
-for n in arms + ["weapon", "weapon2", "leg_l", "leg_r"]:
+for n in arms + ["weapon", "weapon2", "leg_l", "leg_r", "float"]:
     cover |= mask[n]
 f = sil & ~trunk & (cover | ~fg) & grow(trunk, 40)
 tr = im.copy()
@@ -253,8 +255,8 @@ for w, arm in (("weapon", hold), ("weapon2", other)):
         sel = d >= d.max() * 0.8
         pivots[w] = [int(np.median(ax[sel])), int(np.median(ay[sel]))]
         _, e1, e2, _ = grips[w]
-        f = np.array(pivots[w])
-        grips[w] = (arm, e1, e1 if np.hypot(*(e1 - f)) > np.hypot(*(e2 - f)) else e2, 0)
+        fi = np.array(pivots[w])
+        grips[w] = (arm, e1, e1 if np.hypot(*(e1 - fi)) > np.hypot(*(e2 - fi)) else e2, 0)
 for k, v in OVER.get("pivot", {}).items():
     inv = {v2: k2 for k2, v2 in role.items()}
     pivots[inv.get(k, k)] = v
@@ -282,7 +284,29 @@ pix = {"trunk": (trunk_full, tr)}
 for n in arms + ["head", "weapon", "weapon2", "leg_l", "leg_r"]:
     if mask[n].any() and n in pivots:
         pix[n] = (mask[n], im)
-rig = {"foot": foot, "h": int(foot_y - np.where(fg)[0].min()), "tmpl": A.tmpl, "crumble": False, "parts": {}}
+# things floating round it: each piece its own part (float1, float2 …), bobbing on its own (rig.json float = its phase)
+# (a floating thing stands apart from the monster in the original, mostly empty round it; anything else marked so is
+# the map's blend of two parts, red and yellow anti-alias to orange, and goes to the part it borders most)
+floats = []
+for c in pieces(mask["float"]) if mask["float"].any() else []:
+    ring = grow(c, 3) & ~grow(c, 1)
+    near = {n: int((mask[n] & ring).sum()) for n in mask if n not in ("float", "weapon2") and mask[n].any()}
+    edge = grow(c, 1) & ~c
+    if c.sum() >= 12 and (ring & fg & ~mask["float"]).sum() < ring.sum() * 0.3 and (edge & fg & ~mask["float"]).sum() < edge.sum() * 0.1:
+        floats.append(c)
+    else:
+        to = max(near, key=near.get) if any(near.values()) else "trunk"
+        if to in pix:
+            pix[to] = (pix[to][0] | c, pix[to][1])
+for k, c in enumerate(floats):
+    n = f"float{k + 1}"
+    fy, fx = np.where(c)
+    pivots[n] = [int(fx.mean()), int(fy.mean())]
+    role[n] = n
+    z[n] = 7
+    pix[n] = (c, im)
+# (its height leaves out what floats above it)
+rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": False, "parts": {}}
 if two:
     rig["two"] = True
 
@@ -327,8 +351,10 @@ for n, (m, src_im) in pix.items():
     if n in aims:
         q["aim"] = aims[n]
     # every limb turns forward the same way (the engine's guess from the piece's shape fails for a raised arm)
-    if n != "trunk" and n != "head":
+    if n != "trunk" and n != "head" and not n.startswith("float"):
         q["sign"] = 1
+    if n.startswith("float"):
+        q["float"] = round(float(np.random.default_rng(len(rig["parts"])).uniform(0, 6.28)), 2)
     rig["parts"][nm] = q
 json.dump(rig, open(f"{A.out}/rig.json", "w"), indent=1)
 print(json.dumps({k: (v["at"], v["z"], v.get("parent")) for k, v in rig["parts"].items()}))

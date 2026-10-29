@@ -32,13 +32,15 @@ PROMPT = {
     "- WHITE #FFFFFF: a weapon or object held in the hands (blade, staff, club, slingshot, torch with its flame), the whole object.\n"
     "- GREEN #00FF00: the leg / foot on the LEFT side of the picture.\n"
     "- MAGENTA #FF00FF: the leg / foot on the RIGHT side of the picture.\n"
+    "- ORANGE #FF8000: anything floating in the air around the monster, not held and not touching it (orbs, crystals, "
+    "snowflakes, sparks), each object whole.\n"
     "Where one part covers another, paint only the part on top (as it appears in image 1).\n"
     "Background: perfectly flat black #000000 everywhere outside the monster. No text, no labels.\n"
     "Output: square, same framing as image 1.\n",
     "trunk": HEAD
     + REF
     + "Task: redraw it as the TRUNK PIECE of a cutout puppet: the same monster with its ARMS, HANDS, anything held in the hands, and its "
-    "LEGS / FEET all taken off. Keep the head, face, ears, hair, horns, tail, wings and anything worn on the body exactly as in image 1, "
+    "LEGS / FEET all taken off, and anything floating in the air around it removed. Keep the head, face, ears, hair, horns, tail, wings and anything worn on the body exactly as in image 1, "
     "pixel for pixel where they are visible. Where the arms, the held object or the legs covered the body, complete the body naturally: "
     "continue its colours, shading, spots, clothing and outline, with a smooth rounded edge at the shoulders and at the bottom where the "
     "legs were. Same size, same position, same view; nothing new added.\n"

@@ -1,3 +1,20 @@
 {
- "gobo_shooty": {"weapon": "arm_l"}
+ "gobo_shooty": {
+  "weapon": "arm_l"
+ },
+ "novice_sorcerer": {
+  "tmpl": "robed"
+ },
+ "ice_sorcerer": {
+  "tmpl": "robed"
+ },
+ "flame_sorcerer": {
+  "tmpl": "robed"
+ },
+ "elementalist": {
+  "tmpl": "robed"
+ },
+ "chronofrost_sorcerer": {
+  "tmpl": "robed"
+ }
 }
