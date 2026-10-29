@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.41
+// @version      0.21.42
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "7138ca37e4"
+  const ASSET_REV = "041b20f4c4"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7767,6 +7767,76 @@ void main(){
         },
       },
     }
+    // blob: a limbless one (slimes, eyeballs, a jellyfish, a coiled snake, a chest). One body (torso, standing on its
+    // bottom middle: + leans at the foe) that squashes and stretches (sq, in percent: - squashed flat, + stretched tall),
+    // maybe a top piece (head: a lid, a cap, a head on a neck; - thrown back / open, + snapped forward / shut), and
+    // appendages swaying on their own (limbs: all of them reaching at the foe with +). Every blow is a squash and a spring.
+    MT.blob = {
+      idle: { rel: true, dur: 1800, loop: true, keys: [{ t: 0, a: { sq: 0 } }, { t: 900, e: "inout", a: { sq: 4, torso: -1, head: -3, limbs: -4 } }, { t: 1800, e: "inout", a: { sq: 0 } }] },
+      hurt: { rel: true, dur: 520, keys: [{ t: 0, a: {} }, { t: 80, e: "out", a: { sq: -16, torso: -10, head: -15, limbs: -25 }, x: -0.05 }, { t: 240, a: { sq: 6, torso: -6, head: -8, limbs: -10 }, x: -0.045 }, { t: 520, a: {} }] },
+      // a buff: squashed, then drawn up tall with the top piece thrown back
+      cast: { rel: true, dur: 1100, keys: [{ t: 0, a: {} }, { t: 250, e: "out", a: { sq: -15 } }, { t: 500, e: "out", a: { sq: 18, torso: -4, head: -25, limbs: -35 }, y: 0.06 }, { t: 850, a: { sq: 16, torso: -4, head: -27, limbs: -38 }, y: 0.05 }, { t: 1100, a: {} }] },
+      // a shudder, then it sags flat, the top piece and the appendages limp
+      dead: { rel: true, fall: true, lift: 0, dur: 1000, keys: [{ t: 0, a: {} }, { t: 150, e: "out", a: { sq: -15, torso: -8, head: -20 }, x: -0.03 }, { t: 380, e: "out", a: { sq: 10, torso: -4, head: -25 }, x: -0.04 }, { t: 1000, e: "in", a: { sq: -42, torso: -10, head: 25, limbs: 35 }, x: -0.06, g: 1 }] },
+    }
+    MT["blob:stab"] = {
+      // squashed down and back, the top piece drawn back (a lid open, a head reared), then a stretched lunge, snapping shut
+      attack: {
+        dur: 850, hit: 420, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { sq: -20, torso: -12, head: -35, limbs: -25 }, x: -0.04 }, { t: 360, a: { sq: -22, torso: -13, head: -38, limbs: -28 }, x: -0.045 }, { t: 420, e: "in", a: { sq: 16, torso: 14, head: 15, limbs: 35 }, x: 0.15 }, { t: 650, a: { sq: 10, torso: 12, head: 12, limbs: 30 }, x: 0.14 }, { t: 850, a: {} }],
+      },
+      // two snaps
+      attack2: {
+        dur: 950, hit: 560, hits: [330], lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { sq: -15, torso: -8, head: -30 }, x: -0.03 }, { t: 330, e: "in", a: { sq: 12, torso: 10, head: 10, limbs: 25 }, x: 0.1 }, { t: 450, e: "out", a: { sq: -12, torso: -4, head: -30 }, x: 0.06 }, { t: 560, e: "in", a: { sq: 16, torso: 14, head: 15, limbs: 35 }, x: 0.15 }, { t: 760, a: { sq: 10, torso: 12, head: 12, limbs: 30 }, x: 0.14 }, { t: 950, a: {} }],
+      },
+      // a skill: a leap at the foe, landing on it squashed
+      skill: {
+        dur: 1250, hit: 720, lunge: true, through: true,
+        keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { sq: -28, torso: -10, head: -35, limbs: -35 }, x: -0.05 }, { t: 560, e: "out", a: { sq: 22, torso: 10, head: -20, limbs: -20 }, x: 0.06, y: 0.3 }, { t: 720, e: "in", a: { sq: -18, torso: 16, head: 18, limbs: 40 }, x: 0.17 }, { t: 1000, a: { sq: -5, torso: 12, head: 12, limbs: 30 }, x: 0.16 }, { t: 1250, a: {} }],
+      },
+    }
+    MT["blob:slash"] = {
+      // leaned back, the appendages swept behind, then whipped through the foe with the whole body
+      attack: {
+        dur: 900, hit: 430, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { sq: -10, torso: -16, head: -20, limbs: -50 }, x: -0.03 }, { t: 360, a: { sq: -12, torso: -17, head: -22, limbs: -55 }, x: -0.035 }, { t: 430, e: "in", a: { sq: 10, torso: 18, head: 12, limbs: 70 }, x: 0.12 }, { t: 680, a: { sq: 6, torso: 15, head: 10, limbs: 60 }, x: 0.11 }, { t: 900, a: {} }],
+      },
+      attack2: MT["blob:stab"].attack,
+      // a skill: a spin through the foe
+      skill: {
+        dur: 1200, hit: 680, lunge: true, through: true,
+        keys: [{ t: 0, a: {} }, { t: 400, e: "out", a: { sq: -22, torso: -12, limbs: -40 }, x: -0.05 }, { t: 680, e: "in", a: { sq: 12, torso: 8, limbs: 60 }, x: 0.16, y: 0.1, r: 360 }, { t: 950, a: { sq: 5, torso: 6, limbs: 40 }, x: 0.15, r: 360 }, { t: 1200, a: {}, r: 360 }],
+      },
+    }
+    MT["blob:smash"] = {
+      // a hop: squashed, sprung up tall, landing on the foe squashed flat
+      attack: {
+        dur: 1100, hit: 680, ring: 680, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 260, e: "out", a: { sq: -25, torso: -6, head: -15, limbs: -20 } }, { t: 500, e: "out", a: { sq: 22, torso: -6, head: -20, limbs: -35 }, x: 0.05, y: 0.32 }, { t: 590, a: { sq: 18, torso: -4, head: -22, limbs: -38 }, x: 0.07, y: 0.33 }, { t: 680, e: "in", a: { sq: -30, torso: 10, head: 15, limbs: 30 }, x: 0.12 }, { t: 900, a: { sq: -8, torso: 8, head: 10, limbs: 20 }, x: 0.11 }, { t: 1100, a: {} }],
+      },
+      // two quick bounces into the foe
+      attack2: {
+        dur: 1000, hit: 640, hits: [340], lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 160, e: "out", a: { sq: -18 } }, { t: 260, e: "out", a: { sq: 15, torso: 6, limbs: -20 }, x: 0.05, y: 0.15 }, { t: 340, e: "in", a: { sq: -22, torso: 10, limbs: 25 }, x: 0.1 }, { t: 460, e: "out", a: { sq: 15, torso: 4, limbs: -20 }, x: 0.11, y: 0.15 }, { t: 640, e: "in", a: { sq: -26, torso: 12, limbs: 30 }, x: 0.14 }, { t: 820, a: { sq: -6, torso: 8, limbs: 20 }, x: 0.13 }, { t: 1000, a: {} }],
+      },
+      skill: {
+        dur: 1400, hit: 860, ring: 860, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { sq: -32, torso: -8, head: -20, limbs: -30 } }, { t: 660, e: "out", a: { sq: 28, torso: -8, head: -28, limbs: -45 }, x: 0.06, y: 0.5 }, { t: 760, a: { sq: 24, torso: -6, head: -30, limbs: -48 }, x: 0.08, y: 0.51 }, { t: 860, e: "in", a: { sq: -36, torso: 12, head: 18, limbs: 35 }, x: 0.13 }, { t: 1150, a: { sq: -10, torso: 10, head: 12, limbs: 25 }, x: 0.12 }, { t: 1400, a: {} }],
+      },
+    }
+    MT["blob:ranged"] = {
+      // squashed back, then stretched forward as it spits (or shoots) at the foe
+      attack: {
+        dur: 950, shot: 470, hit: 690, missile: "orb",
+        keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { sq: -20, torso: -10, head: -25, limbs: -30 }, x: -0.02 }, { t: 470, e: "in", a: { sq: 16, torso: 12, head: 15, limbs: 30 }, x: 0.03 }, { t: 720, a: { sq: 12, torso: 10, head: 12, limbs: 25 }, x: 0.03 }, { t: 950, a: {} }],
+      },
+      skill: {
+        dur: 1300, shot: 780, hit: 1020, missile: "orb",
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { sq: -18 } }, { t: 640, e: "out", a: { sq: 22, torso: -10, head: -30, limbs: -45 }, y: 0.06 }, { t: 780, e: "in", a: { sq: -10, torso: 14, head: 18, limbs: 35 }, x: 0.04 }, { t: 1050, a: { sq: -4, torso: 12, head: 15, limbs: 30 }, x: 0.04 }, { t: 1300, a: {} }],
+      },
+    }
+    MT["blob:magic"] = MT["blob:ranged"]
     // a beast that rakes or slams also bites
     MT["quad:slash"].attack2 = MT["quad:smash"].attack2 = MT["quad:stab"].attack
     // a beast that shoots or casts: the head drawn back and thrust at the foe, the shot (quills, spit, a spell) from its mouth
@@ -8646,6 +8716,7 @@ void main(){
       const cy = a.rig.def.h * 0.45
       a.rig.root.pivot.set(0, -cy)
       a.rig.root.position.set(0, -cy * k)
+      a.rig.k = [a.rig.root.scale.x, k, cy]
     }
     // starts an action on a unit; the pose it leaves is blended out over the first `blend` ms
     function play1(a, name, { at = 0, blend = 120 } = {}) {
@@ -8697,6 +8768,12 @@ void main(){
       const D = Math.PI / 180
       // r: the whole body turns about its middle (a spin, a flip); + turns forward
       R.root.rotation = (pose.r || 0) * D * a.dir
+      // sq: squashed (-) or stretched (+) by that many percent, standing on its feet (a slime's hop), the width the other way
+      if (R.k) {
+        const sq = (pose.a.sq || 0) / 100
+        R.root.scale.set(R.k[0] * (1 - sq * 0.5), R.k[1] * (1 + sq))
+        R.root.position.y = -R.k[2] * R.k[1] * (1 + sq)
+      }
       const wob = a.jig * 10 * Math.sin(t / 30)
       const h = R.def.h
       for (const q of R.order) {
@@ -8704,11 +8781,16 @@ void main(){
         let deg = v[2]
         // lying flat is as far as a body goes (a fall can tip past it, head below the feet)
         if (q.name === "body") deg = Math.max(-88, Math.min(88, deg))
+        // a stiff top piece (rig.json headk: a tower on a rook) turns only that share of the way
+        if (q.name === "head" && R.def.headk != null) deg *= R.def.headk
         // the hit wobble: on the trunk, and on a monster's own head; a player's head is cut from its body
         // drawing (long hair stays on the body) and must move with it exactly or the head looks split
         if (q.name === "body" || q.name === "torso" || (q.name === "head" && !R.def.hands)) deg -= wob
         // a flier's wing (rig.json wing = its phase) beats all the time, folded still once it has fallen
         if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / 38 + q.p.wing) * 28
+        // a limbless one's appendage (rig.json sway = its phase): sways slowly on its root, and all of them reach
+        // together by the action's limbs (+ toward the foe); limp once it has fallen
+        if (q.p.sway != null) deg += (pose.a.limbs || 0) + (a.dead ? 0 : Math.sin(t / 320 + q.p.sway) * 9)
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
         if (par) {
