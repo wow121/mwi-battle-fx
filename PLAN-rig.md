@@ -122,8 +122,14 @@
 > - **Codex 时装零件会随机画错袖长**（海盗泡泡袖只画肩头、战士多画了护手、游侠护腕画到拳头上），同一提示词重画一次就对。
 >   全量时必须逐张看检查图，错的把旧图改名 `.vN.png` 再跑（gen.sh 跳过已有的）。头像零件 12 张全对。
 > - 提示词已写进去的教训：零件两端不许画深色端帽（否则肩肘出现「球关节」）；保留下侧阴影；袖子按「从肩往下延伸到哪」描述。
-> - 已画（新画法）：头像 blue_person_1、cat_1、bunny_1、frog_1、red_person_1、custom_auspiciousdragon；
->   时装 warrior_1、mage_1、ranger_1、dress_1、pirate_1、cow_suit。
+> - **全量完成（v0.21.36，素材 32a7699）：101 个头像 + 125 件时装全部画完、逐张检查过。**
+>   驱动脚本在 `~/mwi-art-raw/rig/pl3/`（不进仓库）：`full.sh`（20 层一批：body 再 parts）、`review.sh <批号>`（被拦的头像改画头、
+>   切图、拆检查图、拼参考图）、`cut.sh <名字…>`（传到 109 切，拷回两边仓库；**一次只能跑一个**，109 的 rig.json 是共用的）、`refs.sh`。
+> - 头像约五分之一（多是人类动漫脸）被 Codex 输出审核按「sexual」拦掉，肤色紧身衣也拦。改用 `bodym` 阶段：只画头（脸、头发、耳、尾、翅膀），
+>   身体涂品红；`rig-player-layers.py` 用基础小人身体按胳膊零件的肤色重新上色填进去（保留明暗和描边）。
+> - 反复画错的层：在 `pl3/hints.tsv`（名字、阶段、说明）写一句针对这件的话，make-jobs 会把它接到这件的提示词后面，重画一次基本就对。
+>   常见错：长袖只画大臂（最多）、青绿色被画成蓝 / 藏青（jbq、dress_10、tshirt_brewing/intelligence、suit_8、uniform_foraging）、护腕画在肘端。
+>   全量共重画约 30 层，时装大约每批 3/20。
 
 - 101 个头像 + 125 件时装，每个都要 Codex 画一层（对齐 `base_a.png`），然后跑切图流水线。
 - 先写一个生成任务的脚本（参照 `tools/make-jobs.py` / `gen.sh` 的做法，`gen.sh <raw> <jobs.tsv> <并发>`，codex 在本机跑），
