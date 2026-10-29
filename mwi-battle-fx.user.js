@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.36
+// @version      0.21.37
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "32a7699106"
+  const ASSET_REV = "c0897872d7"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -6342,7 +6342,12 @@
     const zh = k => abilityInfo("/abilities/" + k)?.name || k
     const pick = arr => arr[Math.floor(Math.random() * arr.length)]
     const alive = side => lab[side].map((u, i) => (u.hp > 0 ? i : -1)).filter(i => i >= 0)
-    const rigged = () => Assets.list("rig").filter(id => MONSTERS[id])
+    // the rigged monsters of the chosen map (all of them where it has none), six at most
+    const rigged = () => {
+      const all = Assets.list("rig").filter(id => MONSTERS[id])
+      const here = all.filter(id => LOCATIONS[st.loc]?.[1].includes(id))
+      return (here.length ? here : all).slice(0, 6)
+    }
 
     const unitP = () => ({ element: "physical", ...structuredClone(PILOT()), hp: 1500, mp: 1000, maxHp: 1500, maxMp: 1000, lab: true, counters: {} })
     function unitM(id) {
@@ -6451,7 +6456,7 @@
       if (!root) return
       root.replaceChildren()
       row("战场").append(
-        select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => ((st.loc = v), save(), Arena.background())),
+        select(Object.entries(LOCATIONS).map(([k, [n]]) => [k, n]), st.loc, v => ((st.loc = v), save(), reset())),
         select([0, 1, 2, 3, 4, 5].map(t => [t, "T" + t]), st.tier, v => ((st.tier = +v), save(), Arena.background())),
         // 1号's weapon (grip style)
         select(PILOTS.map((p, k) => [k, p.name]), st.pilot, v => ((st.pilot = +v), save(), reset(), draw())),
@@ -7562,6 +7567,143 @@ void main(){
       },
     }
     ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
+    // ----- monster templates (rig.json tmpl, cut by tools/rig-monster.py): one set per body shape, the attacks by the
+    // monster's style (MONSTERS); a monster's own ACTIONS[id] entries win. Parts: torso (pivot at the hips), arm_m (the
+    // arm with the weapon), arm_o, weapon / weapon_o (in their fists), leg_f, leg_b (on the torso).
+    // Arms and weapons are given as DIRECTIONS, the same for every monster: 0 = straight down, 90 = at the foe,
+    // 180 = straight up, -90 = behind; arm_m / arm_o where the arm points, weapon where the weapon in arm_m points
+    // ("rest": the way it is drawn)
+    // (monsterActions turns them into turns from the monster's own rest). rel: the arms' values are turns from rest
+    // (idle, a flinch, a fall). Legs: their own swing, kept on the ground whatever the torso does (fall: they go with it).
+    // biped: a short goblin-like body on two feet, after Lost Castle's goblins: a sharp crouch back, a fast lunge with
+    // the whole body behind it, a long hold.
+    const MT = {
+      biped: {
+        idle: { rel: true, dur: 1600, loop: true, keys: [{ t: 0, a: { arm_m: 2, arm_o: -2 } }, { t: 800, a: { torso: -2, arm_m: -3, arm_o: 3 }, y: -0.012 }, { t: 1600, a: { arm_m: 2, arm_o: -2 } }] },
+        hurt: { rel: true, dur: 480, keys: [{ t: 0, a: {} }, { t: 80, e: "out", a: { torso: -16, arm_m: -25, arm_o: -30, leg_f: 8 }, x: -0.05 }, { t: 230, a: { torso: -11, arm_m: -10, arm_o: -15, leg_f: 5 }, x: -0.045 }, { t: 480, a: {} }] },
+        // a buff or a heal: the weapon thrust up overhead, a little hop
+        cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 160, e: "out", a: { torso: 6, leg_f: 5, leg_b: -5 }, y: -0.02 }, { t: 380, e: "out", a: { torso: -8, arm_m: 165, weapon: 178, arm_o: 150, leg_f: 12, leg_b: -8 }, y: 0.08 }, { t: 750, a: { torso: -8, arm_m: 168, weapon: 180, arm_o: 155 }, y: 0.02 }, { t: 1000, a: {} }] },
+        // knocked flat on its back, the feet kicking up toward the foe
+        dead: { rel: true, fall: true, dur: 800, keys: [{ t: 0, a: {} }, { t: 140, e: "out", a: { torso: -20, arm_m: -30, arm_o: -40, leg_f: 10 }, x: -0.05, y: 0.06 }, { t: 800, e: "in", a: { torso: -86, arm_m: -70, arm_o: -50, leg_f: 25, leg_b: 10 }, x: -0.12 }] },
+      },
+      "biped:slash": {
+        // an overhead chop: the blade up behind the head, brought down through the foe
+        attack: {
+          dur: 900, hit: 430, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -12, arm_m: 160, weapon: 225, arm_o: 30, leg_f: -6 }, x: -0.03, y: 0.02 }, { t: 360, a: { torso: -13, arm_m: 165, weapon: 232, arm_o: 32 }, x: -0.035, y: 0.02 }, { t: 430, e: "in", a: { torso: 18, arm_m: 70, weapon: 50, arm_o: -25, leg_f: 12, leg_b: -10 }, x: 0.08 }, { t: 680, a: { torso: 16, arm_m: 66, weapon: 46, arm_o: -22, leg_f: 10, leg_b: -9 }, x: 0.075 }, { t: 900, a: {} }],
+        },
+        // a flat sweep: wound back behind, swung round through the foe and up
+        attack2: {
+          dur: 900, hit: 420, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 290, e: "out", a: { torso: -10, arm_m: -30, weapon: -85, arm_o: 25 }, x: -0.03, y: -0.02 }, { t: 340, a: { torso: -11, arm_m: -35, weapon: -90, arm_o: 27 }, x: -0.035, y: -0.02 }, { t: 420, e: "in", a: { torso: 14, arm_m: 105, weapon: 125, arm_o: -30, leg_f: 12 }, x: 0.07 }, { t: 680, a: { torso: 12, arm_m: 102, weapon: 122, arm_o: -28, leg_f: 10 }, x: 0.065 }, { t: 900, a: {} }],
+        },
+        // a skill: a leap with the blade high, crashing down with a shock ring
+        skill: {
+          dur: 1250, hit: 700, ring: 700, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { torso: 10, leg_f: -10, leg_b: 10 }, y: -0.04 }, { t: 480, e: "out", a: { torso: -16, arm_m: 170, weapon: 235, arm_o: 150, leg_f: 25, leg_b: -20 }, x: 0.04, y: 0.35 }, { t: 590, a: { torso: -18, arm_m: 175, weapon: 240, arm_o: 155, leg_f: 25, leg_b: -20 }, x: 0.06, y: 0.36 }, { t: 700, e: "in", a: { torso: 24, arm_m: 65, weapon: 45, arm_o: -20, leg_f: 14, leg_b: -12 }, x: 0.11 }, { t: 1000, a: { torso: 22, arm_m: 62, weapon: 42, arm_o: -18, leg_f: 12, leg_b: -11 }, x: 0.105 }, { t: 1250, a: {} }],
+        },
+      },
+      "biped:stab": {
+        // a crouch back with the fist drawn in and the point on the foe, then the arm shot straight out (LC's knife attack)
+        attack: {
+          dur: 820, hit: 400, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 280, e: "out", a: { torso: -14, arm_m: 15, weapon: 100, arm_o: 40, leg_f: -8 }, x: -0.06, y: -0.03 }, { t: 330, a: { torso: -15, arm_m: 10, weapon: 102, arm_o: 42 }, x: -0.065, y: -0.03 }, { t: 400, e: "in", a: { torso: 20, arm_m: 95, weapon: 90, arm_o: -30, leg_f: 18, leg_b: -14 }, x: 0.13 }, { t: 620, a: { torso: 18, arm_m: 94, weapon: 90, arm_o: -28, leg_f: 16, leg_b: -12 }, x: 0.125 }, { t: 820, a: {} }],
+        },
+        // two quick jabs
+        attack2: {
+          dur: 900, hit: 520, hits: [300], lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 200, e: "out", a: { torso: -10, arm_m: 25, weapon: 100, arm_o: 40 }, x: -0.04 }, { t: 300, e: "in", a: { torso: 14, arm_m: 90, weapon: 92, arm_o: 10, leg_f: 10 }, x: 0.07 }, { t: 420, e: "out", a: { torso: -4, arm_m: 35, weapon: 98, arm_o: 30 }, x: 0.03 }, { t: 520, e: "in", a: { torso: 18, arm_m: 95, weapon: 88, arm_o: -25, leg_f: 15, leg_b: -10 }, x: 0.1 }, { t: 720, a: { torso: 17, arm_m: 94, weapon: 88, arm_o: -23, leg_f: 13, leg_b: -9 }, x: 0.095 }, { t: 900, a: {} }],
+        },
+        // a skill: held long, drawn right back, then a dash through the foe
+        skill: {
+          dur: 1200, hit: 680, lunge: true, through: true,
+          keys: [{ t: 0, a: {} }, { t: 420, e: "out", a: { torso: -20, arm_m: -10, weapon: 105, arm_o: 50, leg_f: -12, leg_b: 8 }, x: -0.1, y: -0.04 }, { t: 600, a: { torso: -22, arm_m: -15, weapon: 106, arm_o: 52, leg_f: -13, leg_b: 9 }, x: -0.11, y: -0.04 }, { t: 680, e: "in", a: { torso: 26, arm_m: 100, weapon: 90, arm_o: -40, leg_f: 25, leg_b: -20 }, x: 0.17 }, { t: 960, a: { torso: 24, arm_m: 98, weapon: 90, arm_o: -38, leg_f: 22, leg_b: -18 }, x: 0.16 }, { t: 1200, a: {} }],
+        },
+      },
+      "biped:smash": {
+        // the club heaved up behind the head and brought down on the foe's
+        attack: {
+          dur: 1000, hit: 520, ring: 520, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -14, arm_m: 165, weapon: 210, arm_o: 30, leg_f: -6 }, x: -0.03, y: 0.03 }, { t: 450, a: { torso: -15, arm_m: 170, weapon: 216, arm_o: 32 }, x: -0.035, y: 0.03 }, { t: 520, e: "in", a: { torso: 22, arm_m: 70, weapon: 60, arm_o: -20, leg_f: 13, leg_b: -10 }, x: 0.08 }, { t: 800, a: { torso: 20, arm_m: 66, weapon: 56, arm_o: -18, leg_f: 11, leg_b: -9 }, x: 0.075 }, { t: 1000, a: {} }],
+        },
+        // swung low from behind and round
+        attack2: {
+          dur: 1000, hit: 500, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 360, e: "out", a: { torso: -12, arm_m: -30, weapon: -85, arm_o: 30 }, x: -0.04, y: -0.02 }, { t: 420, a: { torso: -13, arm_m: -35, weapon: -90, arm_o: 32 }, x: -0.045, y: -0.02 }, { t: 500, e: "in", a: { torso: 16, arm_m: 100, weapon: 115, arm_o: -25, leg_f: 10 }, x: 0.07 }, { t: 780, a: { torso: 14, arm_m: 97, weapon: 111, arm_o: -22, leg_f: 9 }, x: 0.065 }, { t: 1000, a: {} }],
+        },
+        skill: {
+          dur: 1350, hit: 780, ring: 780, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 260, e: "out", a: { torso: 12, leg_f: -10, leg_b: 10 }, y: -0.05 }, { t: 560, e: "out", a: { torso: -18, arm_m: 172, weapon: 215, arm_o: 150, leg_f: 25, leg_b: -20 }, x: 0.04, y: 0.4 }, { t: 680, a: { torso: -20, arm_m: 176, weapon: 220, arm_o: 155, leg_f: 25, leg_b: -20 }, x: 0.06, y: 0.41 }, { t: 780, e: "in", a: { torso: 26, arm_m: 65, weapon: 55, arm_o: -20, leg_f: 14, leg_b: -12 }, x: 0.1 }, { t: 1100, a: { torso: 24, arm_m: 62, weapon: 52, arm_o: -18, leg_f: 12, leg_b: -11 }, x: 0.095 }, { t: 1350, a: {} }],
+        },
+      },
+      "biped:ranged": {
+        // the slingshot (or whatever it shoots with) held out at the foe, the other fist drawing back, let go
+        attack: {
+          dur: 900, shot: 480, hit: 700, missile: "orb",
+          keys: [{ t: 0, a: {} }, { t: 200, e: "out", a: { torso: -4, arm_m: 92, weapon: "rest", arm_o: 70 } }, { t: 420, e: "out", a: { torso: -8, arm_m: 95, weapon: "rest", arm_o: -40 }, x: -0.02 }, { t: 480, e: "in", a: { torso: 6, arm_m: 90, weapon: "rest", arm_o: 30 }, x: 0.01 }, { t: 700, a: { torso: 5, arm_m: 90, weapon: "rest", arm_o: 25 }, x: 0.01 }, { t: 900, a: {} }],
+        },
+        skill: {
+          dur: 1150, shot: 700, hit: 920, missile: "orb",
+          keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { torso: -4, arm_m: 98, weapon: "rest", arm_o: 75 } }, { t: 600, e: "out", a: { torso: -14, arm_m: 102, weapon: "rest", arm_o: -55, leg_f: -8 }, x: -0.04 }, { t: 700, e: "in", a: { torso: 10, arm_m: 95, weapon: "rest", arm_o: 35, leg_f: 8 }, x: 0.02 }, { t: 950, a: { torso: 8, arm_m: 95, weapon: "rest", arm_o: 30 }, x: 0.02 }, { t: 1150, a: {} }],
+        },
+      },
+      "biped:magic": {
+        // LC's goblin mage: the staff raised up high, then thrust out at the foe
+        attack: {
+          dur: 1050, shot: 560, hit: 800, missile: "orb",
+          keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -16, arm_m: 160, weapon: 225, arm_o: 30, leg_f: -8 }, x: -0.02, y: 0.02 }, { t: 480, a: { torso: -17, arm_m: 163, weapon: 230, arm_o: 32 }, x: -0.025, y: 0.02 }, { t: 560, e: "in", a: { torso: 14, arm_m: 100, weapon: 130, arm_o: -15, leg_f: 10 }, x: 0.03 }, { t: 840, a: { torso: 12, arm_m: 98, weapon: 128, arm_o: -13, leg_f: 9 }, x: 0.03 }, { t: 1050, a: {} }],
+        },
+        skill: {
+          dur: 1400, shot: 820, hit: 1080, missile: "orb",
+          keys: [{ t: 0, a: {} }, { t: 500, e: "out", a: { torso: -16, arm_m: 165, weapon: 215, arm_o: 150, leg_f: -6 }, y: 0.06 }, { t: 740, a: { torso: -17, arm_m: 168, weapon: 220, arm_o: 155 }, y: 0.07 }, { t: 820, e: "in", a: { torso: 16, arm_m: 100, weapon: 110, arm_o: 60, leg_f: 12 }, x: 0.04 }, { t: 1150, a: { torso: 14, arm_m: 98, weapon: 108, arm_o: 55, leg_f: 10 }, x: 0.04 }, { t: 1400, a: {} }],
+        },
+      },
+    }
+    // a monster's set: its template, its style's attacks, then its own entries. Directions become turns from its rest
+    // (rig.json aim: an arm's from shoulder to fist, a weapon's from grip to tip): the arm turns to its direction and
+    // the wrist turns the weapon to its own; a two-handed weapon (rig.json two) keeps its grip, the arms turn it to its
+    // direction together. Parts on the torso turn with it, and the torso's forward lean is the other way round from
+    // theirs: its lean is added back so a direction stays one on the ground (the legs stay planted, except in a fall).
+    function monsterActions(id, def) {
+      const tmpl = def.tmpl
+      if (!MT[tmpl] || ACTIONS[id]?.__tmpl) return
+      const style = MONSTERS[id]?.[1] || "smash"
+      const src = { ...MT[tmpl], ...(MT[tmpl + ":" + style] || MT[tmpl + ":smash"]) }
+      const P = def.parts
+      const rest = n => P[n]?.aim || 0
+      const set = { __tmpl: tmpl }
+      for (const [name, act] of Object.entries(src)) {
+        const keys = act.keys.map(k => ({ ...k, a: { ...k.a } }))
+        for (const k of keys) {
+          const a = k.a
+          const t = a.torso || 0
+          if (!act.rel) {
+            const A = a.arm_m
+            // (weapon "rest": kept upright as drawn, whatever the arm does: a slingshot held out at the foe)
+            const W = !P.weapon ? null : a.weapon === "rest" ? rest("weapon") : a.weapon
+            delete a.weapon
+            if (def.two && W != null) a.arm_m = W - rest("weapon") + t
+            else if (A != null) {
+              a.arm_m = A - rest("arm_m") + t
+              if (W != null) a.weapon = W - rest("weapon") - A + rest("arm_m")
+            }
+            if (a.arm_o != null) a.arm_o += t - rest("arm_o")
+          }
+          if (def.two) a.arm_o = a.arm_m
+          if (!act.fall && t) for (const n of ["leg_f", "leg_b"]) a[n] = (a[n] || 0) + t
+        }
+        // whole turns taken off so the first move leaves the rest the short way round (the rest of the action follows on)
+        if (!act.rel)
+          for (const n of ["arm_m", "arm_o", "weapon"]) {
+            const first = keys.find(k => k.a[n] != null)
+            if (!first) continue
+            const off = -Math.round(first.a[n] / 360) * 360
+            for (const k of keys) if (k.a[n] != null) k.a[n] += off
+          }
+        set[name] = { ...act, keys }
+      }
+      ACTIONS[id] = Object.assign(set, ACTIONS[id])
+    }
     // ----- two-handed slashers / smashers (werewolf, goblin; after Lost Castle's THW_*): both hands on the haft (the
     // front hand follows the weapon, def.two), so only the back hand moves. At rest the head trails low behind the body,
     // the haft across the hips; every blow is a big committed swing with a long hold after it.
@@ -8122,6 +8264,7 @@ void main(){
       if (!rigs[id])
         rigs[id] = (async () => {
           const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
+          if (def.tmpl) monsterActions(id, def)
           const tex = {}
           for (const [n, q] of Object.entries(def.parts)) tex[n] = await P.Assets.load(Assets.url(`rig/${id}/${q.img}`))
           return { def, tex }
@@ -8361,7 +8504,7 @@ void main(){
       }
       root.filters = [a.filter]
       a.cont.addChildAt(root, 1)
-      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.face !== "right" }
+      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.crumble ?? def.face !== "right" }
       rigScale(a)
       if (a.dead) {
         if (a.rig.crumble) rigCrumble(a, true)
