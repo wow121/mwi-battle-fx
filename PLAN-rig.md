@@ -218,19 +218,31 @@
   无敌护盾、强化光晕（+5 蓝 … +15 彩虹）；不在屏幕上时不播放，回来按当前战况 `sync`（`clearFx` 把特效走完清掉，`teardown` 释放滤镜）；
   画布跟随外框大小（ResizeObserver）；每帧整体 try/catch（报错不能让 PixiJS ticker 停掉）。死亡：四足趴下、半人马跪倒，其余怪碎裂。
   调试：`__mwiBattleFx.Arena.stats()`（特效 / 粒子 / 补间数、WebGL 是否丢失、ticker 是否在跑）。
-- **剩下 5 件（用户要求一次做完）**：
-  1. **眩晕**：真实战斗里被眩晕要显示（新版现在只有测试页的 `tg.stunned` 会出星星 `stun(a, ms)`）。从战斗消息取眩晕状态
-     （先查 `tools/test/replay-msgs.tsv` 和录制的消息里 pMap / mMap 的字段，计划里记的是 `isStunned`），开始 / 结束都要跟上。
-  2. **5 对 5 满场帧率**：实测并优化。109 上用 `tools/test/run-mock.sh`（`DRIVER=` 换驱动、`MOCK=` 换页面）摆 5 玩家 + 5 怪、持续放技能，
-     量每秒帧数（`requestAnimationFrame` 计数，或 `app.ticker.FPS`）；手机宽度（`PHONE=1`）也量。帧率差就找大头（滤镜、粒子数、bloom）。
-  3. **公会试炼用新版**：现在 `GuildLive` 还挂老版 `Stage`（`mode === "guild"`）。新版要做几十人阵型（老版 `guildLayout`：坦克在前，
-     近战、远程、魔法往后；多排；滚轮缩放、拖动平移、双击复位），人多时降低特效（老版 `crowded()`）。测试页面 `tools/test/guild.html`。
-     做好后公会试炼也按 `cfg.stageEngine` 走。
-  4. **没有骨骼的怪的后备画法**：游戏出新怪还没切骨骼时，新版现在只有名字和血条。用它的整张立绘（`assets/m/<id>/idle.webp` 等，
-     老版用的那套），再没有就用老版的 `fallbackSvg` 那种简单图形；受击 / 攻击至少有位移和闪白。
-  5. **Greasy Fork 规定**：确认发布版从 jsDelivr 动态加载 PixiJS（`Arena` 里 `LIBS` + `loadScript`）是否违反 Greasy Fork 规则；
-     不允许就改成 `@require`（`tools/build-release.py` 管发布版头部，要和开发版一致地处理），并确认发布版能跑（`SCRIPT=release/... run-mock.sh`）。
-- 测试工具（都不在仓库里）：`~/mwi-art-raw/rig/mon/` 的 `shot.sh` / `shotp.sh` / `drive-mon.mjs` / `drive-pl.mjs` / `drive-fx.mjs`（测试页定格、
+- **5 件收尾（v0.21.58–0.21.62，2026-10-29，开发版，未发布）**：
+  1. **眩晕**（0.21.58）：`battle_updated` 的 pMap / mMap 里 `isStunned: true`（和 `isBlinded` 一样只在为真时出现）。`onBattleUpdated` 记 `u.stunned` = 开始时刻，
+     该单位下一条不带它的更新（或死亡）清零。新版舞台 `stunFrame`：星星挂在单位身上（`a.stars`，随 `a.cont` 销毁），从造成眩晕的那一击落下时出现
+     （没画那一击就最迟 1 秒），标记消失就淡出，最长 3.3 秒（游戏里最长的眩晕：重锤 3 秒）。测试页 `tg.stunned` 走 `a.stunUntil`。注意：真实消息里的
+     `isStunned` 字段名是照 `isBlinded` 推的，录制（2026-10-23）里没碰到眩晕，进游戏要再看一眼。老版舞台没有眩晕显示（没加）。
+  2. **5 对 5 帧率**（0.21.59）：109 上 5 玩家（带 +5~+15 武器）+ 5 怪，每 200 ms 一个技能。改动：身体着色器只在闪白 / 溶解时挂上（10 个单位常驻滤镜
+     各要多渲染一遍）、特效和粒子合用一个 bloom、光环圈 / 护盾只在有时重画。结果（两次测量）：桌面 1060 px 不限帧 447–467 → 480–500 fps，
+     手机宽度（390 px、DPR 3、CPU 降速 4 倍）不限帧 116–121 → 123–127 fps；限 60 帧时桌面始终 60，手机平均 59（最差单帧 50–80 ms，CPU 降速所致）。
+     剩下的大头是浏览器 / GPU 原生开销（profile 里 `(program)` 约一半）。还能做但没做的：手机上分辨率封顶 1.5（实测 +14%，画面会略糊）。
+  3. **公会试炼用新版**（0.21.61）：`GuildLive` 跟 `cfg.stageEngine` 走，来源 `GUILD = {units: gunits, loc: "guild_trial", guild: true}`；`Arena.formation`
+     照老版 `guildLayout`（`ROLE_ORDER` / `roleOf` 已提到顶层，两版共用）；镜头 `view` 加在 `app.stage` 上：滚轮 / 双指缩放、拖动平移、双击或左上角
+     ＋−⟲ 复位。人多（>12）`many`：粒子 ×0.35、无慢动作 / 镜头推近 / 震屏 / 冲击波 / 压暗光、无技能名、玩家无武器和增益光晕、无 HP / MP 数字，伤害数字缩小。
+     `playLive(actions, U)` / `newBattle(U)` 只播在台上的那场。顺手修了两个新版的真 bug：只用新版时样式表没人注入（`Stage.injectCss()` 现在由
+     Live / GuildLive 调），PixiJS 载入超过 1 秒时每秒的 `open` 都会再建一个 Application（`starting` 挡住）。109 实测 40 人：桌面全程 60 fps，
+     手机宽度 + CPU 降速 4 倍 35–60 fps。
+  4. **没骨骼的怪**（0.21.60）：`loadFlat` / `buildFlat` / `flatFrame` / `playFlat`：有 `assets/m/<id>/` 立绘就按动作阶段换 idle / windup / strike / hurt /
+     cast / dead 图，再没有就画老版那种元素色圆包 + 两只眼；近战冲上去，远程 / 法系从身体中间射；受击闪白 + 抖动，死亡溶解，复活回来。测试时把
+     manifest 里 griffin / werewolf 的 rig 去掉（`d5/nofrig.py`）。
+  5. **Greasy Fork**（0.21.62）：允许。依据 greasyfork.org/help/external-scripts「Code from CDNs is allowed」，CDN 清单 /help/cdns 里有
+     「jsDelivr npm version-specific references」`^(https?:)?\/\/(cdn|test1|testingcf|fastly|gcore)\.jsdelivr\.net\/npm\/.+@[0-9\.]+.*`。代码规则里
+     「Libraries … should be @require-d, unless there's a valid technical reason」：理由是只在舞台第一次打开时才载入（900 KB），且被墙时可换主机。
+     现在每个文件带 SRI 哈希（`LIBS` 里的 sha384），`cdn` 失败依次换 `fastly` / `gcore.jsdelivr.net`。发布版用 build-release.py 构建后在 109 跑通，
+     拦掉 cdn.jsdelivr.net 也能从 fastly 载入（构建后已 `git checkout release/`）。如果用户更想要 `@require`，改 build-release.py 的头部即可。
+- 测试工具（都不在仓库里）：`~/mwi-art-raw/rig/test/d5/`（这次的：`run.sh` 支持 `PRE=` 改 manifest、`THROTTLE=` CPU 降速、`BLOCK=` 拦网址、`PROFILE=1`；
+  `drive-gen.mjs` 定时截图并记录页面 `probe()`；`stun.html` / `perfw.html`（`matrix.sh` 四种组合量帧率）/ `flat.html` / `guild-rig.html`）；`~/mwi-art-raw/rig/mon/` 的 `shot.sh` / `shotp.sh` / `drive-mon.mjs` / `drive-pl.mjs` / `drive-fx.mjs`（测试页定格、
   按按钮连拍）；`~/mwi-art-raw/rig/test/` 的 `drive-hide.mjs`（切标签）、`drive-stress.mjs`（切 15 轮 + `stats()`）、`drive-resize.mjs` 可以照抄。
 
 ## 3. 建议的顺序
