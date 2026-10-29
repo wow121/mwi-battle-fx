@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.60
+// @version      0.21.61
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -203,7 +203,7 @@
     units.p.forEach((u, i) => Looks.assign(u, i))
     if (cfg.debug) console.log("[战斗动画] new_battle", obj) // #dev
     if (cfg.enabled) Stage.newBattle()
-    if (cfg.enabled) Arena.newBattle()
+    if (cfg.enabled) Arena.newBattle(units)
   }
 
   // guild trials: up to ~40 players against the trial boss(es), with their own messages (new_guild_battle /
@@ -211,12 +211,16 @@
   const gunits = { p: [], m: [] }
   // a player seen casting one of these stands with the tanks
   const TANK_ABILITIES = new Set(["provoke", "taunt", "toughness", "spike_shell", "retribution", "guardian_aura", "invincible"])
+  // their places in a guild trial's formation, front to back
+  const ROLE_ORDER = ["tank", "melee", "ranged", "magic"]
+  const roleOf = u => (u?.tank ? "tank" : u?.style === "ranged" ? "ranged" : u?.style === "magic" ? "magic" : "melee")
   function onNewGuildBattle(obj) {
     gunits.tier = obj.tier ?? gunits.tier
     gunits.p = (obj.players || []).map(unitFrom)
     gunits.m = (obj.monsters || []).map(unitFrom)
     gunits.p.forEach(u => Looks.assignGuild(u))
     if (cfg.enabled) Stage.newBattle("guild")
+    if (cfg.enabled) Arena.newBattle(gunits)
   }
 
   // A trial joined mid-way (or a page reload during one) has no new_guild_battle: units are made up from the
@@ -313,8 +317,8 @@
     procs(actions, changes, U)
     if (cfg.debug) console.log("[战斗动画]", JSON.stringify(obj), changes, actions) // #dev
     if (cfg.enabled) Stage.play(actions, src)
-    // (the rigged stage, when it is the one laid over the own battle)
-    if (cfg.enabled && src === "live") Arena.playLive(actions)
+    // (the rigged stage, when it is the one laid over this battle)
+    if (cfg.enabled && (src === "live" || src === "guild")) Arena.playLive(actions, U)
   }
 
   // turns raw hp/mp deltas into actions:
@@ -1670,8 +1674,6 @@
     }
     // guild trials: the whole roster in formation, tanks in front, then melee, ranged and magic at the back.
     // Each group fills columns of up to `rows`; back rows stand higher and a little to the left.
-    const ROLE_ORDER = ["tank", "melee", "ranged", "magic"]
-    const roleOf = u => (u?.tank ? "tank" : u?.style === "ranged" ? "ranged" : u?.style === "magic" ? "magic" : "melee")
     function guildLayout(ground) {
       const list = actors.p
       const n = list.length
@@ -2813,6 +2815,8 @@
         return
       }
       if (!slot?.isConnected) {
+        // (the stage's styles: the old stage puts them in when it is attached, the new one never is)
+        Stage.injectCss()
         slot = document.createElement("div")
         slot.className = "bfx-live-slot"
         if (getComputedStyle(area).position === "static") area.style.position = "relative"
@@ -2853,6 +2857,7 @@
       cfg.stageEngine = v
       saveCfg()
       ensure()
+      GuildLive.ensure()
       menu()
     }
     return { ensure, setEngine }
@@ -2863,11 +2868,15 @@
     let area = null
     let slot = null
     let btn = null
+    let arenaEl = null
+    // the trial as the rigged stage sees it (the trial's own backdrop; its tier in the corner badge)
+    const GUILD = { units: gunits, loc: () => "guild_trial", tier: () => gunits.tier ?? 0, live: true, guild: true }
     function cleanup() {
+      if (arenaEl) Arena.close(arenaEl)
       slot?.remove()
       btn?.remove()
       if (area) area.style.minHeight = ""
-      slot = btn = null
+      slot = btn = arenaEl = null
       if (Stage.modeOf() === "guild") Stage.detach()
     }
     function ensure() {
@@ -2891,19 +2900,38 @@
       }
       btn.textContent = cfg.guildOverlay ? L("切换到原版", "Original view") : L("切换到动画", "Battle FX view")
       if (!cfg.guildOverlay) {
+        if (arenaEl) Arena.close(arenaEl)
         slot?.remove()
-        slot = null
+        slot = arenaEl = null
         area.style.minHeight = ""
         if (Stage.modeOf() === "guild") Stage.detach()
         return
       }
       if (!slot?.isConnected) {
+        // (the stage's styles: the old stage puts them in when it is attached, the new one never is)
+        Stage.injectCss()
         slot = document.createElement("div")
         slot.className = "bfx-live-slot"
         area.appendChild(slot)
+        arenaEl = null
       }
       area.style.minHeight = cfg.guildH + "px"
-      if (!Stage.isTestActive()) Stage.attach(slot, "guild")
+      if (Stage.isTestActive()) return
+      // the old stage or the new one, as for the own battle (cfg.stageEngine)
+      if (cfg.stageEngine === "classic") {
+        if (arenaEl) Arena.close(arenaEl)
+        arenaEl?.remove()
+        arenaEl = null
+        Stage.attach(slot, "guild")
+      } else {
+        if (Stage.modeOf() === "guild") Stage.detach()
+        if (!arenaEl?.isConnected) {
+          arenaEl = document.createElement("div")
+          arenaEl.className = "bfx-arena"
+          slot.appendChild(arenaEl)
+        }
+        Arena.open(arenaEl, GUILD)
+      }
     }
     return { ensure, active: () => !!slot?.isConnected }
   })()
@@ -8313,6 +8341,7 @@ void main(){
     let source = null
     let resizer = null
     let loading = null
+    let starting = false
     let units = { p: [], m: [] }
     let dot, glow, smokeTex, streakTex, rayTex, hazeTex, leafTex, pillarTex
     let shock = null
@@ -8378,8 +8407,12 @@ void main(){
 
     async function open(view, from) {
       if (from) source = from
+      // a guild trial: the whole roster in formation, its camera moved by hand (the class gives the zoom buttons, the
+      // grab cursor, and touch dragging that doesn't scroll the page)
+      view.classList.toggle("bfx-guild", !!source?.guild)
       if (host === view && app) return
       host = view
+      setView(1, 0, 0)
       if (app) {
         app.resizeTo = view
         resizer?.observe(view)
@@ -8387,12 +8420,17 @@ void main(){
         app.ticker.start()
         return sync()
       }
+      // (asked again while PixiJS loads, as the page is checked every second: the one start under way takes it; a second
+      // start made a second application, each one more drawing every frame)
+      if (starting) return
+      starting = true
       view.textContent = "载入 PixiJS…"
       try {
         loading = loading || libs()
         await loading
       } catch (e) {
         loading = null
+        starting = false
         view.textContent = "PixiJS 载入失败：" + e.message
         return
       }
@@ -8515,6 +8553,7 @@ void main(){
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
+      camera(app.canvas)
       // (the canvas follows its box whenever the box changes size: PixiJS's own resizeTo only listens for the window's
       // resize event, and the game lays its battle panel out by itself, before or after that event or without one)
       resizer = new ResizeObserver(() =>
@@ -8525,8 +8564,14 @@ void main(){
         }),
       )
       resizer.observe(view)
-      // (closed while PixiJS was loading)
-      if (host !== view) return close()
+      starting = false
+      // (closed, or moved to another view, while PixiJS was loading)
+      if (host !== view) {
+        const next = host
+        host = view
+        close()
+        return next && open(next)
+      }
       sync()
     }
 
@@ -8541,7 +8586,8 @@ void main(){
     }
     const liveOn = () => !!(app && source?.live && host?.isConnected)
     // a new wave (or a new battle): everyone set up again from the battle's units
-    function newBattle() {
+    function newBattle(U) {
+      if (U && source?.units !== U) return
       sideAuras.m = {}
       statuses.m = {}
       if (liveOn()) sync()
@@ -8556,11 +8602,11 @@ void main(){
       sync()
     }
     // the real battle's actions: its line-up first brought up to date (a unit joined, a wave came in)
-    function playLive(actions) {
-      if (!liveOn()) return
+    // (U: the battle they come from, the own one or a guild trial: only the one on the stage is played)
+    function playLive(actions, U = source?.units) {
+      if (!liveOn() || source.units !== U) return
       if (!onScreen()) return void (stale = true)
       if (stale) return freshen()
-      const U = source.units
       if (["p", "m"].some(side => units[side].length !== U[side].length || units[side].some((a, i) => a.u !== U[side][i]))) sync()
       try {
         play(actions)
@@ -8581,7 +8627,11 @@ void main(){
       let text = ""
       let tier = null
       if (!source.live) (text = title(source.loc())), (tier = source.tier())
-      else if (where.labyrinth) text = L("迷宫", "Labyrinth") + (where.floor ? L(` · 第${where.floor}层`, ` · Floor ${where.floor}`) : "")
+      else if (source.guild) {
+        const bosses = [...new Set(source.units.m.map(u => nameOf("m", u)).filter(Boolean))]
+        text = L("公会试炼", "Guild Trial") + (bosses.length ? " · " + bosses.join(" / ") : "")
+        tier = source.tier()
+      } else if (where.labyrinth) text = L("迷宫", "Labyrinth") + (where.floor ? L(` · 第${where.floor}层`, ` · Floor ${where.floor}`) : "")
       else {
         const zone = where.zone && ZONE_ZH[where.zone] ? where.zone : stageLocation()
         text = zone ? title(zone) : ""
@@ -8637,6 +8687,8 @@ void main(){
     async function sync() {
       if (!app || !source) return
       const run = ++syncing
+      // (put in here, not on opening: the first opening's "载入 PixiJS…" text replaces what the view holds)
+      if (source.guild) zoomButtons(host)
       background()
       clearFx()
       for (const side of ["p", "m"]) {
@@ -8661,7 +8713,7 @@ void main(){
     function tierOfU(u) {
       const own = u?.raw?.difficultyTier
       if (typeof own === "number") return own
-      if (!source?.live) return source?.tier() ?? null
+      if (!source?.live || source.guild) return source?.tier() ?? null
       return where.labyrinth || DUNGEON_ZONES.has(where.zone) ? null : where.tier ?? null
     }
     function makeUnit(side, i, u) {
@@ -8714,14 +8766,16 @@ void main(){
       // drawn at 1.375 boxes (its 512 px cell fills the box), a player's box three quarters of that and filled by the
       // figure; each side in a row on one ground line, the first nearest the middle, every other one a step back
       const ground = Math.min(H * 0.84, H - 40) // (the HUD, with its MP numbers, fits under it)
+      const formed = source?.guild ? formation(W2, H, ground) : null
       for (const side of ["p", "m"])
         units[side].forEach((a, i, all) => {
           const n = all.length
-          const box = unitSize(W2, H, n) * cfg.scale * (side === "p" ? 0.75 : 1)
+          const box = side === "p" && formed ? formed.box : unitSize(W2, H, n) * cfg.scale * (side === "p" ? 0.75 : 1)
           const step = n > 1 ? Math.min(box * 0.78, (W2 * 0.44 - box) / (n - 1)) : 0
           a.h = side === "p" ? box * 1.08 : ((a.rig?.def.h || 220) * box * 1.375) / 400
           a.x0 = side === "p" ? W2 * 0.46 - box / 2 - i * step : W2 * 0.54 + box / 2 + i * step
           a.y0 = ground - (i % 2) * H * 0.035
+          if (side === "p" && formed) [a.x0, a.y0] = formed.at.get(a)
           a.dir = side === "p" ? 1 : -1
           a.cont.position.set(a.x0, a.y0)
           a.cont.zIndex = a.y0
@@ -8735,6 +8789,124 @@ void main(){
           if (a.rig) rigScale(a)
           if (a.flat) a.flat.k = 0
         })
+      hudSize()
+    }
+    // the guild trial's formation (as the old stage's guildLayout): tanks in front, then melee, ranged and magic at the
+    // back, each group in columns of up to `rows`, back rows higher and a little to the left; as many rows as make the
+    // units biggest while the formation fits the left half across and about 60% of the height
+    function formation(SW, SH, ground) {
+      const list = units.p
+      const groups = ROLE_ORDER.map(r => list.filter(a => roleOf(a.u) === r)).filter(g => g.length)
+      let rows = 1
+      let s = 0
+      for (let r = 1; r <= Math.min(8, list.length); r++) {
+        const cols = groups.reduce((c, g) => c + Math.ceil(g.length / r), 0)
+        const size = Math.min(SH * 0.4, (SW * 0.44) / (cols * 0.68 + (groups.length - 1) * 0.3 + 0.15 * (r - 1) + 0.9), (SH * 0.62) / (1 + 0.34 * (r - 1)))
+        if (size > s * 1.02) (s = size), (rows = r)
+      }
+      s *= cfg.scale
+      const at = new Map()
+      let col = 0
+      for (const g of groups) {
+        g.forEach((a, k) => {
+          const c = col + Math.floor(k / rows)
+          const r = k % rows
+          at.set(a, [SW * 0.46 - s / 2 - c * s * 0.68 - r * s * 0.15, ground - r * s * 0.34])
+        })
+        col += Math.ceil(g.length / rows) + 0.3
+      }
+      return { box: s * 0.8, at }
+    }
+    // a crowd (a guild trial of more than 12): fewer particles, no slow motion, camera moves, dimming, screen
+    // ripples, skill names or weapon glows, and no HP / MP numbers on the players
+    const crowd = () => !!source?.guild && units.p.length > 12
+    // names only while the players are big enough on screen to carry them (the camera zoom enlarges both together)
+    function hudSize() {
+      const many = crowd()
+      for (const a of units.p) {
+        a.hpT.visible = a.mpT.visible = !many
+        a.label.visible = !many || (a.box || 0) * view.z >= 60
+      }
+    }
+    // ----- the guild trial's camera: the wheel zooms about the cursor, a drag pans, a double click (or ⟲) resets -----
+    const view = { z: 1, x: 0, y: 0 }
+    function setView(z, x, y) {
+      if (!app) return
+      const SW = app.screen.width
+      const SH = app.screen.height
+      view.z = Math.max(1, Math.min(4, z))
+      view.x = Math.min(0, Math.max(SW - SW * view.z, x))
+      view.y = Math.min(0, Math.max(SH - SH * view.z, y))
+      app.stage.scale.set(view.z)
+      app.stage.position.set(view.x, view.y)
+      hudSize()
+    }
+    const zoomAt = (f, mx, my) => {
+      const z = Math.max(1, Math.min(4, view.z * f))
+      setView(z, mx - ((mx - view.x) / view.z) * z, my - ((my - view.y) / view.z) * z)
+    }
+    function camera(cv) {
+      const on = () => !!source?.guild && host?.contains(cv)
+      const at = e => {
+        const r = cv.getBoundingClientRect()
+        return [e.clientX - r.left, e.clientY - r.top]
+      }
+      cv.addEventListener(
+        "wheel",
+        e => {
+          if (!on()) return
+          e.preventDefault()
+          zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, ...at(e))
+        },
+        { passive: false },
+      )
+      // (two fingers pinch, one drags)
+      const touches = new Map()
+      let drag = null
+      let pinch = null
+      cv.addEventListener("pointerdown", e => {
+        if (!on() || (e.pointerType === "mouse" && e.button !== 0)) return
+        touches.set(e.pointerId, at(e))
+        try {
+          cv.setPointerCapture(e.pointerId)
+        } catch (err) {}
+        const pts = [...touches.values()]
+        if (pts.length === 2) {
+          drag = null
+          pinch = { d: Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]) || 1, z: view.z }
+        } else if (pts.length === 1) drag = { p: pts[0], vx: view.x, vy: view.y }
+      })
+      cv.addEventListener("pointermove", e => {
+        if (!touches.has(e.pointerId)) return
+        touches.set(e.pointerId, at(e))
+        const pts = [...touches.values()]
+        if (pinch && pts.length >= 2) {
+          const d = Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1])
+          zoomAt((pinch.z * d) / pinch.d / view.z, (pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2)
+        } else if (drag) setView(view.z, drag.vx + pts[0][0] - drag.p[0], drag.vy + pts[0][1] - drag.p[1])
+      })
+      const up = e => {
+        touches.delete(e.pointerId)
+        if (touches.size < 2) pinch = null
+        drag = null
+      }
+      cv.addEventListener("pointerup", up)
+      cv.addEventListener("pointercancel", up)
+      cv.addEventListener("dblclick", () => on() && setView(1, 0, 0))
+    }
+    function zoomButtons(view2) {
+      if (view2.querySelector(".bfx-zoom")) return
+      const z = document.createElement("div")
+      z.className = "bfx-zoom"
+      z.innerHTML = '<button data-z="1.4">+</button><button data-z="0.714">−</button><button data-z="0">⟲</button>'
+      z.addEventListener("click", e => {
+        e.stopPropagation()
+        const f = +e.target.closest("button")?.dataset.z
+        if (!app) return
+        if (f === 0) setView(1, 0, 0)
+        else if (f) zoomAt(f, app.screen.width / 2, app.screen.height / 2)
+      })
+      view2.appendChild(z)
     }
     function drawHp(a) {
       // (redrawn only when something on it changed: the MP is read from the battle's unit each frame)
@@ -8754,6 +8926,8 @@ void main(){
       }
       bar(16, Math.max(0, a.hp) / (a.maxHp || 1), 0xd93b3b)
       bar(25, mp / maxMp, 0x2f6fd9)
+      // (a crowd's players carry none: a number redrawn is a new texture)
+      if (!a.hpT.visible) return
       a.hpT.text = `${fmt(Math.max(0, a.hp))}/${fmt(a.maxHp)}`
       a.hpT.position.set(0, 19.5)
       a.mpT.text = `${fmt(mp)}/${fmt(maxMp)}`
@@ -9856,7 +10030,7 @@ void main(){
     // size1 and color / color1 change over the life; drag slows them (share of speed kept per second); to() pulls them
     // toward a moving point; tex "streak" draws them as streaks along their flight, "smoke" as puffs that do not glow
     function emit(x, y, o = {}) {
-      const n = Math.min(o.n ?? 10, MAX_PARTS - parts.length)
+      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1)), MAX_PARTS - parts.length)
       const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : o.tex === "leaf" ? leafTex : dot
       // smoke and leaves are solid things: drawn over the bodies without glowing
       const layer = o.tex === "smoke" || o.tex === "leaf" ? smokeLayer : partLayer
@@ -9927,10 +10101,12 @@ void main(){
     }
     // a slow-motion beat: k of real speed for ms of real time
     function slow(ms, k) {
+      if (many) return
       slowUntil = Math.max(slowUntil, performance.now() + ms)
       slowK = k
     }
     function focusOn(x, y, amt, ms) {
+      if (many) return
       focus = { x, y, amt, t0: now(), until: now() + ms }
     }
     // the air shimmers over a hot area (a displacement filter on the scene, its map drifting) for dur ms
@@ -10038,6 +10214,7 @@ void main(){
       })
     }
     function sparks(x, y, color, n, { speed = 260, up = 0, life = 600, size = 0.5, gravity = 500 } = {}) {
+      if (many) n = Math.ceil(n * 0.35)
       for (let k = 0; k < n; k++) {
         const s = new P.Sprite(dot)
         s.anchor.set(0.5)
@@ -10051,6 +10228,8 @@ void main(){
       }
     }
     function light(x, y, color, r, dur, peak = 1) {
+      // (a crowd's dozens of blows at once would light the whole stage white)
+      if (many) return
       const s = new P.Sprite(glow)
       s.anchor.set(0.5)
       s.tint = color
@@ -10062,10 +10241,10 @@ void main(){
         s.alpha = peak * Math.sin(Math.PI * Math.min(1, p))
         if (p >= 1) s.destroy()
       })
-      tween(dur, p => (dim = Math.max(dim, 0.45 * Math.sin(Math.PI * Math.min(1, p)))))
+      if (!many) tween(dur, p => (dim = Math.max(dim, 0.45 * Math.sin(Math.PI * Math.min(1, p)))))
     }
     function number(a, text, color, big) {
-      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: big ? 30 : 20, fontWeight: "900", fill: color, stroke: { color: "#000", width: big ? 6 : 4 }, dropShadow: { color: "#000", blur: 4, distance: 0, alpha: 0.8 } } })
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: (big ? 30 : 20) * (many ? 0.65 : 1), fontWeight: "900", fill: color, stroke: { color: "#000", width: big ? 6 : 4 }, dropShadow: { color: "#000", blur: 4, distance: 0, alpha: 0.8 } } })
       tx.anchor.set(0.5)
       const x = a.x0 + (Math.random() - 0.5) * a.h * 0.3
       const y = a.y0 - a.h * 0.95
@@ -10084,6 +10263,7 @@ void main(){
       tween(dur, p => (a.uni.uFlash = p >= 1 ? 0 : 0.9 * (1 - p)))
     }
     function crit(a) {
+      if (many) return
       shake = Math.max(shake, 1)
       punch = 1
       const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
@@ -10196,7 +10376,7 @@ void main(){
       sparks(h.x, h.y, 0xffe9a0, 14, { speed: 90, gravity: 0, life: 500, size: 0.35 })
     }
     function banner(a, text, color) {
-      if (!text) return
+      if (!text || many) return
       const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 }, dropShadow: { color: "#000", blur: 6, distance: 0, alpha: 0.9 } } })
       tx.anchor.set(0.5)
       const y = a.y0 - a.h * 1.25
@@ -10579,7 +10759,7 @@ void main(){
       if (a.flat) return bodyFilters(a)
       if (!a.rig) return
       a.rig.root.alpha = buffs.includes("elusiveness") ? 0.72 : 1
-      const glows = buffs.filter(k => BUFF_C[k]).slice(0, 2)
+      const glows = many && a.side === "p" ? [] : buffs.filter(k => BUFF_C[k]).slice(0, 2)
       const key = glows.join()
       if (key !== a.glowKey) {
         a.glowKey = key
@@ -10609,7 +10789,7 @@ void main(){
     const ENCH_T = [[15, "rainbow", 4, 260], [12, 0xff5a3c, 3.6, 220], [10, 0xffa53a, 3.2, 380], [8, 0xc07bff, 2.8, 0], [5, 0x6fb6ff, 2.4, 0]]
     function enchGlow(a) {
       a.ench = []
-      if (a.side !== "p") return
+      if (a.side !== "p" || crowd()) return
       const it = a.u.items || {}
       const enh = a.u.enh || {}
       for (const [part, level] of [["weapon", it.main_hand ? enh.main_hand : enh.two_hand], ["off", enh.off_hand]]) {
@@ -11173,7 +11353,7 @@ void main(){
             })
           recipe?.hit?.({ src, tgs: tgs.filter(([, tg]) => tg.dHP), color: tcol })
           // a skill's blow freezes both sides for a moment and punches the camera in
-          if (isSkill) {
+          if (isSkill && !many) {
             for (const u of [src, ...tgs.map(([a]) => a)]) if (u.act) u.act.t0 += 90
             punch = Math.max(punch, 0.7)
             shake = Math.max(shake, 0.6)
@@ -11191,7 +11371,10 @@ void main(){
         console.warn("[战斗动画] frame", e)
       }
     }
+    // (crowd(), kept for the frame: asked by every effect)
+    let many = false
     function frameBody() {
+      many = crowd()
       if (stale) freshen()
       const k = performance.now() < slowUntil ? slowK : 1
       clock += Math.min(50, app.ticker.deltaMS) * k
@@ -11295,7 +11478,7 @@ void main(){
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     // (what is on the stage right now: for checking that effects go away and nothing piles up)
     const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started }
-    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats }
+    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
   // #dev-start
