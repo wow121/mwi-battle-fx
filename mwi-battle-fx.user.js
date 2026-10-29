@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.33
+// @version      0.21.34
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8282,11 +8282,12 @@ void main(){
       if (off) {
         tex.off = off.tex
         // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm); a dagger by
-        // its hilt, a shield / book / relic in the middle
+        // its hilt, a shield / book / relic in the middle; a book behind the front arm and fist (held by the bottom of its
+        // spine: drawn over them it hid the wrist, and forearm and fist showed as two hands)
         def.parts.off = base.parts.ho
           ? // (a dagger turned to point forward, held over the break between its pommel and grip where the art has one,
             // its point for the blade's light trail)
-            { pivot: off.axis ? along(off.axis, off.axis[4] < 0.4 ? off.axis[4] : 0.08) : off.grip, tip: off.axis && along(off.axis, 1), rot: off.axis ? angle(off.axis) - 90 : 0, at: base.fist, parent: "ho", z: 4.1, scale: base.scale * (off.k || 1) }
+            { pivot: off.axis ? along(off.axis, off.axis[4] < 0.4 ? off.axis[4] : 0.08) : off.grip, tip: off.axis && along(off.axis, 1), rot: off.axis ? angle(off.axis) - 90 : 0, at: base.fist, parent: "ho", z: offOf(u.items?.off_hand) === "book" ? 3.4 : 4.1, scale: base.scale * (off.k || 1) }
           : base.parts.bfore
           ? { pivot: off.grip, at: base.fist, parent: "fore", z: 4.5, upright: true, scale: base.scale }
           : { pivot: off.grip, at: base.back, parent: "body", z: 0, scale: base.scale }
