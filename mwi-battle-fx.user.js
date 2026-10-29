@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.48
+// @version      0.21.49
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8569,6 +8569,8 @@ void main(){
     const liveOn = () => !!(app && source?.live && host?.isConnected)
     // a new wave (or a new battle): everyone set up again from the battle's units
     function newBattle() {
+      sideAuras.m = {}
+      statuses.m = {}
       if (liveOn()) sync()
     }
     // the real battle's actions: its line-up first brought up to date (a unit joined, a wave came in)
@@ -8624,7 +8626,10 @@ void main(){
       // (a monster by its Chinese name on a Chinese page, as the old stage does)
       a.label = new P.Text({ text: nameOf(side, u), style: { fontFamily: "sans-serif", fontSize: 12, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
       a.label.anchor.set(0.5, 0)
-      a.cont.addChild(a.shadow, a.hpBar, a.label)
+      // aura rings under the feet, a shield bubble over the body
+      a.rings = new P.Graphics()
+      a.over = new P.Graphics()
+      a.cont.addChild(a.rings, a.shadow, a.hpBar, a.label, a.over)
       unitsLayer.addChild(a.cont)
       return a
     }
@@ -8637,13 +8642,18 @@ void main(){
         bg.scale.set(k)
         bg.position.set((W2 - bg.texture.width * k) / 2, (H - bg.texture.height * k) * 0.85)
       }
+      // sized and placed as on the old stage: a box per unit by the head count (unitSize), a monster's 400 px pose frame
+      // drawn at 1.375 boxes (its 512 px cell fills the box), a player's box three quarters of that and filled by the
+      // figure; each side in a row on one ground line, the first nearest the middle, every other one a step back
+      const ground = Math.min(H * 0.84, H - 34)
       for (const side of ["p", "m"])
         units[side].forEach((a, i, all) => {
-          // the first of each side stands nearest the middle
-          const gap = (W2 * 0.36) / Math.max(2, all.length)
-          a.h = Math.min(H * 0.5, gap * 1.6)
-          a.x0 = side === "p" ? W2 * 0.4 - (i + 0.5) * gap : W2 * 0.6 + (i + 0.5) * gap
-          a.y0 = H * 0.86 + (i % 2) * H * 0.03
+          const n = all.length
+          const box = unitSize(W2, H, n) * cfg.scale * (side === "p" ? 0.75 : 1)
+          const step = n > 1 ? Math.min(box * 0.78, (W2 * 0.44 - box) / (n - 1)) : 0
+          a.h = side === "p" ? box * 1.08 : ((a.rig?.def.h || 220) * box * 1.375) / 400
+          a.x0 = side === "p" ? W2 * 0.46 - box / 2 - i * step : W2 * 0.54 + box / 2 + i * step
+          a.y0 = ground - (i % 2) * H * 0.035
           a.dir = side === "p" ? 1 : -1
           a.cont.position.set(a.x0, a.y0)
           a.cont.zIndex = a.y0
@@ -8778,6 +8788,8 @@ void main(){
       // the weapon pieces come with the paper-doll index
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
+        // (a refined item drawn as its plain one: the game's refined icon carries a 精 mark)
+        id = id && String(id).replace(/_refined$/, "")
         const pole = id && /staff|trident|spear|boomstick|stabber/.test(id) && (await gameIcon(String(id).split("/").pop()))
         if (pole) return { tex: pole.tex, grip: [0, 0], axis: pole.axis, k: pole.k }
         // an item redrawn for the rig (assets/rig/weapons: side-view crossbows, their axes in WEAPON_AXIS too; books
@@ -8910,9 +8922,11 @@ void main(){
         root.addChild(str)
       }
       root.filters = [a.filter]
-      a.cont.addChildAt(root, 1)
+      a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
+      a.glowKey = ""
       a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.crumble ?? def.face !== "right" }
-      rigScale(a)
+      enchGlow(a)
+      layout()
       if (a.dead) {
         if (a.rig.crumble) rigCrumble(a, true)
         else play1(a, "dead", { at: 1e6 })
@@ -10283,6 +10297,66 @@ void main(){
       punch = Math.max(punch, big ? 0.9 : 0.4)
       shake = Math.max(shake, big ? 0.7 : 0.25)
     }
+    // ----- lasting effects (as the old stage): aura rings under every ally while a side aura lasts, a glow round a unit
+    // while a self buff lasts (two at most), a shield bubble while invincible; and the enhancement glow round a
+    // player's weapon and off hand (+5 blue, +8 purple, +10 orange breathing, +12 red, +15 rainbow) -----
+    const AURA_C = { critical_aura: 0xff8a3c, fierce_aura: 0xff3c5a, mystic_aura: 0x9a7cff, guardian_aura: 0x4aa8ff, speed_aura: 0x9cff4a }
+    const BUFF_C = { berserk: 0xff3b2f, frenzy: 0xffd23c, vampirism: 0xb0102a, spike_shell: 0xff8a2a, retribution: 0xffd76a, elemental_affinity: 0xc77dff, precision: 0x5ad6ff, insanity: 0xd23cff, provoke: 0xff4040, taunt: 0xff4040, invincible: 0xffe27a }
+    const sideAuras = { p: {}, m: {} } // aura key -> until (arena ms)
+    const statuses = { p: {}, m: {} } // slot -> { buff key -> until }
+    function grant(src, ab) {
+      if (!src || !ab) return
+      const until = now() + (BUFF_SECONDS[ab.key] || (AURA_C[ab.key] ? 120 : 10)) * 1000
+      if (AURA_C[ab.key]) sideAuras[src.side][ab.key] = until
+      else if (BUFF_SECONDS[ab.key]) (statuses[src.side][src.i] ||= {})[ab.key] = until
+    }
+    function statusFrame(a, t) {
+      const st = statuses[a.side][a.i] || {}
+      const auras = a.dead ? [] : Object.keys(AURA_C).filter(k => sideAuras[a.side][k] > t)
+      const buffs = a.dead ? [] : Object.keys(st).filter(k => st[k] > t)
+      a.rings.clear()
+      auras.forEach((k, n) => {
+        const w = a.h * (0.8 + n * 0.2)
+        const al = 0.55 + 0.4 * Math.sin(t / 400 - n * 0.9)
+        a.rings.ellipse(0, -2, w / 2, w * 0.13).stroke({ color: AURA_C[k], width: 7, alpha: al * 0.3 })
+        a.rings.ellipse(0, -2, w / 2, w * 0.13).stroke({ color: AURA_C[k], width: 2, alpha: al })
+      })
+      a.over.clear()
+      if (buffs.includes("invincible")) {
+        const r = a.h * 0.62
+        const al = 0.5 + 0.2 * Math.sin(t / 300)
+        a.over.circle(0, -a.h * 0.5, r).fill({ color: 0xfff2b0, alpha: 0.1 }).stroke({ color: 0xffe27a, width: 3, alpha: al })
+      }
+      if (!a.rig) return
+      a.rig.root.alpha = buffs.includes("elusiveness") ? 0.72 : 1
+      const glows = buffs.filter(k => BUFF_C[k]).slice(0, 2)
+      const key = glows.join()
+      if (key !== a.glowKey) {
+        a.glowKey = key
+        a.rig.root.filters = [a.filter, ...glows.map((k, n) => new F.GlowFilter({ distance: 10 + n * 6, outerStrength: 2.2, color: BUFF_C[k], quality: 0.2 }))]
+      }
+      // the enhancement glow breathes from +10, cycles the rainbow from +15
+      for (const g of a.ench || []) {
+        if (g.breathe) g.f.outerStrength = g.strength * (0.55 + 0.45 * Math.sin(t / g.breathe))
+        if (g.rainbow) g.f.color = new P.Color({ h: (t / 8) % 360, s: 90, l: 60 }).toNumber()
+      }
+    }
+    const ENCH_T = [[15, "rainbow", 4, 260], [12, 0xff5a3c, 3.6, 220], [10, 0xffa53a, 3.2, 380], [8, 0xc07bff, 2.8, 0], [5, 0x6fb6ff, 2.4, 0]]
+    function enchGlow(a) {
+      a.ench = []
+      if (a.side !== "p") return
+      const it = a.u.items || {}
+      const enh = a.u.enh || {}
+      for (const [part, level] of [["weapon", it.main_hand ? enh.main_hand : enh.two_hand], ["off", enh.off_hand]]) {
+        const q = a.rig.by[part]
+        const tier = ENCH_T.find(([n]) => (level || 0) >= n)
+        if (!q || !tier) continue
+        const [, color, strength, breathe] = tier
+        const f = new F.GlowFilter({ distance: 12, outerStrength: strength, color: color === "rainbow" ? 0xff4d4d : color, quality: 0.2 })
+        q.s.filters = [f]
+        a.ench.push({ f, strength, breathe: breathe || (color === "rainbow" ? 300 : 0), rainbow: color === "rainbow" })
+      }
+    }
     function shockRing(x, y, h, color) {
       const g = new P.Graphics()
       g.position.set(x, y)
@@ -10679,6 +10753,7 @@ void main(){
         }
         if (e.effect !== "damage") {
           if (src) {
+            later(260, () => grant(src, e.ab))
             play1(src, "cast")
             circle(src, "buff", 900)
             // on the caster, or the whole side for an aura: a column of light, its colour rising round each, and what that
@@ -10910,6 +10985,7 @@ void main(){
             rigFrame(a, t)
             if (a.rig.arms.length) rigArms(a)
           }
+          statusFrame(a, t)
         }
       trails(t)
       // camera: shake and a short zoom punch toward the middle
