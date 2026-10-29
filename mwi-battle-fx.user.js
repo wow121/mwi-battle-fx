@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.37
+// @version      0.21.38
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "c0897872d7"
+  const ASSET_REV = "c466771e3d"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7586,6 +7586,14 @@ void main(){
         // knocked flat on its back, the feet kicking up toward the foe
         dead: { rel: true, fall: true, dur: 800, keys: [{ t: 0, a: {} }, { t: 140, e: "out", a: { torso: -20, arm_m: -30, arm_o: -40, leg_f: 10 }, x: -0.05, y: 0.06 }, { t: 800, e: "in", a: { torso: -86, arm_m: -70, arm_o: -50, leg_f: 25, leg_b: 10 }, x: -0.12 }] },
       },
+      // robed: a long robe to the ground, no feet to step with (the sorcerers): it sways from the hem, the attacks are
+      // the biped's (a caster raises its staff, book or hand high and thrusts it at the foe)
+      robed: {
+        idle: { rel: true, dur: 2400, loop: true, keys: [{ t: 0, a: { torso: 1.5, arm_m: 2, arm_o: -2 } }, { t: 1200, a: { torso: -1.5, arm_m: -3, arm_o: 3 }, y: -0.008 }, { t: 2400, a: { torso: 1.5, arm_m: 2, arm_o: -2 } }] },
+        hurt: { rel: true, dur: 520, keys: [{ t: 0, a: {} }, { t: 90, e: "out", a: { torso: -12, arm_m: -20, arm_o: -25 }, x: -0.04 }, { t: 260, a: { torso: -8, arm_m: -8, arm_o: -12 }, x: -0.035 }, { t: 520, a: {} }] },
+        cast: { dur: 1100, keys: [{ t: 0, a: {} }, { t: 200, e: "out", a: { torso: 4 } }, { t: 450, e: "out", a: { torso: -8, arm_m: 165, weapon: 178, arm_o: 150 }, y: 0.05 }, { t: 850, a: { torso: -8, arm_m: 168, weapon: 180, arm_o: 155 }, y: 0.04 }, { t: 1100, a: {} }] },
+        dead: { rel: true, fall: true, lift: 0.05, dur: 900, keys: [{ t: 0, a: {} }, { t: 180, e: "out", a: { torso: -15, arm_m: -20, arm_o: -30 }, x: -0.04, y: 0.03 }, { t: 900, e: "in", a: { torso: -86, arm_m: -60, arm_o: -45 }, x: -0.1 }] },
+      },
       "biped:slash": {
         // an overhead chop: the blade up behind the head, brought down through the foe
         attack: {
@@ -7668,7 +7676,8 @@ void main(){
       const tmpl = def.tmpl
       if (!MT[tmpl] || ACTIONS[id]?.__tmpl) return
       const style = MONSTERS[id]?.[1] || "smash"
-      const src = { ...MT[tmpl], ...(MT[tmpl + ":" + style] || MT[tmpl + ":smash"]) }
+      // (a shape without attacks of its own for this style uses the biped's)
+      const src = { ...MT[tmpl], ...(MT[tmpl + ":" + style] || MT["biped:" + style] || MT[tmpl + ":smash"] || MT["biped:smash"]) }
       const P = def.parts
       const rest = n => P[n]?.aim || 0
       const set = { __tmpl: tmpl }
@@ -8595,10 +8604,17 @@ void main(){
           const fwd = R.def.face === "right" ? 1 : -1
           // a floating hand also moves by its own [forward, up]
           q.x = q.p.at[0] - R.def.foot[0] + (pose.x + v[0]) * h * fwd
-          // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead
+          // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead (an action's
+          // lift, in heights: less for a body turning about the hem of a robe)
           const tip = Math.max(0, Math.min(1, (Math.abs(pose.a.body || pose.a.torso || 0) - 30) / 58))
-          q.y = q.p.at[1] - R.def.foot[1] - (Math.max(0, pose.y) + v[1] + 0.3 * tip) * h
+          q.y = q.p.at[1] - R.def.foot[1] - (Math.max(0, pose.y) + v[1] + (A?.def.lift ?? 0.3) * tip) * h
           q.wr = r + q.rest
+          // something floating round a monster (rig.json float = its phase): bobs on its own, gone when it falls
+          if (q.p.float != null) {
+            q.y += Math.sin(t / 650 + q.p.float) * h * 0.03
+            q.wr += Math.sin(t / 900 + q.p.float * 2) * 0.12
+            q.s.alpha = a.dead ? Math.max(0, q.s.alpha - 0.04) : Math.min(1, q.s.alpha + 0.04)
+          }
         }
         // getting back up: fly from where the piece lay into place
         const b = R.back
