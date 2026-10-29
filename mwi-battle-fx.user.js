@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.46
+// @version      0.21.47
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -9041,6 +9041,38 @@ void main(){
         q.s.position.set(b ? lerp(q.x, q.fx, b) : q.x, b ? lerp(q.y, q.fy, b) : q.y)
         q.s.rotation = b ? lerp(q.wr, q.fr, b) : q.wr
       }
+      // a floating hand goes no farther from its shoulder than the arm reaches (its keys are moves from rest, laid over
+      // whatever the body does: raised overhead on a leaning body they would pull the arm long); past it, the hand and
+      // what it holds are drawn back toward the shoulder along the same line
+      const body = R.by.body
+      // an arm's shoulder where the body is now, and how far its hand can be from it
+      const shoulder = arm => {
+        const dx0 = arm.shoulder[0] - body.p.at[0]
+        const dy0 = arm.shoulder[1] - body.p.at[1]
+        const c = Math.cos(body.wr)
+        const s = Math.sin(body.wr)
+        return [body.x + dx0 * c - dy0 * s, body.y + dx0 * s + dy0 * c]
+      }
+      const reachOf = arm => (arm.len[0] + arm.len[1]) * 1.15 + (R.by[arm.hand]?.w || 0) * 0.32
+      if (R.def.arms && body && !R.back)
+        for (const arm of Object.values(R.def.arms)) {
+          const hand = R.by[arm.hand]
+          if (!hand) continue
+          const [Sx, Sy] = shoulder(arm)
+          const d = Math.hypot(hand.x - Sx, hand.y - Sy)
+          const reach = reachOf(arm)
+          if (d <= reach) continue
+          const mx = (Sx - hand.x) * (1 - reach / d)
+          const my = (Sy - hand.y) * (1 - reach / d)
+          const moved = new Set([hand])
+          for (const q of R.order)
+            if (moved.has(q) || moved.has(R.by[q.p.parent])) {
+              moved.add(q)
+              q.x += mx
+              q.y += my
+              q.s.position.set(q.x, q.y)
+            }
+        }
       // a bow's string: drawn from its two ends to the back hand while that hand is pulling it (close behind the bow)
       if (R.str) {
         R.str.clear()
@@ -9069,8 +9101,25 @@ void main(){
         const dy = (R.def.two[1] - w.p.pivot[1]) * k
         const c = Math.cos(w.wr)
         const s = Math.sin(w.wr)
-        ho.x = w.x + dx * c - dy * s
-        ho.y = w.y + dx * s + dy * c
+        // (at its place on the haft, or slid along it to where its arm reaches: from the holding hand to a little past)
+        const arm = body && Object.values(R.def.arms || {}).find(m => R.by[m.hand] === ho)
+        let f = 1
+        if (arm) {
+          const [Sx, Sy] = shoulder(arm)
+          const reach = reachOf(arm)
+          const at = t => [w.x + (dx * c - dy * s) * t, w.y + (dx * s + dy * c) * t]
+          const dist = t => Math.hypot(at(t)[0] - Sx, at(t)[1] - Sy)
+          if (dist(1) > reach) {
+            let best = 1
+            for (let t = 0; t <= 1.4001; t += 0.05) {
+              const fits = dist(t) <= reach
+              if ((fits && (dist(best) > reach || Math.abs(t - 1) < Math.abs(best - 1))) || (!fits && dist(best) > reach && dist(t) < dist(best))) best = t
+            }
+            f = best
+          }
+        }
+        ho.x = w.x + (dx * c - dy * s) * f
+        ho.y = w.y + (dx * s + dy * c) * f
         ho.s.position.set(ho.x, ho.y)
         ho.s.rotation = ho.wr = lead.wr
       }
