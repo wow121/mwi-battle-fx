@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.58
+// @version      0.21.59
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8499,15 +8499,19 @@ void main(){
       lights.blendMode = fxLayer.blendMode = partLayer.blendMode = "add"
       bloom = new F.AdvancedBloomFilter({ threshold: 0.45, bloomScale: 1, brightness: 1, blur: 8, quality: 6 })
       bloom.blendMode = "add"
-      fxLayer.filters = [bloom]
-      partLayer.filters = [bloom]
+      // (one bloom over the effects and the particles together: a filter is a pass over the whole stage, two of them
+      // cost twice the one)
+      const glowLayer = new P.Container()
+      glowLayer.addChild(fxLayer, partLayer)
+      glowLayer.blendMode = "add"
+      glowLayer.filters = [bloom]
       // ground marks (scorches, cracks, spent arrows) under everyone; smoke over the bodies, not glowing
       decalLayer = new P.Container()
       smokeLayer = new P.Container()
       scene = new P.Container()
       back = new P.Container()
       back.addChild(bg, decalLayer, lights, unitsLayer, smokeLayer)
-      scene.addChild(back, shotLayer, fxLayer, partLayer)
+      scene.addChild(back, shotLayer, glowLayer)
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
@@ -8605,7 +8609,7 @@ void main(){
     // a unit taken down with its GPU filters (its body shader, buff glows, enhancement glows): left behind, every
     // set-up again would pile more of them up until the WebGL context gives out
     function teardown(a) {
-      const fs = new Set([a.filter, ...(a.rig?.root.filters || []), ...(a.ench || []).map(g => g.f)])
+      const fs = new Set([a.filter, ...(a.glowFs || []), ...(a.ench || []).map(g => g.f)])
       a.cont.destroy({ children: true })
       for (const f of fs) f?.destroy?.()
     }
@@ -8942,7 +8946,8 @@ void main(){
     const FALLERS = new Set(["quad", "centaur"])
     function buildRig(a, { def, tex }) {
       // (the old body's glow filters freed with it; its body shader a.filter goes on to the new one)
-      for (const f of [...(a.rig?.root.filters || []), ...(a.ench || []).map(g => g.f)]) if (f !== a.filter) f?.destroy?.()
+      for (const f of [...(a.glowFs || []), ...(a.ench || []).map(g => g.f)]) f?.destroy?.()
+      a.glowFs = []
       a.rig?.root.destroy({ children: true })
       const root = new P.Container()
       const list = Object.entries(def.parts)
@@ -9006,7 +9011,8 @@ void main(){
         str.zIndex = 3.92
         root.addChild(str)
       }
-      root.filters = [a.filter]
+      // (the body shader is put on by bodyFilters only while it shows something)
+      a.bodyOn = null
       a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
       a.glowKey = ""
       // a monster shatters when it dies (its pieces tumble back, bounce and burn away), except a four-legged beast, which
@@ -10459,15 +10465,20 @@ void main(){
       const buffs = live.filter(k => st[k].kind === "buff")
       drawChips(a, [...auras.map(k => [k, "buff"]), ...live.map(k => [k, st[k].kind])])
       drawHp(a)
-      a.rings.clear()
+      // (the rings and the shield are redrawn each frame only while there are some: an empty Graphics cleared every
+      // frame is rebuilt every frame all the same)
+      if (auras.length || a.ringsOn) a.rings.clear()
+      a.ringsOn = auras.length > 0
       auras.forEach((k, n) => {
         const w = a.h * (0.8 + n * 0.2)
         const al = 0.55 + 0.4 * Math.sin(t / 400 - n * 0.9)
         a.rings.ellipse(0, -2, w / 2, w * 0.13).stroke({ color: AURA_C[k], width: 7, alpha: al * 0.3 })
         a.rings.ellipse(0, -2, w / 2, w * 0.13).stroke({ color: AURA_C[k], width: 2, alpha: al })
       })
-      a.over.clear()
-      if (buffs.includes("invincible")) {
+      const shield = buffs.includes("invincible")
+      if (shield || a.overOn) a.over.clear()
+      a.overOn = shield
+      if (shield) {
         const r = a.h * 0.62
         const al = 0.5 + 0.2 * Math.sin(t / 300)
         a.over.circle(0, -a.h * 0.5, r).fill({ color: 0xfff2b0, alpha: 0.1 }).stroke({ color: 0xffe27a, width: 3, alpha: al })
@@ -10478,14 +10489,28 @@ void main(){
       const key = glows.join()
       if (key !== a.glowKey) {
         a.glowKey = key
-        for (const f of a.rig.root.filters || []) if (f !== a.filter) f.destroy()
-        a.rig.root.filters = [a.filter, ...glows.map((k, n) => new F.GlowFilter({ distance: 10 + n * 6, outerStrength: 2.2, color: BUFF_C[k], quality: 0.2 }))]
+        for (const f of a.glowFs) f.destroy()
+        a.glowFs = glows.map((k, n) => new F.GlowFilter({ distance: 10 + n * 6, outerStrength: 2.2, color: BUFF_C[k], quality: 0.2 }))
+        a.bodyOn = null
       }
+      bodyFilters(a)
       // the enhancement glow breathes from +10, cycles the rainbow from +15
       for (const g of a.ench || []) {
         if (g.breathe) g.f.outerStrength = g.strength * (0.55 + 0.45 * Math.sin(t / g.breathe))
         if (g.rainbow) g.f.color = new P.Color({ h: (t / 8) % 360, s: 90, l: 60 }).toNumber()
       }
+    }
+    // The body shader (a flash, burning away) costs a render of the whole body into a texture of its own every frame, so
+    // it is on only while it shows something: ten bodies under it all the time took a fifth of a frame at 5 v 5.
+    // A body burnt away completely is simply hidden.
+    function bodyFilters(a) {
+      const root = a.rig?.root || a.flat.root
+      const on = a.uni.uFlash > 0 || (a.uni.uDis > 0 && a.uni.uDis < 1)
+      root.visible = a.uni.uDis < 1
+      if (on === a.bodyOn) return
+      a.bodyOn = on
+      const fs = on ? [a.filter, ...a.glowFs] : a.glowFs
+      root.filters = fs.length ? fs : null
     }
     const ENCH_T = [[15, "rainbow", 4, 260], [12, 0xff5a3c, 3.6, 220], [10, 0xffa53a, 3.2, 380], [8, 0xc07bff, 2.8, 0], [5, 0x6fb6ff, 2.4, 0]]
     function enchGlow(a) {
