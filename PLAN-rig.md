@@ -211,16 +211,27 @@
 - 切零件需要每只怪物单独定多边形和关节，工作量大：先挑一种体型做通、做出批量方法，再铺开。
 
 ### D. 接进真实战斗
-- **第一步（v0.21.46）**：配置 `stageEngine`（默认 `"rig"` = 新版骨骼舞台，`"classic"` = 老版整张立绘舞台，老版代码不动）。
-  切换：油猴菜单「战斗舞台：…（点击切换）」或战斗区右上角「换老版舞台 / 换新版舞台」按钮。
-  新版时 `Live` 在战斗区的覆盖层里挂 `Arena`（来源 `{units, loc: stageLocation, tier: where.tier, live: true}`），
-  `onBattleUpdated` 的动作走 `Arena.playLive`（先按单位对象核对阵容，变了就重建），`new_battle` 走 `Arena.newBattle`。
-  `Arena` 和怪物 / 武器数据移出了 `#dev` 区，发布版也带上；只有测试页 `Lab` 和 demo 还是开发专用。
-  公会试炼仍用老版（几十人的阵型新版还没做）。
-  新版还缺：地点 / 难度角标、血量数字、增益 / 状态图标、没有骨骼的新怪的后备画法；发布前要确认 Greasy Fork 对从 jsDelivr 载入 PixiJS 的规定。
-- 现在只有测试页用 PixiJS。正式战斗舞台（`Stage`，DOM / CSS）还是旧的整张立绘。全部补齐后，把 `Arena` 接到真实战斗消息上
-  （`units` / `resolve` 产生的事件和测试页的 `play(evs)` 形状一致），替换旧舞台；眩晕用消息里的 `isStunned`。
-- 性能：一场战斗最多 5 对 5 + 公会战更多人，注意 PixiJS 的帧率（以前用户关心过卡顿）。
+- **已完成（v0.21.46–0.21.57）**：配置 `cfg.stageEngine`（默认 `"rig"` 新版骨骼舞台 / `"classic"` 老版，老版代码不动；油猴菜单和战斗区右上角按钮切换）。
+  `Live` 在战斗区覆盖层挂 `Arena`（来源 `{units, loc: stageLocation, tier: where.tier, live: true}`）；`onBattleUpdated` → `Arena.playLive`
+  （阵容变了先 `sync`），`new_battle` → `Arena.newBattle`。`Arena` 和怪物 / 武器数据已移出 `#dev`，发布版带上；测试页 `Lab` 和 demo 仍开发专用。
+  大小和站位照老版（`unitSize`）；脚下信息栏（名字 + 怪物难度、血条和蓝条带数字、状态小图标）；左上角地点 / 难度角标；光环圈、增益光晕、
+  无敌护盾、强化光晕（+5 蓝 … +15 彩虹）；不在屏幕上时不播放，回来按当前战况 `sync`（`clearFx` 把特效走完清掉，`teardown` 释放滤镜）；
+  画布跟随外框大小（ResizeObserver）；每帧整体 try/catch（报错不能让 PixiJS ticker 停掉）。死亡：四足趴下、半人马跪倒，其余怪碎裂。
+  调试：`__mwiBattleFx.Arena.stats()`（特效 / 粒子 / 补间数、WebGL 是否丢失、ticker 是否在跑）。
+- **剩下 5 件（用户要求一次做完）**：
+  1. **眩晕**：真实战斗里被眩晕要显示（新版现在只有测试页的 `tg.stunned` 会出星星 `stun(a, ms)`）。从战斗消息取眩晕状态
+     （先查 `tools/test/replay-msgs.tsv` 和录制的消息里 pMap / mMap 的字段，计划里记的是 `isStunned`），开始 / 结束都要跟上。
+  2. **5 对 5 满场帧率**：实测并优化。109 上用 `tools/test/run-mock.sh`（`DRIVER=` 换驱动、`MOCK=` 换页面）摆 5 玩家 + 5 怪、持续放技能，
+     量每秒帧数（`requestAnimationFrame` 计数，或 `app.ticker.FPS`）；手机宽度（`PHONE=1`）也量。帧率差就找大头（滤镜、粒子数、bloom）。
+  3. **公会试炼用新版**：现在 `GuildLive` 还挂老版 `Stage`（`mode === "guild"`）。新版要做几十人阵型（老版 `guildLayout`：坦克在前，
+     近战、远程、魔法往后；多排；滚轮缩放、拖动平移、双击复位），人多时降低特效（老版 `crowded()`）。测试页面 `tools/test/guild.html`。
+     做好后公会试炼也按 `cfg.stageEngine` 走。
+  4. **没有骨骼的怪的后备画法**：游戏出新怪还没切骨骼时，新版现在只有名字和血条。用它的整张立绘（`assets/m/<id>/idle.webp` 等，
+     老版用的那套），再没有就用老版的 `fallbackSvg` 那种简单图形；受击 / 攻击至少有位移和闪白。
+  5. **Greasy Fork 规定**：确认发布版从 jsDelivr 动态加载 PixiJS（`Arena` 里 `LIBS` + `loadScript`）是否违反 Greasy Fork 规则；
+     不允许就改成 `@require`（`tools/build-release.py` 管发布版头部，要和开发版一致地处理），并确认发布版能跑（`SCRIPT=release/... run-mock.sh`）。
+- 测试工具（都不在仓库里）：`~/mwi-art-raw/rig/mon/` 的 `shot.sh` / `shotp.sh` / `drive-mon.mjs` / `drive-pl.mjs` / `drive-fx.mjs`（测试页定格、
+  按按钮连拍）；会话草稿目录里的 `drive-hide.mjs`（切标签）、`drive-stress.mjs`（切 15 轮 + `stats()`）、`drive-resize.mjs` 可以照抄。
 
 ## 3. 建议的顺序
 1. A 的武器分组 + 剑盾以外的 2~3 种握法（各自先用试点形象），给用户看。
