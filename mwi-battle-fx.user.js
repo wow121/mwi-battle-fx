@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.59
+// @version      0.21.60
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8650,6 +8650,11 @@ void main(){
           const r = await (side === "p" ? loadPlayerRig(a.u) : loadRig(a.kind)).catch(e => console.warn("[动画测试] rig", a.kind, e))
           if (run !== syncing) return
           if (r) buildRig(a, r)
+          else if (side === "m") {
+            const f = await loadFlat(a.kind)
+            if (run !== syncing) return
+            buildFlat(a, f)
+          }
         }
     }
     const DUNGEON_ZONES = new Set(["chimerical_den", "enchanted_fortress", "pirate_cove", "sinister_circus"])
@@ -8728,6 +8733,7 @@ void main(){
           a.hudKey = ""
           drawHp(a)
           if (a.rig) rigScale(a)
+          if (a.flat) a.flat.k = 0
         })
     }
     function drawHp(a) {
@@ -9026,6 +9032,84 @@ void main(){
         else play1(a, "dead", { at: 1e6 })
       } else play1(a, "idle")
     }
+    // ----- a monster without a rig (one the game added since): the old stage's pose pictures, else a plain shape -----
+    // The pictures (assets/m/<id>/<pose>.webp, 400 px, the body standing in the middle 1 / 1.375 of the frame, feet on
+    // its bottom edge) are swapped by the action's phase: wound up before the blow, striking as it lands. A melee
+    // monster runs in like a rigged one; the rest shoot from the middle of the body.
+    const FLAT_POSES = ["idle", "windup", "strike", "hurt", "cast", "dead"]
+    const flats = {}
+    function loadFlat(id) {
+      if (!Assets.has("m", id)) return Promise.resolve(null)
+      flats[id] ||= Promise.all(FLAT_POSES.map(n => P.Assets.load(Assets.url(`m/${id}/${n}.webp`)).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
+      return flats[id]
+    }
+    function buildFlat(a, tex) {
+      a.flat?.root.destroy({ children: true })
+      const root = new P.Container()
+      let body
+      if (tex) {
+        body = new P.Sprite(tex.idle)
+        body.anchor.set(0.5, 0.5 + 0.5 / 1.375)
+      } else {
+        // the old stage's stand-in: a hump in the unit's element colour with two eyes, in a 100 unit box, feet at 0
+        body = new P.Graphics()
+        body.moveTo(-32, 0).quadraticCurveTo(-36, -52, 0, -62).quadraticCurveTo(36, -52, 32, 0).closePath()
+        body.fill(COLOR[a.u.element] || 0x99aaaa).stroke({ color: 0x000000, width: 2, alpha: 0.4 })
+        for (const x of [-12, 12]) body.circle(x, -37, 5).fill(0xffffff).circle(x - 2, -37, 2.5).fill(0x000000)
+      }
+      root.addChild(body)
+      a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
+      a.glowFs ||= []
+      a.bodyOn = null
+      a.flat = { root, body, tex, melee: !/ranged|magic/.test(a.u.style || "") }
+      layout()
+      play1(a, a.dead ? "dead" : "idle")
+    }
+    function flatScale(a) {
+      const F2 = a.flat
+      // (a picture: its frame at 1.375 boxes; the shape: about the body height of a rigged monster)
+      F2.k = F2.tex ? (a.box * 1.375) / F2.tex.idle.width : a.h / 62
+    }
+    function playFlat(a, name, at = 0) {
+      const F2 = a.flat
+      const strike = /^(attack|skill)/.test(name)
+      const def =
+        name === "dead" ? { dur: 1 } : name === "hurt" ? { dur: 320 } : name === "cast" ? { dur: 800 }
+        : strike && F2.melee ? { dur: 900, hit: 450, lunge: true }
+        : strike ? { dur: 900, hit: 560, shot: 300, missile: a.u.style === "magic" ? "orb" : "arrow" }
+        : { dur: 1e9 }
+      a.act = { name, def, t0: now() - at }
+      return def
+    }
+    function flatFrame(a, t) {
+      const F2 = a.flat
+      if (!F2.k) flatScale(a)
+      const A = a.act
+      const at = A ? t - A.t0 : 0
+      let pose = "idle"
+      let lean = 0
+      if (a.dead) pose = "dead"
+      else if (A && at < A.def.dur) {
+        if (A.name === "hurt") (pose = "hurt"), (lean = -0.12 * (1 - at / A.def.dur))
+        else if (A.name === "cast") pose = "cast"
+        else if (A.def.hit != null) {
+          const go = A.def.shot ?? A.def.hit - 120
+          if (at < go) (pose = A.name.startsWith("skill") && !F2.melee ? "cast" : "windup"), (lean = -0.1 * Math.min(1, at / go))
+          else if (at < A.def.hit + 260) (pose = "strike"), (lean = 0.12)
+        }
+      }
+      if (F2.tex) {
+        F2.body.texture = F2.tex[pose]
+        lean *= 0.4
+      }
+      // breathing while it stands, a shudder when hit; the pictures face left, turned to face the foe
+      const k = F2.k
+      const breathe = a.dead ? 0 : 0.015 * Math.sin(t / 420 + a.i)
+      F2.root.scale.set((a.dir < 0 ? 1 : -1) * k, k * (1 + breathe))
+      F2.root.rotation = lean * a.dir
+      F2.root.x = a.jig * a.h * 0.04 * Math.sin(t / 30)
+      if (!F2.tex && a.dead) F2.root.rotation = -a.dir * 1.3
+    }
     // art faces left unless rig.json says face: "right"; mirrored to face the foe
     function rigScale(a) {
       const k = a.h / a.rig.def.h
@@ -9037,6 +9121,7 @@ void main(){
     }
     // starts an action on a unit; the pose it leaves is blended out over the first `blend` ms
     function play1(a, name, { at = 0, blend = 120 } = {}) {
+      if (a.flat) return playFlat(a, name, at)
       const act = actionOf(a.kind, name) || actionOf(a.kind, "idle")
       if (!act) return null
       a.from = a.pose ? { ...a.pose, a: { ...a.pose.a } } : null
@@ -10201,7 +10286,7 @@ void main(){
       if (isSkill && !tg.died) afflict(a, e.ab)
       drawHp(a)
       if (tg.died) die(a)
-      else if (a.rig && !a.act?.def.hit) play1(a, "hurt")
+      else if ((a.rig || a.flat) && !a.act?.def.hit) play1(a, "hurt")
     }
     // a.life counts deaths and revivals: a burn-away or rebuild still running from an earlier one leaves the body
     // alone (a revival during the 2.4 s burn used to be burnt away again, the unit invisible until its next death)
@@ -10245,6 +10330,10 @@ void main(){
       const life = ++a.life
       drawHp(a)
       a.hud.visible = false
+      if (a.flat) {
+        play1(a, "dead")
+        return tween(1500, p => a.life === life && (a.uni.uDis = ease(p)), 900)
+      }
       if (!a.rig) return
       if (a.rig.crumble) {
         rigCrumble(a)
@@ -10259,6 +10348,10 @@ void main(){
       a.hud.visible = true
       a.hudKey = ""
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.9, 900)
+      if (a.flat) {
+        play1(a, "idle")
+        tween(900, p => a.life === life && (a.uni.uDis = 1 - ease(p)))
+      }
       if (a.rig) {
         if (a.rig.fallen) {
           rigRise(a)
@@ -10483,6 +10576,7 @@ void main(){
         const al = 0.5 + 0.2 * Math.sin(t / 300)
         a.over.circle(0, -a.h * 0.5, r).fill({ color: 0xfff2b0, alpha: 0.1 }).stroke({ color: 0xffe27a, width: 3, alpha: al })
       }
+      if (a.flat) return bodyFilters(a)
       if (!a.rig) return
       a.rig.root.alpha = buffs.includes("elusiveness") ? 0.72 : 1
       const glows = buffs.filter(k => BUFF_C[k]).slice(0, 2)
@@ -11167,7 +11261,7 @@ void main(){
           if (a.rig) {
             rigFrame(a, t)
             if (a.rig.arms.length) rigArms(a)
-          }
+          } else if (a.flat) flatFrame(a, t)
           statusFrame(a, t)
           stunFrame(a, t)
         }
