@@ -5,8 +5,9 @@ usage: rig-player-layers.py <sheets dir> <out dir> <name> ...      names like a_
 
 <sheets dir> holds noarms_a.png (the bald base figure without arms) and, per layer, the two Codex sheets of
 tools/make-rig-player-jobs.py on flat green (an outfit's uncovered skin in magenta): <name>.png, the armless body
-painted over noarms_a, and <name>_parts.png, the parts guide (tools/rig-player-guide.py, next to this script)
-repainted as its arms and fists. Per layer it writes to <out dir> (assets/rig/player):
+painted over noarms_a (an avatar's may be the head only, its body in magenta: filled with the base recoloured), and
+<name>_parts.png, the parts guide (tools/rig-player-guide.py, next to this script) repainted as its arms and fists.
+Per layer it writes to <out dir> (assets/rig/player):
   <name>_body.webp / _head.webp   the armless body split at the neck (the far arm passes between head and torso)
   <name>_hm.webp / _ho.webp       the two fists (back = main hand, front = off hand)
   <name>_arm{f,b}_{up,lo}.webp    each upper arm / forearm, a capsule lying level, its joint at the centre of its left
@@ -62,6 +63,26 @@ def unmagenta(im):
     bare = im[..., 3] < 50
     im[..., 3] *= np.clip((70 - mg) / 40, 0, 1)
     im[grow(mg > 30, 3) & grow(bare, 3), 3] = 0
+
+
+def fill_skin(im, skin):
+    """an avatar drawn head only (make-rig-player-jobs.py bodym: the image filter blocks some bare bodies), its body left
+    magenta: the base figure under it, recoloured to the skin of its arms (its shading and outline kept as the ratio to
+    the base's own skin)"""
+    r, g, b = im[..., 0], im[..., 1], im[..., 2]
+    mag = (np.minimum(r, b) - g - np.abs(r - b) * 0.5 > 30) & (im[..., 3] > 50)
+    if mag.sum() < 0.05 * SIL.sum():
+        return
+    unmagenta(im)
+    lum = base[..., :3] @ [0.3, 0.59, 0.11]
+    torso = SIL.copy()
+    torso[:720] = False
+    shade = np.clip(lum / max(1, np.median(lum[torso])), 0, 1.3)[..., None]
+    under = np.dstack([np.clip(np.array(skin, float) * shade, 0, 255), base[..., 3] * grow(mag, 4)])
+    ai, au = im[..., 3:] / 255, under[..., 3:] / 255
+    ao = ai + au * (1 - ai)
+    im[..., :3] = (im[..., :3] * ai + under[..., :3] * au * (1 - ai)) / np.maximum(ao, 1e-6)
+    im[..., 3:] = ao * 255
 
 
 def save(img, name):
@@ -163,8 +184,10 @@ for name in NAMES:
         unmagenta(im)
         unmagenta(pt)
     sc = score(painted)
-    cut_body(name, im)
     cols, cover = cut_parts(name, pt, ppainted)
+    if name.startswith("a_"):
+        fill_skin(im, [int(cols["armf"]["fill"][k : k + 2], 16) for k in (1, 3, 5)])
+    cut_body(name, im)
     sc.update(cover)
     kind = "avatars" if name.startswith("a_") else "outfits"
     if name[2:] not in rig[kind]:

@@ -6,8 +6,9 @@
                            arms and fists (sleeves and gloves for an outfit), with the body drawn first as a reference
 tools/rig-player-layers.py cuts them.
 
-usage: make-rig-player-jobs.py <raw_dir> body|parts <name> ...   names like a_cat_1 / o_mage_1 (ref/lib/<name>.png)
-       make-rig-player-jobs.py <raw_dir> body|parts --all        every avatar and outfit in ref/lib
+usage: make-rig-player-jobs.py <raw_dir> body|bodym|parts <name> ...   names like a_cat_1 / o_mage_1 (ref/lib/<name>.png)
+       make-rig-player-jobs.py <raw_dir> body|bodym|parts --all        every avatar and outfit in ref/lib
+bodym: avatars only, the head painted and the body left magenta (for those whose bare body the image filter blocks)
 Writes <raw_dir>/rig/pl3/jobs-<phase>.tsv for tools/gen.sh <raw_dir>/rig/pl3 <jobs> <parallel> (it skips sheets that
 exist); run the parts phase after the body sheets are in.
 """
@@ -42,6 +43,17 @@ PROMPT = {
     + KEEP
     + "Only hair, ears, horns or a tail may extend outside the outline.\n"
     "Output: square, same size and framing as image 1. " + GREEN + " Do not use green on the character.\n",
+    # (an avatar whose body Codex's filter blocks: the head only, the body left in magenta; rig-player-layers.py fills
+    # it with the base figure recoloured to the skin of the avatar's arms)
+    ("bodym", "a"): HEAD
+    + BASE
+    + "Reference image 2 is a game avatar shown from the FRONT (flat vector art, soft cel shading).\n"
+    "Task: repaint the HEAD of image 1 as the head of image 2, in the same 3/4 view facing right: its face, both eyes, hair, ears and "
+    "any horns, and a tail or wings if image 2 has them. Paint the whole figure below the chin (neck, torso, legs, feet) in perfectly "
+    "flat unshaded magenta #FF00FF, keeping its outline exactly; no clothes, no details on it.\n"
+    + KEEP
+    + "Only hair, ears, horns, wings or a tail may extend outside the outline.\n"
+    "Output: square, same size and framing as image 1. " + GREEN + " Do not use green or magenta on the character.\n",
     ("body", "o"): HEAD
     + BASE
     + "Reference image 2 is a game outfit shown from the FRONT (flat vector art, soft cel shading).\n"
@@ -81,16 +93,32 @@ names = sys.argv[3:]
 if names == ["--all"]:
     names = sorted(f[:-4] for f in os.listdir(LIB) if f[:2] in ("a_", "o_") and f.endswith(".png"))
 for (ph, k), text in PROMPT.items():
+    if ph == "bodym":
+        ph = "body"
+        k = "am"
     with open(os.path.join(PL, f"p_{ph}_{k}.txt"), "w") as f:
         f.write(text)
+HINTS = {}
+if os.path.exists(os.path.join(PL, "hints.tsv")):
+    for line in open(os.path.join(PL, "hints.tsv")):
+        if line.strip() and not line.startswith("#"):
+            nm, ph, text = line.rstrip("\n").split("\t")
+            HINTS[(nm, ph)] = text
 n = 0
-with open(os.path.join(PL, f"jobs-{PHASE}.tsv"), "w") as f:
+with open(os.path.join(PL, f"jobs-{PHASE}.tsv"), "w") as f:  # (bodym: jobs-bodym.tsv)
     for name in names:
         ref = os.path.join(LIB, name + ".png")
         if not os.path.exists(ref):
             sys.exit("no reference " + ref)
-        prompt = os.path.join(PL, f"p_{PHASE}_{name[0]}.txt")
-        if PHASE == "body":
+        prompt = os.path.join(PL, "p_body_am.txt" if PHASE == "bodym" else f"p_{PHASE}_{name[0]}.txt")
+        # a layer Codex keeps getting wrong: its note (<pl3>/hints.tsv: name, phase, text) added to its own prompt
+        hint = HINTS.get((name, PHASE))
+        if hint:
+            text = open(prompt).read() + "In particular: " + hint + "\n"
+            prompt = os.path.join(PL, f"p_{PHASE}_{name}.txt")
+            with open(prompt, "w") as h:
+                h.write(text)
+        if PHASE in ("body", "bodym"):
             f.write(f"{name}\t{prompt}\t{os.path.join(SHEETS, 'noarms_a.png')},{ref}\n")
         else:
             body = os.path.join(SHEETS, name + ".png")
