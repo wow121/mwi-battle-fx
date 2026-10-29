@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.45
+// @version      0.21.46
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig" }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
@@ -203,6 +203,7 @@
     units.p.forEach((u, i) => Looks.assign(u, i))
     if (cfg.debug) console.log("[战斗动画] new_battle", obj) // #dev
     if (cfg.enabled) Stage.newBattle()
+    if (cfg.enabled) Arena.newBattle()
   }
 
   // guild trials: up to ~40 players against the trial boss(es), with their own messages (new_guild_battle /
@@ -308,6 +309,8 @@
     procs(actions, changes, U)
     if (cfg.debug) console.log("[战斗动画]", JSON.stringify(obj), changes, actions) // #dev
     if (cfg.enabled) Stage.play(actions, src)
+    // (the rigged stage, when it is the one laid over the own battle)
+    if (cfg.enabled && src === "live") Arena.playLive(actions)
   }
 
   // turns raw hp/mp deltas into actions:
@@ -964,6 +967,8 @@
 .bfx-stage.bfx-live{position:absolute;inset:0;height:auto;min-height:0;resize:none;border-radius:6px}
 .bfx-toggle{position:absolute;top:2px;right:4px;z-index:20;padding:2px 8px;font:12px/18px sans-serif;color:#dfe6ff;background:rgba(20,26,52,.85);border:1px solid #4a5590;border-radius:10px;cursor:pointer}
 .bfx-toggle:hover{background:#2a3460}
+.bfx-arena{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
+.bfx-live-slot>.bfx-arena{position:absolute;inset:0;border-radius:6px}
 /* #dev-start */
 .bfx-lab{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;font:12px/1.4 sans-serif;color:#dfe6ff}
 .bfx-lab .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px}
@@ -977,7 +982,6 @@
 .bfx-lab .gal figure{margin:0;display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border-radius:6px;padding:2px 4px}
 .bfx-lab .gal img{width:96px;height:96px}
 .bfx-lab .gal label{font-size:11px;cursor:pointer}
-.bfx-arena{position:relative;width:100%;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.12);color:#dfe6ff;font:13px sans-serif}
 .bfx-lab-stage{display:none}
 /* #dev-end */`
       document.head.appendChild(st)
@@ -2755,15 +2759,23 @@
   // ---------- real battles: the stage laid over the game's unit cards ----------
   // Only BattlePanel_battleArea is covered, so consumables, ability cooldowns and the flee button below
   // stay visible. A button in the panel's corner switches between our view and the original cards.
+  // Two stages to choose from (cfg.stageEngine, a button in the other corner): "rig", the rigged PixiJS one (Arena,
+  // every monster cut into parts and animated), or "classic", the old one (Stage: whole pose pictures, DOM and CSS).
   const Live = (() => {
     let area = null
     let slot = null
     let btn = null
+    let engineBtn = null
+    let arenaEl = null
+    // the own battle as the rigged stage sees it
+    const LIVE = { units, loc: () => stageLocation(), tier: () => where.tier || 0, live: true }
     function cleanup() {
+      if (arenaEl) Arena.close(arenaEl)
       slot?.remove()
       btn?.remove()
+      engineBtn?.remove()
       if (area) area.style.minHeight = ""
-      slot = btn = null
+      slot = btn = engineBtn = arenaEl = null
       if (Stage.modeOf() === "live") Stage.detach()
     }
     function ensure() {
@@ -2788,8 +2800,10 @@
       }
       btn.textContent = cfg.overlay ? L("切换到原版", "Original view") : L("切换到动画", "Battle FX view")
       if (!cfg.overlay) {
+        if (arenaEl) Arena.close(arenaEl)
         slot?.remove()
-        slot = null
+        engineBtn?.remove()
+        slot = engineBtn = arenaEl = null
         area.style.minHeight = ""
         if (Stage.modeOf() === "live") Stage.detach()
         return
@@ -2799,11 +2813,45 @@
         slot.className = "bfx-live-slot"
         if (getComputedStyle(area).position === "static") area.style.position = "relative"
         area.appendChild(slot)
+        arenaEl = null
       }
+      // the new stage / the old one
+      if (!engineBtn?.isConnected) {
+        engineBtn = document.createElement("button")
+        engineBtn.className = "bfx-toggle bfx-engine"
+        engineBtn.addEventListener("click", e => {
+          e.stopPropagation()
+          setEngine(cfg.stageEngine === "classic" ? "rig" : "classic")
+        })
+        panel.appendChild(engineBtn)
+      }
+      engineBtn.textContent = cfg.stageEngine === "classic" ? L("换新版舞台", "New stage") : L("换老版舞台", "Old stage")
+      // (left of the other button: the old stage's location badge is in the left corner)
+      engineBtn.style.right = btn.offsetWidth + 10 + "px"
       area.style.minHeight = cfg.liveH + "px"
-      if (!Stage.isTestActive() && !GuildLive.active()) Stage.attach(slot, "live")
+      if (Stage.isTestActive() || GuildLive.active()) return
+      if (cfg.stageEngine === "classic") {
+        if (arenaEl) Arena.close(arenaEl)
+        arenaEl?.remove()
+        arenaEl = null
+        Stage.attach(slot, "live")
+      } else {
+        if (Stage.modeOf() === "live") Stage.detach()
+        if (!arenaEl?.isConnected) {
+          arenaEl = document.createElement("div")
+          arenaEl.className = "bfx-arena"
+          slot.appendChild(arenaEl)
+        }
+        Arena.open(arenaEl, LIVE)
+      }
     }
-    return { ensure }
+    function setEngine(v) {
+      cfg.stageEngine = v
+      saveCfg()
+      ensure()
+      menu()
+    }
+    return { ensure, setEngine }
   })()
 
   // ---------- guild trials: the stage laid over the trial shown in the guild page's 进行中 tab ----------
@@ -6254,8 +6302,8 @@
     // #release-end
   })()
 
-  // #dev-start
   // ---------- 动画测试: a sandbox for any location, line-up, skill and pose ----------
+  // (the data below and the Arena ship in releases: the rigged stage plays real battles; only the lab is dev)
   const MONSTERS = {"abyssal_imp":["深渊小鬼","magic","fire"],"acrobat":["杂技师","smash","physical"],"alligator":["夏洛克","slash","physical"],"anchor_shark":["持锚鲨","smash","physical"],"aquahorse":["水马","ranged","water"],"black_bear":["黑熊","stab","physical"],"brine_marksman":["海盐射手","ranged","physical"],"butterjerry":["蝶鼠","stab","physical"],"captain_fishhook":["鱼钩船长","slash","physical"],"centaur_archer":["半人马弓箭手","ranged","physical"],"chronofrost_sorcerer":["霜时巫师","magic","water"],"crab":["螃蟹","smash","physical"],"crystal_colossus":["水晶巨像","stab","physical"],"cyclops":["独眼巨人","smash","physical"],"demonic_overlord":["恶魔霸主","magic","fire"],"deranged_jester":["小丑皇","smash","physical"],"dodocamel":["渡渡驼","smash","physical"],"dryad":["树精","magic","nature"],"dusk_revenant":["黄昏亡灵","ranged","physical"],"elementalist":["元素法师","magic","fire"],"enchanted_bishop":["秘法主教","magic","nature"],"enchanted_king":["秘法国王","slash","physical"],"enchanted_knight":["秘法骑士","slash","physical"],"enchanted_pawn":["秘法士兵","smash","physical"],"enchanted_queen":["秘法王后","magic","water"],"enchanted_rook":["秘法堡垒","ranged","physical"],"eye":["独眼","slash","physical"],"eyes":["叠眼","slash","physical"],"flame_sorcerer":["火焰巫师","magic","fire"],"fly":["苍蝇","smash","physical"],"frog":["青蛙","smash","physical"],"frost_sniper":["霜冻狙击手","ranged","water"],"giant_mantis":["巨螳螂","slash","physical"],"giant_scorpion":["巨蝎","stab","physical"],"giant_shoebill":["鲸头鹳","smash","physical"],"gobo_boomy":["轰轰","magic","fire"],"gobo_chieftain":["哥布林酋长","stab","physical"],"gobo_shooty":["咻咻","ranged","physical"],"gobo_slashy":["砍砍","slash","physical"],"gobo_smashy":["锤锤","smash","physical"],"gobo_stabby":["刺刺","stab","physical"],"granite_golem":["花岗岩魔像","smash","physical"],"griffin":["狮鹫","slash","physical"],"grizzly_bear":["棕熊","slash","physical"],"gummy_bear":["软糖熊","smash","physical"],"ice_sorcerer":["冰霜巫师","magic","water"],"infernal_warlock":["地狱术士","magic","fire"],"jackalope":["鹿角兔","magic","nature"],"juggler":["杂耍者","ranged","physical"],"jungle_sprite":["丛林精灵","magic","nature"],"luna_empress":["月神之蝶","magic","nature"],"magician":["魔术师","magic","fire"],"magnetic_golem":["磁力魔像","smash","physical"],"manticore":["狮蝎兽","ranged","physical"],"marine_huntress":["海洋猎手","ranged","water"],"mimic":["宝箱怪","stab","physical"],"myconid":["蘑菇人","magic","nature"],"nom_nom":["咬咬鱼","stab","physical"],"novice_sorcerer":["新手巫师","magic","water"],"panda":["熊猫","smash","physical"],"polar_bear":["北极熊","smash","physical"],"porcupine":["豪猪","ranged","physical"],"pyre_hunter":["火焰猎手","ranged","fire"],"rabid_rabbit":["疯魔兔","slash","physical"],"rat":["杰瑞","stab","physical"],"red_panda":["小熊猫","slash","physical"],"salamander":["火蜥蜴","magic","fire"],"sea_snail":["蜗牛","smash","physical"],"shadow_archer":["暗影弓手","ranged","physical"],"siren":["海妖","magic","water"],"skunk":["臭鼬","slash","physical"],"slimy":["史莱姆","magic","water"],"snake":["蛇","stab","physical"],"soul_hunter":["灵魂猎手","ranged","physical"],"squawker":["鹦鹉","magic","nature"],"stalactite_golem":["钟乳石魔像","stab","physical"],"swampy":["沼泽虫","smash","physical"],"the_kraken":["克拉肯","ranged","physical"],"the_watcher":["观察者","ranged","physical"],"tidal_conjuror":["潮汐召唤师","magic","water"],"treant":["树人","magic","nature"],"trial_badger":["试炼獾","slash","physical"],"trial_beetle":["试炼甲虫","smash","physical"],"trial_chameleon":["试炼变色龙","ranged","physical"],"trial_dragonfly":["试炼蜻蜓","ranged","physical"],"trial_firefly":["试炼萤火虫","magic","fire"],"trial_hedgehog":["试炼刺猬","magic","nature"],"trial_jellyfish":["试炼水母","magic","water"],"trial_wasp":["试炼黄蜂","stab","physical"],"turtle":["忍者龟","smash","physical"],"vampire":["吸血鬼","stab","physical"],"veyes":["复眼","slash","physical"],"werewolf":["狼人","slash","physical"],"zombie":["僵尸","slash","physical"],"zombie_bear":["僵尸熊","stab","physical"]}
   const LOCATIONS = {"aqua_planet":["海洋星球",["sea_snail","crab","aquahorse","nom_nom","turtle","marine_huntress"]],"bear_with_it":["熊熊星球",["gummy_bear","panda","black_bear","grizzly_bear","polar_bear","red_panda"]],"chimerical_den":["奇幻洞穴",["rat","skunk","porcupine","slimy","frog","snake","swampy","alligator","sea_snail","crab","aquahorse","jungle_sprite","myconid","nom_nom","turtle","centaur_archer","gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","eye","butterjerry","eyes","veyes","jackalope","dodocamel","manticore","griffin"]],"enchanted_fortress":["秘法要塞",["novice_sorcerer","ice_sorcerer","flame_sorcerer","panda","black_bear","magnetic_golem","abyssal_imp","elementalist","grizzly_bear","polar_bear","stalactite_golem","soul_hunter","enchanted_pawn","enchanted_knight","enchanted_bishop","enchanted_rook","enchanted_queen","enchanted_king"]],"gobo_planet":["哥布林星球",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","gobo_chieftain"]],"golem_cave":["魔像洞穴",["magnetic_golem","stalactite_golem","granite_golem","crystal_colossus"]],"infernal_abyss":["地狱深渊",["abyssal_imp","soul_hunter","infernal_warlock","demonic_overlord"]],"jungle_planet":["丛林星球",["jungle_sprite","myconid","treant","centaur_archer","luna_empress"]],"pirate_cove":["海盗基地",["eye","eyes","veyes","zombie","magnetic_golem","abyssal_imp","vampire","stalactite_golem","soul_hunter","squawker","werewolf","granite_golem","infernal_warlock","anchor_shark","brine_marksman","tidal_conjuror","captain_fishhook","the_kraken"]],"planet_of_the_eyes":["眼球星球",["eye","eyes","veyes","the_watcher"]],"sinister_circus":["阴森马戏团",["gobo_stabby","gobo_slashy","gobo_smashy","gobo_shooty","gobo_boomy","novice_sorcerer","gummy_bear","ice_sorcerer","flame_sorcerer","panda","black_bear","grizzly_bear","polar_bear","zombie","vampire","rabid_rabbit","elementalist","werewolf","zombie_bear","acrobat","juggler","magician","deranged_jester"]],"smelly_planet":["臭臭星球",["fly","rat","skunk","porcupine","slimy"]],"sorcerers_tower":["巫师之塔",["novice_sorcerer","ice_sorcerer","flame_sorcerer","elementalist","chronofrost_sorcerer"]],"swamp_planet":["沼泽星球",["frog","snake","swampy","alligator","giant_shoebill"]],"twilight_zone":["暮光之地",["zombie","vampire","werewolf","dusk_revenant"]]}
   // ---------- 动画测试: the rigged battle (PixiJS) with an auto battle ----------
@@ -6303,6 +6351,7 @@
     if (/mace|flail|bludgeon/.test(id)) return "mace"
     return "sword"
   }
+  // #dev-start
   // Only units that have a rig take part: 1号 is the drawn player pilot (blue hair, warrior outfit, holy sword +
   // knight's aegis, sword skills), the monsters are every rigged monster. The DOM stage still hangs in a hidden slot
   // (Stage.attach(Lab.render(), "test")) but gets no events.
@@ -6521,12 +6570,16 @@
       }
       buildUnits()
       draw()
-      Arena.open(view)
+      Arena.open(view, { units: lab, loc: () => st.loc, tier: () => st.tier })
       return slot
     }
     const stop = () => setAuto(false)
     return { units: lab, render, stop, redraw: () => draw(), loc: () => st.loc, tier: () => st.tier, startAuto: () => setAuto(true) }
   })()
+  // #dev-end
+  // #release-start
+  // const Lab = { units: { p: [], m: [] }, render() {}, stop() {}, redraw() {}, loc: () => null, tier: () => 0 }
+  // #release-end
 
   // ---------- Arena: rigged units in WebGL (PixiJS + pixi-filters) ----------
   // Bodies are cutout rigs (assets/rig/): parts on joints (a player: a body and two floating hands), moved by keyframed
@@ -8295,6 +8348,9 @@ void main(){
     }
 
     let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
+    // what it shows: { units, loc(), tier(), live } (the lab's sandbox, or the real battle laid over the game's cards)
+    let source = null
+    let resizer = null
     let loading = null
     let units = { p: [], m: [] }
     let dot, glow, smokeTex, streakTex, rayTex, hazeTex, leafTex, pillarTex
@@ -8359,11 +8415,15 @@ void main(){
         c.fillRect(0, 0, s, s)
       })
 
-    async function open(view) {
+    async function open(view, from) {
+      if (from) source = from
       if (host === view && app) return
       host = view
       if (app) {
+        app.resizeTo = view
+        resizer?.observe(view)
         view.appendChild(app.canvas)
+        app.ticker.start()
         return sync()
       }
       view.textContent = "载入 PixiJS…"
@@ -8490,29 +8550,56 @@ void main(){
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       app.ticker.add(frame)
-      new ResizeObserver(() => requestAnimationFrame(layout)).observe(view)
+      resizer = new ResizeObserver(() => requestAnimationFrame(layout))
+      resizer.observe(view)
+      // (closed while PixiJS was loading)
+      if (host !== view) return close()
       sync()
     }
 
     // ----- scene -----
-    function background() {
+    // taken off the page (the real battle left, the lab closed, the old stage chosen): stopped until opened again
+    function close(view) {
+      if (view && host !== view) return
+      host = null
       if (!app) return
-      const loc = Lab.loc()
-      const t = Lab.tier()
+      app.ticker.stop()
+      app.canvas.remove()
+    }
+    const liveOn = () => !!(app && source?.live && host?.isConnected)
+    // a new wave (or a new battle): everyone set up again from the battle's units
+    function newBattle() {
+      if (liveOn()) sync()
+    }
+    // the real battle's actions: its line-up first brought up to date (a unit joined, a wave came in)
+    function playLive(actions) {
+      if (!liveOn()) return
+      const U = source.units
+      if (["p", "m"].some(side => units[side].length !== U[side].length || units[side].some((a, i) => a.u !== U[side][i]))) sync()
+      try {
+        play(actions)
+      } catch (e) {
+        console.warn("[战斗动画] arena", e)
+      }
+    }
+    function background() {
+      if (!app || !source) return
+      const loc = source.loc()
+      const t = source.tier()
       const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
       const name = Assets.has("bg", loc + band) ? loc + band : Assets.has("bg", loc) ? loc : null
       if (name) P.Assets.load(Assets.url("bg/" + name + ".webp")).then(tex => ((bg.texture = tex), layout()))
     }
     let syncing = 0
     async function sync() {
-      if (!app) return
+      if (!app || !source) return
       const run = ++syncing
       background()
       for (const side of ["p", "m"]) {
         units[side].forEach(a => a.cont.destroy({ children: true }))
         units[side] = []
       }
-      for (const side of ["p", "m"]) Lab.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
+      for (const side of ["p", "m"]) source.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
       layout()
       for (const side of ["p", "m"])
         for (const a of units[side]) {
@@ -8534,7 +8621,8 @@ void main(){
       a.shadow.tint = 0x000000
       a.shadow.alpha = 0.45
       a.hpBar = new P.Graphics()
-      a.label = new P.Text({ text: u.name || "", style: { fontFamily: "sans-serif", fontSize: 12, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
+      // (a monster by its Chinese name on a Chinese page, as the old stage does)
+      a.label = new P.Text({ text: nameOf(side, u), style: { fontFamily: "sans-serif", fontSize: 12, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
       a.label.anchor.set(0.5, 0)
       a.cont.addChild(a.shadow, a.hpBar, a.label)
       unitsLayer.addChild(a.cont)
@@ -10727,19 +10815,16 @@ void main(){
     }
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
-    return { open, sync, play, background, units: () => units, still, setArms, armsOn: () => armsOn }
+    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn }
   })()
 
+  // #dev-start
   // ---------- demo: plays a scripted sequence (stage works without a battle) ----------
   function demo() {
     if (!Stage.open()) return alert(L("先进入战斗页面（能看到“交战”标签）", "Open the combat page first (the Battle tab)"))
     Lab.startAuto()
   }
-
   // #dev-end
-  // #release-start
-  // const Lab = { units: { p: [], m: [] }, render() {}, stop() {}, redraw() {}, loc: () => null, tier: () => 0 }
-  // #release-end
 
   // #dev-start
   // ---------- 录制战斗消息: samples of every websocket message type plus the battle panels' DOM ----------
@@ -10829,6 +10914,10 @@ void main(){
       // GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
       // #release-end
       toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
+      // the rigged stage (new, the default) or the pose-picture one (old)
+      GM_registerMenuCommand(L(`战斗舞台：${cfg.stageEngine === "classic" ? "老版（整张立绘）" : "新版（骨骼动画）"}（点击切换）`, `Battle stage: ${cfg.stageEngine === "classic" ? "old (pose pictures)" : "new (rigged)"} (click to switch)`), () =>
+        Live.setEngine(cfg.stageEngine === "classic" ? "rig" : "classic"),
+      ),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
       // #dev-start

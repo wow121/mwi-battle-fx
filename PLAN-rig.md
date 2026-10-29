@@ -211,6 +211,13 @@
 - 切零件需要每只怪物单独定多边形和关节，工作量大：先挑一种体型做通、做出批量方法，再铺开。
 
 ### D. 接进真实战斗
+- **第一步（v0.21.46）**：配置 `stageEngine`（默认 `"rig"` = 新版骨骼舞台，`"classic"` = 老版整张立绘舞台，老版代码不动）。
+  切换：油猴菜单「战斗舞台：…（点击切换）」或战斗区右上角「换老版舞台 / 换新版舞台」按钮。
+  新版时 `Live` 在战斗区的覆盖层里挂 `Arena`（来源 `{units, loc: stageLocation, tier: where.tier, live: true}`），
+  `onBattleUpdated` 的动作走 `Arena.playLive`（先按单位对象核对阵容，变了就重建），`new_battle` 走 `Arena.newBattle`。
+  `Arena` 和怪物 / 武器数据移出了 `#dev` 区，发布版也带上；只有测试页 `Lab` 和 demo 还是开发专用。
+  公会试炼仍用老版（几十人的阵型新版还没做）。
+  新版还缺：地点 / 难度角标、血量数字、增益 / 状态图标、没有骨骼的新怪的后备画法；发布前要确认 Greasy Fork 对从 jsDelivr 载入 PixiJS 的规定。
 - 现在只有测试页用 PixiJS。正式战斗舞台（`Stage`，DOM / CSS）还是旧的整张立绘。全部补齐后，把 `Arena` 接到真实战斗消息上
   （`units` / `resolve` 产生的事件和测试页的 `play(evs)` 形状一致），替换旧舞台；眩晕用消息里的 `isStunned`。
 - 性能：一场战斗最多 5 对 5 + 公会战更多人，注意 PixiJS 的帧率（以前用户关心过卡顿）。
