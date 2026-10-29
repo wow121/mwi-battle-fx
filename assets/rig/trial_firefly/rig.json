@@ -1,0 +1,56 @@
+{
+ "foot": [
+  220,
+  339
+ ],
+ "h": 224,
+ "tmpl": "fly",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    100,
+    141
+   ],
+   "at": [
+    177,
+    267
+   ],
+   "z": 3,
+   "sign": -1
+  },
+  "wing_n1": {
+   "img": "wing_n1.webp",
+   "pivot": [
+    38,
+    114
+   ],
+   "at": [
+    190,
+    251
+   ],
+   "z": 6.0,
+   "parent": "torso",
+   "sign": 1,
+   "wing": 0
+  },
+  "wing_f1": {
+   "img": "wing_f1.webp",
+   "pivot": [
+    8,
+    86
+   ],
+   "at": [
+    149,
+    199
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": 1,
+   "wing": 0.7
+  }
+ },
+ "hover": 0.35,
+ "lie": 0.369
+}

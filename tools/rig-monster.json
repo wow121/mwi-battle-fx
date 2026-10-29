@@ -89,5 +89,23 @@
   "merge": {
    "weapon": "trunk"
   }
+ },
+ "fly": {
+  "tmpl": "fly"
+ },
+ "trial_dragonfly": {
+  "tmpl": "fly"
+ },
+ "trial_wasp": {
+  "tmpl": "fly"
+ },
+ "trial_firefly": {
+  "tmpl": "fly"
+ },
+ "butterjerry": {
+  "tmpl": "fly"
+ },
+ "luna_empress": {
+  "tmpl": "fly"
  }
 }

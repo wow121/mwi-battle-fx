@@ -109,6 +109,16 @@ for n in list(mask):
 for k, v in OVER.get("merge", {}).items():
     mask[v] |= mask[k]
     mask[k][:] = False
+# a flier (tmpl fly): the map's arm colours are its wings, nearer (blue) and farther (cyan), each wing its own part
+# flapping on its root; everything else is one body
+FLY = OVER.get("tmpl") == "fly"
+wings = {}
+if FLY:
+    wings = {"wing_n": mask["arm_l"].copy(), "wing_f": mask["arm_r"].copy()}
+    mask["arm_l"][:] = mask["arm_r"][:] = False
+    for n in ("leg_l", "leg_r", "weapon", "head"):
+        mask["trunk"] |= mask[n]
+        mask[n][:] = False
 print("parts", {n: int(m.sum()) for n, m in mask.items() if m.any()})
 
 # ----- roles -----
@@ -229,6 +239,8 @@ if both.sum() > 200:
 cover = np.zeros_like(fg)
 for n in arms + ["weapon", "weapon2", "leg_l", "leg_r", "float"] + (["head"] if QUAD else []):
     cover |= mask[n]
+for m in wings.values():
+    cover |= m
 f = sil & ~trunk & (cover | ~fg) & grow(trunk, 40)
 tr = im.copy()
 tr[f, :3] = fit[f].astype(np.int16)
@@ -245,6 +257,9 @@ ty, tx = np.where(trunk_full)
 pivots = {}
 # hips: the trunk's bottom centre, a little up (a beast's: above its back legs, so it rears on them)
 pivots["trunk"] = [int(np.median(tx)), int(ty.max() - (ty.max() - ty.min()) * 0.12)]
+# (a flier's: its middle, it tilts in the air)
+if FLY:
+    pivots["trunk"] = [int(np.median(tx)), int(np.median(ty))]
 if QUAD and (mask["leg_l"] | mask["leg_r"]).any():
     ly, lx = np.where(mask["leg_l"] | mask["leg_r"])
     pivots["trunk"] = [int(np.median(lx)), int(ly.min())]
@@ -310,6 +325,23 @@ pix = {"trunk": (trunk_full, tr)}
 for n in arms + ["head", "weapon", "weapon2", "leg_l", "leg_r"]:
     if mask[n].any() and n in pivots:
         pix[n] = (mask[n], im)
+# a flier's wings: each piece its own part (wing_n1 … nearer, drawn over the body; wing_f1 … behind it), turning on
+# its root (where it meets the body), flapping in the engine (rig.json wing = its phase)
+for pre, group in wings.items():
+    for k, c in enumerate(c for c in pieces(group) if c.sum() >= fg.sum() * 0.004):
+        n = f"{pre}{k + 1}"
+        root = c & grow(trunk, 3)
+        if root.any():
+            ry, rx = np.where(root)
+            pivots[n] = [int(np.median(rx)), int(np.median(ry))]
+        else:
+            cy, cx = np.where(c)
+            j = np.argmin((cx - pivots["trunk"][0]) ** 2 + (cy - pivots["trunk"][1]) ** 2)
+            pivots[n] = [int(cx[j]), int(cy[j])]
+        role[n] = n
+        z[n] = 6 + k * 0.1 if pre == "wing_n" else 1 + k * 0.1
+        parent[n] = "trunk"
+        pix[n] = (c, im)
 # things floating round it: each piece its own part (float1, float2 …), bobbing on its own (rig.json float = its phase)
 # (a floating thing stands apart from the monster in the original, mostly empty round it; anything else marked so is
 # the map's blend of two parts, red and yellow anti-alias to orange, and goes to the part it borders most)
@@ -335,12 +367,16 @@ for k, c in enumerate(floats):
 rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()) if not QUAD else int(max(foot_y - np.where(fg)[0].min(), 0.6 * H)), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": False, "parts": {}}
 if two:
     rig["two"] = True
+# a flier hangs this far (in heights) above the ground
+if FLY:
+    rig["hover"] = 0.35
 # fallen on its back (the torso turned 86 degrees back about its pivot, everything on it along): how far it would
 # sink below its feet' line, in heights; the engine lifts it by that much to lie on the ground (rig.json lie)
 if not QUAD:
     by, bx = np.where(fg & ~mask["float"])
     px, py = pivots["trunk"]
-    t = np.radians(86)
+    # (a flier falls belly up)
+    t = np.radians(170 if FLY else 86)
     low = (py + (bx - px) * np.sin(t) + (by - py) * np.cos(t)).max()
     rig["lie"] = round(float(low - foot_y) / rig["h"], 3)
 # a beast's legs as a share of its height (lying down it sinks by about that much)
@@ -399,6 +435,8 @@ for n, (m, src_im) in pix.items():
     # a beast's head nods down with +
     if QUAD and n == "head":
         q["sign"] = -1
+    if n.startswith("wing"):
+        q["wing"] = 0 if n.startswith("wing_n") else 0.7
     if n.startswith("float"):
         q["float"] = round(float(np.random.default_rng(len(rig["parts"])).uniform(0, 6.28)), 2)
     rig["parts"][nm] = q

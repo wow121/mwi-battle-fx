@@ -71,6 +71,27 @@ QUAD_TRUNK = (
     "Background: perfectly flat {bg} everywhere outside the animal. No text, no shadow, no floor. Do not use {bg} on the animal.\n"
     "Output: square, same framing as image 1.\n"
 )
+# a flier (tmpl fly): its wings, the rest one body
+FLY = (
+    "Task: make a PART MAP of it for a cutout puppet (Spine-style rig). Trace the creature EXACTLY: same outline, same size, same position, "
+    "so the map lies over image 1 pixel for pixel. Fill every part of it with ONE perfectly flat colour by which part it belongs to "
+    "(no shading, no outlines, no details, no anti-aliasing between parts):\n"
+    "- RED #FF0000: the body: head, eyes, antennae, thorax, abdomen, tail, legs and any little arms, all of it except the wings.\n"
+    "- BLUE #0000FF: every wing NEARER to the viewer (drawn over the body), or, for wings spread flat, the wings on the LEFT side of the picture.\n"
+    "- CYAN #00FFFF: every wing FARTHER from the viewer (behind the body), or, for wings spread flat, the wings on the RIGHT side.\n"
+    "Each wing whole, out to its tip. Where one part covers another, paint only the part on top (as it appears in image 1).\n"
+    "Background: perfectly flat black #000000 everywhere outside the creature. No text, no labels.\n"
+    "Output: square, same framing as image 1.\n"
+)
+FLY_TRUNK = (
+    "Task: redraw it as the BODY PIECE of a cutout puppet: the same creature with ALL its WINGS taken off. Keep the head, eyes, antennae, "
+    "body, legs, arms and tail exactly as in image 1, pixel for pixel where they are visible. Where the wings covered the body, complete it "
+    "naturally: continue its colours, stripes, fur, shading and outline. Same size, same position, same view; nothing new added.\n"
+    "Background: perfectly flat {bg} everywhere outside the creature. No text, no shadow, no floor. Do not use {bg} on the creature.\n"
+    "Output: square, same framing as image 1.\n"
+)
+PROMPT[("seg", "fly")] = HEAD + REF + FLY
+PROMPT[("trunk", "fly")] = HEAD + REF + FLY_TRUNK
 PROMPT[("seg", "quad")] = HEAD + REF + QUAD
 PROMPT[("trunk", "quad")] = HEAD + REF + QUAD_TRUNK
 TMPL = {k: v.get("tmpl") for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rig-monster.json"))).items()}
