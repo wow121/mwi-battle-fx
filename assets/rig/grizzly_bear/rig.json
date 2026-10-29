@@ -17,7 +17,8 @@
     303,
     243
    ],
-   "z": 3
+   "z": 3,
+   "sign": -1
   },
   "leg_fn": {
    "img": "leg_fn.webp",
@@ -91,5 +92,6 @@
    "parent": "torso",
    "sign": 1
   }
- }
+ },
+ "legs": 0.308
 }

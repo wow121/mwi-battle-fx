@@ -17,7 +17,8 @@
     186,
     292
    ],
-   "z": 3
+   "z": 3,
+   "sign": -1
   },
   "arm_m": {
    "img": "arm_m.webp",
@@ -93,5 +94,6 @@
    "sign": 1
   }
  },
- "two": true
+ "two": true,
+ "lie": 0.267
 }

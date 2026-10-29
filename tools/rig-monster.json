@@ -1,6 +1,7 @@
 {
  "gobo_shooty": {
-  "weapon": "arm_l"
+  "weapon": "arm_l",
+  "sleeve": false
  },
  "novice_sorcerer": {
   "tmpl": "robed"
@@ -12,7 +13,8 @@
   "tmpl": "robed"
  },
  "elementalist": {
-  "tmpl": "robed"
+  "tmpl": "robed",
+  "sleeve": false
  },
  "chronofrost_sorcerer": {
   "tmpl": "robed"
@@ -25,5 +27,67 @@
  },
  "polar_bear": {
   "tmpl": "quad"
+ },
+ "demonic_overlord": {
+  "tmpl": "robed"
+ },
+ "dusk_revenant": {
+  "tmpl": "robed"
+ },
+ "enchanted_bishop": {
+  "tmpl": "robed"
+ },
+ "enchanted_king": {
+  "tmpl": "robed"
+ },
+ "enchanted_queen": {
+  "tmpl": "robed"
+ },
+ "infernal_warlock": {
+  "tmpl": "robed"
+ },
+ "dodocamel": {
+  "tmpl": "quad"
+ },
+ "frog": {
+  "tmpl": "quad"
+ },
+ "griffin": {
+  "tmpl": "quad"
+ },
+ "jackalope": {
+  "tmpl": "quad"
+ },
+ "manticore": {
+  "tmpl": "quad"
+ },
+ "skunk": {
+  "tmpl": "quad"
+ },
+ "trial_badger": {
+  "tmpl": "quad"
+ },
+ "trial_chameleon": {
+  "tmpl": "quad"
+ },
+ "trial_hedgehog": {
+  "tmpl": "quad"
+ },
+ "turtle": {
+  "tmpl": "quad"
+ },
+ "zombie_bear": {
+  "tmpl": "quad"
+ },
+ "crystal_colossus": {
+  "crumble": true
+ },
+ "granite_golem": {
+  "crumble": true
+ },
+ "acrobat": {
+  "merge": {
+   "weapon": "trunk"
+  }
  }
 }

@@ -1,0 +1,55 @@
+{
+ "foot": [
+  181,
+  329
+ ],
+ "h": 212,
+ "tmpl": "biped",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    91,
+    188
+   ],
+   "at": [
+    184,
+    303
+   ],
+   "z": 3,
+   "sign": -1
+  },
+  "arm_m": {
+   "img": "arm_m.webp",
+   "pivot": [
+    26,
+    7
+   ],
+   "at": [
+    136,
+    252
+   ],
+   "z": 6,
+   "parent": "torso",
+   "aim": 40,
+   "sign": 1
+  },
+  "weapon": {
+   "img": "weapon.webp",
+   "pivot": [
+    23,
+    25
+   ],
+   "at": [
+    116,
+    276
+   ],
+   "z": 5.5,
+   "parent": "arm_m",
+   "aim": 140,
+   "sign": 1
+  }
+ },
+ "lie": 0.435
+}

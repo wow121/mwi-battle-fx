@@ -105,6 +105,10 @@ for n in list(mask):
     if n not in ("trunk", "float") and mask[n].sum() < fg.sum() * 0.003:
         mask["trunk"] |= mask[n]
         mask[n][:] = False
+# (a correction may merge one part into another: a ribbon wound round the whole body is not held like a weapon)
+for k, v in OVER.get("merge", {}).items():
+    mask[v] |= mask[k]
+    mask[k][:] = False
 print("parts", {n: int(m.sum()) for n, m in mask.items() if m.any()})
 
 # ----- roles -----
@@ -147,7 +151,9 @@ def grip(m, arm=None):
     lo, hi = t.min(), t.max()
     width = [np.ptp(u[t < lo + (hi - lo) * 0.2]), np.ptp(u[t > hi - (hi - lo) * 0.2])]
     near = []
-    for a in arms:
+    # (only an arm that touches it can hold it)
+    touching = [a for a in arms if (mask[a] & grow(m, 4)).any()] or arms
+    for a in touching:
         ay, ax = np.where(mask[a])
         for k, e in enumerate(ends):
             near.append((np.sqrt((ax - e[0]) ** 2 + (ay - e[1]) ** 2).min(), k, a))
@@ -263,6 +269,13 @@ for w, arm in (("weapon", hold), ("weapon2", other)):
         d = np.sqrt((ax - pivots[arm][0]) ** 2 + (ay - pivots[arm][1]) ** 2)
         sel = d >= d.max() * 0.8
         pivots[w] = [int(np.median(ax[sel])), int(np.median(ay[sel]))]
+        # (a hand inside a long sleeve: the sleeve's far end is not on the weapon; the arm's pixels touching it are)
+        wy, wx = np.where(mask[w])
+        gap = np.sqrt((wx - pivots[w][0]) ** 2 + (wy - pivots[w][1]) ** 2).min()
+        if gap > 20 and OVER.get("sleeve", True):
+            ty_, tx_ = np.where(mask[arm] & grow(mask[w], 4))
+            if len(tx_):
+                pivots[w] = [int(np.median(tx_)), int(np.median(ty_))]
         _, e1, e2, _ = grips[w]
         fi = np.array(pivots[w])
         grips[w] = (arm, e1, e1 if np.hypot(*(e1 - fi)) > np.hypot(*(e2 - fi)) else e2, 0)
@@ -322,6 +335,19 @@ for k, c in enumerate(floats):
 rig = {"foot": foot, "h": int(foot_y - np.where(fg & ~mask["float"])[0].min()) if not QUAD else int(max(foot_y - np.where(fg)[0].min(), 0.6 * H)), "tmpl": OVER.get("tmpl", A.tmpl), "crumble": False, "parts": {}}
 if two:
     rig["two"] = True
+# fallen on its back (the torso turned 86 degrees back about its pivot, everything on it along): how far it would
+# sink below its feet' line, in heights; the engine lifts it by that much to lie on the ground (rig.json lie)
+if not QUAD:
+    by, bx = np.where(fg & ~mask["float"])
+    px, py = pivots["trunk"]
+    t = np.radians(86)
+    low = (py + (bx - px) * np.sin(t) + (by - py) * np.cos(t)).max()
+    rig["lie"] = round(float(low - foot_y) / rig["h"], 3)
+# a beast's legs as a share of its height (lying down it sinks by about that much)
+if QUAD:
+    tops = [pivots[n][1] for n in ("arm_l", "arm_r", "leg_l", "leg_r") if n in pivots]
+    if tops:
+        rig["legs"] = round((foot_y - float(np.mean(tops))) / rig["h"], 3)
 
 
 def aim(piv, m):
@@ -366,6 +392,10 @@ for n, (m, src_im) in pix.items():
     # every limb turns forward the same way (the engine's guess from the piece's shape fails for a raised arm)
     if n != "trunk" and n != "head" and not n.startswith("float"):
         q["sign"] = 1
+    # the trunk stands on its pivot: + leans it forward (the engine's guess from the piece fails when a long tail or coat
+    # puts the pivot in its upper half)
+    if n == "trunk":
+        q["sign"] = -1
     # a beast's head nods down with +
     if QUAD and n == "head":
         q["sign"] = -1
