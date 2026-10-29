@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.61
+// @version      0.21.62
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6618,7 +6618,16 @@
   // ACTIONS. Effects: bloom on effect sheets and sparks, a per-body shader that flashes on
   // a hit and burns the body away on death, shockwave + camera punch on crits, lights that dim the scene around a cast.
   const Arena = (() => {
-    const LIBS = ["https://cdn.jsdelivr.net/npm/pixi.js@8.14.0/dist/pixi.min.js", "https://cdn.jsdelivr.net/npm/pixi-filters@6.1.5/dist/pixi-filters.js"]
+    // PixiJS and its filters, loaded only when a stage first opens (most pages never show one; the 900 KB would be
+    // read on every page load as an @require). Greasy Fork allows code from its recognised CDNs, and these are jsDelivr
+    // npm references at a fixed version; each file is also checked against its hash (subresource integrity), so what
+    // runs is exactly the published library. cdn.jsdelivr.net first, then the other jsDelivr hosts Greasy Fork lists
+    // for networks where the first one is blocked.
+    const LIBS = [
+      ["npm/pixi.js@8.14.0/dist/pixi.min.js", "sha384-bWuiWufOk9p58s6Ew+wuR8zsJWaXZtIdPoxS1Mi7yvN/eCGWJuj1uV2m1JGROLgV"],
+      ["npm/pixi-filters@6.1.5/dist/pixi-filters.js", "sha384-wOxcZA+vaqcNDmX7OgdhG7HetEjyw12tVVIUix+CShtNNE3TJRSlg40M2bfkYpEg"],
+    ]
+    const LIB_HOSTS = ["https://cdn.jsdelivr.net/", "https://fastly.jsdelivr.net/", "https://gcore.jsdelivr.net/"]
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
     // per-body shader: uFlash mixes in a solid colour, uDis burns the body away along value noise (orange edge)
     const FRAG = `in vec2 vTextureCoord;
@@ -8369,18 +8378,30 @@ void main(){
     const lerp = (a, b, p) => a + (b - a) * p
     const ease = p => 1 - (1 - p) * (1 - p)
 
-    function loadScript(src) {
+    function loadScript(src, integrity) {
       return new Promise((ok, fail) => {
         const s = document.createElement("script")
         s.src = src
+        if (integrity) {
+          s.integrity = integrity
+          s.crossOrigin = "anonymous"
+        }
         s.onload = ok
         s.onerror = () => fail(new Error(src))
         document.head.appendChild(s)
       })
     }
     async function libs() {
-      if (!W.PIXI?.Application) await loadScript(LIBS[0])
-      if (!W.PIXI?.filters) await loadScript(LIBS[1])
+      const load = async ([path, hash]) => {
+        for (let k = 0; ; k++)
+          try {
+            return await loadScript(LIB_HOSTS[k] + path, hash)
+          } catch (e) {
+            if (k === LIB_HOSTS.length - 1) throw e
+          }
+      }
+      if (!W.PIXI?.Application) await load(LIBS[0])
+      if (!W.PIXI?.filters) await load(LIBS[1])
       P = W.PIXI
       F = W.PIXI.filters
     }
