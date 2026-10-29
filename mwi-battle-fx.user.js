@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.42
+// @version      0.21.43
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "041b20f4c4"
+  const ASSET_REV = "ba0dec7701"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7837,6 +7837,46 @@ void main(){
       },
     }
     MT["blob:magic"] = MT["blob:ranged"]
+    // fish: one body swimming in the air a little off the ground (rig.json hover), turning about its middle (+ dips its
+    // nose), squashing and stretching like a blob (sq), its fins and tail beating all the time and reaching (limbs), a head
+    // of its own if it has one (the aquahorse's: - reared back, + thrust at the foe). Attacks: a dart and a bite, or a
+    // rear back and a spit from the mouth; it dies belly up and sinks to the ground.
+    MT.fish = {
+      idle: { rel: true, dur: 1400, loop: true, keys: [{ t: 0, a: { torso: 2 } }, { t: 700, e: "inout", a: { torso: -2, sq: 3, head: -4 }, y: 0.03 }, { t: 1400, e: "inout", a: { torso: 2 } }] },
+      hurt: { rel: true, dur: 500, keys: [{ t: 0, a: {} }, { t: 80, e: "out", a: { torso: -22, sq: -12, head: -15, limbs: -30 }, x: -0.07, y: 0.03 }, { t: 250, a: { torso: -12, sq: 5, head: -8 }, x: -0.06, y: 0.02 }, { t: 500, a: {} }] },
+      cast: { rel: true, dur: 1100, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { sq: -10 } }, { t: 550, e: "out", a: { torso: -14, sq: 12, head: -25, limbs: -35 }, y: 0.12 }, { t: 850, a: { torso: -15, sq: 10, head: -27, limbs: -38 }, y: 0.13 }, { t: 1100, a: {} }] },
+      dead: { rel: true, fall: true, dur: 1000, keys: [{ t: 0, a: {} }, { t: 180, e: "out", a: { torso: -30, sq: -10, head: -25 }, x: -0.04, y: 0.05 }, { t: 1000, e: "in", a: { torso: -170, sq: -8, head: 20, limbs: 30 }, x: -0.08, g: 1 }] },
+    }
+    MT["fish:stab"] = {
+      // drawn back and up with a flick of the tail, then a dart at the foe, jaws first
+      attack: {
+        dur: 850, hit: 420, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -16, sq: -12, head: -30, limbs: -35 }, x: -0.06, y: 0.06 }, { t: 360, a: { torso: -17, sq: -13, head: -32, limbs: -38 }, x: -0.065, y: 0.065 }, { t: 420, e: "in", a: { torso: 16, sq: 14, head: 15, limbs: 40 }, x: 0.17, y: -0.03 }, { t: 650, a: { torso: 13, sq: 9, head: 12, limbs: 32 }, x: 0.16, y: -0.02 }, { t: 850, a: {} }],
+      },
+      // two snaps
+      attack2: {
+        dur: 950, hit: 560, hits: [330], lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { torso: -12, sq: -10, head: -25, limbs: -30 }, x: -0.04, y: 0.05 }, { t: 330, e: "in", a: { torso: 12, sq: 10, head: 10, limbs: 30 }, x: 0.12 }, { t: 450, e: "out", a: { torso: -8, sq: -8, head: -25, limbs: -25 }, x: 0.06, y: 0.05 }, { t: 560, e: "in", a: { torso: 16, sq: 14, head: 15, limbs: 40 }, x: 0.16, y: -0.02 }, { t: 760, a: { torso: 13, sq: 9, head: 12, limbs: 32 }, x: 0.15 }, { t: 950, a: {} }],
+      },
+      // a skill: a long run up and a dash right through the foe
+      skill: {
+        dur: 1200, hit: 680, lunge: true, through: true,
+        keys: [{ t: 0, a: {} }, { t: 450, e: "out", a: { torso: -22, sq: -18, head: -35, limbs: -45 }, x: -0.09, y: 0.12 }, { t: 600, a: { torso: -24, sq: -20, head: -37, limbs: -48 }, x: -0.1, y: 0.13 }, { t: 680, e: "in", a: { torso: 18, sq: 18, head: 18, limbs: 45 }, x: 0.19, y: -0.03 }, { t: 950, a: { torso: 14, sq: 10, head: 14, limbs: 35 }, x: 0.18 }, { t: 1200, a: {} }],
+      },
+    }
+    MT["fish:slash"] = MT["fish:smash"] = MT["fish:stab"]
+    MT["fish:ranged"] = {
+      // reared back and up, then thrust forward spitting at the foe from the mouth
+      attack: {
+        dur: 950, shot: 470, hit: 690, missile: "orb", from: "head",
+        keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -18, sq: -10, head: -28, limbs: -35 }, x: -0.03, y: 0.08 }, { t: 470, e: "in", a: { torso: 12, sq: 12, head: 20, limbs: 30 }, x: 0.02, y: 0.04 }, { t: 720, a: { torso: 10, sq: 8, head: 16, limbs: 25 }, x: 0.02, y: 0.04 }, { t: 950, a: {} }],
+      },
+      skill: {
+        dur: 1300, shot: 780, hit: 1020, missile: "orb", from: "head",
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { sq: -12 } }, { t: 640, e: "out", a: { torso: -24, sq: 14, head: -35, limbs: -45 }, x: -0.04, y: 0.18 }, { t: 780, e: "in", a: { torso: 15, sq: -8, head: 22, limbs: 35 }, x: 0.03, y: 0.1 }, { t: 1050, a: { torso: 12, sq: -3, head: 18, limbs: 30 }, x: 0.03, y: 0.09 }, { t: 1300, a: {} }],
+      },
+    }
+    MT["fish:magic"] = MT["fish:ranged"]
     // a beast that rakes or slams also bites
     MT["quad:slash"].attack2 = MT["quad:smash"].attack2 = MT["quad:stab"].attack
     // a beast that shoots or casts: the head drawn back and thrust at the foe, the shot (quills, spit, a spell) from its mouth
@@ -8790,7 +8830,8 @@ void main(){
         if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / 38 + q.p.wing) * 28
         // a limbless one's appendage (rig.json sway = its phase): sways slowly on its root, and all of them reach
         // together by the action's limbs (+ toward the foe); limp once it has fallen
-        if (q.p.sway != null) deg += (pose.a.limbs || 0) + (a.dead ? 0 : Math.sin(t / 320 + q.p.sway) * 9)
+        // (a fish's fins and tail beat faster and wider: it swims)
+        if (q.p.sway != null) deg += (pose.a.limbs || 0) + (a.dead ? 0 : R.def.tmpl === "fish" ? Math.sin(t / 130 + q.p.sway) * 16 : Math.sin(t / 320 + q.p.sway) * 9)
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
         if (par) {
@@ -9646,7 +9687,8 @@ void main(){
     }
     // a beast's mouth (act.from "head": what it spits or breathes leaves from there): the front of its head piece, low
     function mouthOf(a) {
-      const q = a.rig?.by.head
+      // (a fish without a head of its own: the front of its body)
+      const q = a.rig?.by.head || (a.rig?.def.tmpl === "fish" && a.rig.by.torso)
       if (!q || a.rig.fallen) return null
       const sp = q.s.children[0]
       // (rig art faces left: the front is the piece's left edge)
