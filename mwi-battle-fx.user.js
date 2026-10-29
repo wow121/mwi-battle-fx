@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.47
+// @version      0.21.48
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -10227,6 +10227,62 @@ void main(){
       emit(m.x + dir * a.h * 0.2, m.y, { n, tex: "streak", color: [color, 0xffffff], size: 0.5, speed: 760, angle: dir > 0 ? 0 : Math.PI, spread: 0.35, drag: 0.05, life: 280 })
     }
     // a ring standing up across a blow (a shield's shock, an arrow's punch)
+    // ----- the spear: every thrust a lance of light along the spear, from the hand out through the tip and on past the
+    // foe, cone rings rippling along it and a spray out of the foe's back; a skill's twice as long and thick -----
+    function lance(from, to, color, h, { over = 1.3, w = 0.08, dur = 320, delay = 0 } = {}) {
+      const dx = to.x - from.x
+      const dy = to.y - from.y
+      const len = Math.hypot(dx, dy) + h * over
+      const g = new P.Graphics()
+      g.position.set(from.x, from.y)
+      g.rotation = Math.atan2(dy, dx)
+      g.visible = false
+      fxLayer.addChild(g)
+      tween(
+        dur,
+        p => {
+          g.visible = true
+          g.clear()
+          const e = Math.min(1, p / 0.25)
+          const L = len * (1 - Math.pow(1 - e, 3))
+          const a = p < 0.25 ? 1 : 1 - (p - 0.25) / 0.75
+          const th = h * w * (p < 0.25 ? 1 : 1 - (0.6 * (p - 0.25)) / 0.75)
+          g.poly([0, -th * 2.4, L, 0, 0, th * 2.4]).fill({ color, alpha: a * 0.3 })
+          g.poly([0, -th, L, 0, 0, th]).fill({ color, alpha: a })
+          g.poly([L * 0.1, -th * 0.35, L, 0, L * 0.1, th * 0.35]).fill({ color: 0xffffff, alpha: a })
+          if (p >= 1) g.destroy()
+        },
+        delay,
+      )
+    }
+    // shock rings one after another along a line (the air the thrust punched through)
+    function coneRings(x, y, ang, color, h, n = 3) {
+      for (let k = 0; k < n; k++) later(k * 45, () => shockRing(x + Math.cos(ang) * k * h * 0.38, y + Math.sin(ang) * k * h * 0.38, h * (1 - k * 0.18), color))
+    }
+    const SPEAR_COL = 0xa8dcff
+    const isSpear = a => /^player:spear/.test(a?.kind || "")
+    // one blow of the spear on each foe it lands on; big for a skill's last blow; name: the action (its own extras)
+    function spearBlow(src, tgs, color, big, name) {
+      const hand = handOf(src, "hm") || mid(src)
+      const tip = tipOf(src) || mid(src)
+      const ang = Math.atan2(tip.y - hand.y, tip.x - hand.x)
+      for (const [a] of tgs) {
+        const m = mid(a)
+        // (along the spear, aimed through the foe's middle; run past it already, a dash through: from behind it)
+        const to = { x: m.x, y: (m.y + tip.y) / 2 }
+        const past = (hand.x - m.x) * src.dir > -a.h * 0.2
+        lance(past ? { x: m.x - src.dir * a.h * 1.2, y: to.y } : hand, to, color, a.h, big ? { over: 2.4, w: 0.14, dur: 460 } : { over: 1.2, w: 0.075, dur: 280 })
+        coneRings(m.x, m.y, ang, color, a.h * (big ? 1.2 : 0.8), big ? 4 : 2)
+        through(a, src.dir, color, big ? 28 : 12)
+        light(m.x, m.y, color, a.h * (big ? 1.5 : 0.8), big ? 320 : 220, 1.5)
+        if (big) rays(m.x, m.y, color, a.h * 1.4, { n: 12, dur: 320 })
+        // the overhead drive cracks the ground, the upward sweep leaves its arc
+        if (name === "attack3") (decal("crack", a.x0, a.y0, a.h * 0.6), debris(a.x0, a.y0, a.h, 8))
+        if (name === "attack4") slashArc(m.x, m.y, a.h * 0.55, src.dir, color, { tilt: -0.9 })
+      }
+      punch = Math.max(punch, big ? 0.9 : 0.4)
+      shake = Math.max(shake, big ? 0.7 : 0.25)
+    }
     function shockRing(x, y, h, color) {
       const g = new P.Graphics()
       g.position.set(x, y)
@@ -10464,8 +10520,14 @@ void main(){
           }),
       },
       // ----- stab -----
-      // 破胆之刺: a sharp spray out of the foe's back
-      poke: { hit: ({ tgs, src, color }) => tgs.forEach(([a]) => through(a, src.dir, color, 14)) },
+      // 破胆之刺: a sharp spray out of the foe's back, the air around it shaken
+      poke: {
+        hit: ({ tgs, src, color }) =>
+          tgs.forEach(([a]) => {
+            through(a, src.dir, color, 14)
+            zoomBlur(mid(a).x, mid(a).y, 180, 0.035)
+          }),
+      },
       // 透骨之刺: driven down through the foe: a long spray behind, the ground cracked under it
       impale: {
         hit: ({ tgs, src }) =>
@@ -10474,6 +10536,12 @@ void main(){
             decal("crack", a.x0, a.y0, a.h * 0.7)
             debris(a.x0, a.y0, a.h, 8)
             zoomBlur(mid(a).x, mid(a).y, 200, 0.04)
+            // a giant spear of light stabbing down out of the sky with it, a column where it lands
+            const m = mid(a)
+            lance({ x: m.x - src.dir * a.h * 0.5, y: m.y - a.h * 2.6 }, { x: m.x, y: a.y0 - a.h * 0.1 }, 0xff6a5a, a.h, { over: 0.15, w: 0.2, dur: 520 })
+            pillar(a.x0, a.y0, a.h * 0.55, a.h * 2.2, 0xff5050, 650)
+            shockRing(a.x0, a.y0 - a.h * 0.05, a.h * 1.6, 0xff8a7a)
+            shake = Math.max(shake, 1)
           }),
       },
       // 破甲之刺: bits of armour knocked off, grey and glinting
@@ -10491,6 +10559,11 @@ void main(){
           tgs.forEach(([a]) => {
             through(a, src.dir, color, 30)
             shockRing(mid(a).x, mid(a).y, a.h * 1.1, color)
+            // run clean through: a beam across the whole stage, a slow-motion beat on the foe
+            beam({ x: mid(a).x - src.dir * a.h * 2, y: mid(a).y }, mid(a), color, a.h * 1.6)
+            zoomBlur(mid(a).x, mid(a).y, 260, 0.06)
+            slow(220, 0.3)
+            focusOn(mid(a).x, mid(a).y, 0.07, 520)
           }),
       },
       // ----- smash -----
@@ -10644,13 +10717,14 @@ void main(){
         // earlier blows of a multi-blow action (hits: [ms, …]): a slash and a flinch, the damage lands at hit
         for (const t of act?.hits || [])
           if (t < at)
-            later(t, () =>
+            later(t, () => {
               tgs.forEach(([a]) => {
                 hitFx(a, src, e.style, e.element, false, false)
                 flash(a, 0xffffff, 160)
                 a.jig = 0.7
-              }),
-            )
+              })
+              if (isSpear(src)) spearBlow(src, tgs, isSkill ? tcol : SPEAR_COL, false, name)
+            })
         // the blade leaves a light trail while it swings: thin and white for an attack, broad and coloured for a skill
         const tcol = act?.color != null ? act.color : isSkill ? (e.element && e.element !== "physical" ? color : 0xffd84a) : 0xeef4ff
         // (a shot leaves none: its missile carries the light)
@@ -10744,6 +10818,7 @@ void main(){
           const shown = !!recipe?.main
           if (shown) recipe.main({ src, all: tgs.map(([a]) => a), color: tcol })
           tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
+          if (isSpear(src) && act?.shot == null) spearBlow(src, tgs.filter(([, tg]) => tg.dHP), isSkill ? tcol : SPEAR_COL, isSkill, name)
           // a skill's blow: light rays and white-hot sparks out of each foe it lands on, dust and a crack under a smash
           if (isSkill)
             tgs.forEach(([a, tg]) => {
