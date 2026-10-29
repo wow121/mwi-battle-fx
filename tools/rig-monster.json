@@ -195,5 +195,11 @@
    "arm_o": 6.2
   },
   "reclaim": true
+ },
+ "magnetic_golem": {
+  "crumble": true,
+  "z": {
+   "arm_m": 6
+  }
  }
 }
