@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.44
+// @version      0.21.45
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "ccf2319cb3"
+  const ASSET_REV = "2a8d8b3286"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7877,6 +7877,23 @@ void main(){
       },
     }
     MT["fish:magic"] = MT["fish:ranged"]
+    // centaur: a biped's upper body (torso, turning on the horse's back) with its arms and bow on a horse (horse, standing
+    // on its hindquarters: - rears up), each leg its own (the front ones on legs, the hind ones on legs_b, kept on the
+    // ground as the horse leans; scut: a stamp). Its shots are the biped's, the skill reared up; it folds down to die.
+    MT.centaur = {
+      idle: { rel: true, dur: 1600, loop: true, keys: [{ t: 0, a: { arm_m: 2, arm_o: -2 } }, { t: 800, a: { torso: -2, horse: -1, arm_m: -3, arm_o: 3 }, y: -0.008 }, { t: 1600, a: { arm_m: 2, arm_o: -2 } }] },
+      hurt: { rel: true, dur: 480, keys: [{ t: 0, a: {} }, { t: 80, e: "out", a: { torso: -14, horse: -6, arm_m: -20, arm_o: -25, scut: 8 }, x: -0.05 }, { t: 240, a: { torso: -9, horse: -4, arm_m: -8, arm_o: -12 }, x: -0.045 }, { t: 480, a: {} }] },
+      // a buff: reared up, the bow thrust overhead
+      cast: { dur: 1000, keys: [{ t: 0, a: {} }, { t: 160, e: "out", a: { torso: 4, horse: 4 } }, { t: 380, e: "out", a: { torso: -8, horse: -16, arm_m: 165, weapon: 178, arm_o: 150 } }, { t: 750, a: { torso: -8, horse: -17, arm_m: 168, weapon: 180, arm_o: 155 } }, { t: 1000, a: {} }] },
+      // the upper body slumps back, the horse folds its legs and lies down
+      dead: { rel: true, fall: true, lift: 0, dur: 900, keys: [{ t: 0, a: {} }, { t: 150, e: "out", a: { torso: -15, horse: -6, arm_m: -20, arm_o: -30, scut: 10 }, x: -0.03 }, { t: 900, e: "in", a: { torso: -35, horse: 5, arm_m: -45, arm_o: -55, legs: 75, legs_b: -70 }, x: -0.06, y: -0.2 }] },
+    }
+    MT["centaur:ranged"] = {
+      attack: MT["biped:ranged"].attack,
+      // the skill: reared up on the hind legs as it draws, coming down as it looses
+      skill: { ...MT["biped:ranged"].skill, keys: MT["biped:ranged"].skill.keys.map(k => ({ ...k, a: { ...k.a, horse: { 220: -6, 600: -18, 700: -4, 950: -3 }[k.t] ?? 0 } })) },
+    }
+    MT["centaur:magic"] = MT["centaur:ranged"]
     // bug: an arthropod (a crab, a scorpion, a mantis, a beetle). One body on its walking legs (torso, standing on its
     // belly's bottom middle: + leans at the foe; the legs stay on the ground), its pincers / scythe arms (claws: - drawn
     // back and up, + struck at the foe), a scorpion's tail (tail: - curled back, + the sting), a head of its own (head: +
@@ -7972,7 +7989,8 @@ void main(){
         const keys = act.keys.map(k => ({ ...k, a: { ...k.a } }))
         for (const k of keys) {
           const a = k.a
-          const t = a.torso || 0
+          // (a centaur's arms are on its upper body, on its horse: both leans; its legs only on the horse)
+          const t = (a.torso || 0) + (a.horse || 0)
           if (!act.rel) {
             const A = a.arm_m
             // (weapon "rest": kept upright as drawn, whatever the arm does: a slingshot held out at the foe)
@@ -7986,7 +8004,8 @@ void main(){
             if (a.arm_o != null) a.arm_o += t - rest("arm_o")
           }
           if (def.two) a.arm_o = a.arm_m
-          if (!act.fall && t) for (const n of Object.keys(P)) if (n.startsWith("leg")) a[n] = (a[n] || 0) + t
+          const lean = tmpl === "centaur" ? a.horse || 0 : t
+          if (!act.fall && lean) for (const n of Object.keys(P)) if (n.startsWith("leg")) a[n] = (a[n] || 0) + lean
           // lying down, a beast sinks by its legs' length (rig.json legs; the template's -0.2 is for a bear's)
           if (act.fall && k.y < 0 && def.legs) k.y = (k.y * def.legs) / 0.45
           // a flier's fall: g of the way down from its hover
@@ -8897,7 +8916,7 @@ void main(){
         if (q.p.sway != null) {
           const fish = R.def.tmpl === "fish"
           deg += (pose.a[q.p.ch || "limbs"] || 0) * (R.def.chk?.[q.p.ch] ?? 1) + (a.dead ? 0 : Math.sin(t / (q.p.per || (fish ? 130 : 320)) + q.p.sway) * (q.p.amp ?? (fish ? 16 : 9)))
-          if (q.p.ch === "legs" && pose.a.scut && !(A?.name === "dead" && at >= A.def.dur)) deg += Math.sin(t / 40 + q.p.sway * 1.6) * pose.a.scut
+          if (q.p.ch?.startsWith("legs") && pose.a.scut && !(A?.name === "dead" && at >= A.def.dur)) deg += Math.sin(t / 40 + q.p.sway * 1.6) * pose.a.scut
         }
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
