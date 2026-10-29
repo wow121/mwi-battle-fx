@@ -70,7 +70,102 @@
   "bunny_1",
   "frog_1",
   "red_person_1",
-  "custom_auspiciousdragon"
+  "custom_auspiciousdragon",
+  "blue_person_2",
+  "blue_person_3",
+  "bunny_2",
+  "cat_2",
+  "cat_3",
+  "cat_4",
+  "cat_5",
+  "custom_aaron0701",
+  "custom_aowoo",
+  "custom_bestcow",
+  "custom_bigoppaioneesan",
+  "custom_cainan",
+  "custom_catopia",
+  "custom_daddyvladi",
+  "custom_goldenhound",
+  "custom_goodguyjack_2",
+  "custom_goodguyjack",
+  "custom_h0lyduck",
+  "custom_888ray888",
+  "custom_hamunekouwuo",
+  "custom_hasumi",
+  "custom_jiojio",
+  "custom_kathur",
+  "custom_kiyuu_2",
+  "custom_immortalphoenix",
+  "custom_invincbriv14jump",
+  "custom_jbq",
+  "custom_joey",
+  "custom_karlding",
+  "custom_kiyuu_3",
+  "custom_kiyuu_4",
+  "custom_kiyuu_6",
+  "custom_kiyuu",
+  "custom_krazden",
+  "custom_leica",
+  "custom_liha",
+  "custom_lilaccc",
+  "custom_lsx",
+  "custom_marchosias",
+  "custom_matoasakura",
+  "custom_mengmenguwu",
+  "custom_miuca",
+  "custom_mooooooooo",
+  "custom_neronex",
+  "custom_oguri",
+  "custom_owengod",
+  "custom_perxmon",
+  "custom_pyrothefolf",
+  "custom_quadraele",
+  "custom_rose",
+  "custom_sumimiuniverse",
+  "custom_taichislippers",
+  "custom_toillian",
+  "custom_touya",
+  "custom_weijia",
+  "custom_weilan",
+  "custom_windoge",
+  "custom_xialu",
+  "dog_1",
+  "dog_2",
+  "dog_3",
+  "dog_4",
+  "dog_5",
+  "frog_2",
+  "gingerbread",
+  "golden_bunny",
+  "golden_cat",
+  "golden_cow",
+  "golden_frog",
+  "golden_hamster",
+  "golden_retriever",
+  "green_person_1",
+  "green_person_2",
+  "green_person_3",
+  "hamster_1",
+  "hamster_2",
+  "iron_cow",
+  "jack_o_lantern",
+  "lucky_koi",
+  "person_default",
+  "spring_festival_boy",
+  "spring_festival_girl",
+  "yellow_person_1",
+  "yellow_person_2",
+  "yellow_person_3",
+  "pirate_1",
+  "pirate_2",
+  "purple_person_1",
+  "purple_person_2",
+  "purple_person_3",
+  "red_person_2",
+  "red_person_3",
+  "santa",
+  "siamese_cat",
+  "siren"
  ],
  "outfits": [
   "warrior_1",
@@ -78,7 +173,126 @@
   "ranger_1",
   "dress_1",
   "pirate_1",
-  "cow_suit"
+  "cow_suit",
+  "anchorbound_equipment",
+  "christmas_tree_dress",
+  "cow_dress",
+  "custom_888ray888",
+  "custom_aaron0701",
+  "custom_aowoo",
+  "custom_auspiciousdragon",
+  "custom_bestcow",
+  "custom_bigoppaioneesan",
+  "custom_cainan",
+  "custom_catopia",
+  "custom_daddyvladi",
+  "custom_dripyy",
+  "custom_goldenhound",
+  "custom_goodguyjack_2",
+  "custom_goodguyjack",
+  "custom_h0lyduck",
+  "custom_hamunekouwuo",
+  "custom_hasumi",
+  "custom_immortalphoenix",
+  "custom_invincbriv14jump",
+  "custom_jbq",
+  "custom_jiojio",
+  "custom_joey",
+  "custom_kiyuu_2",
+  "custom_kiyuu_3",
+  "custom_kiyuu_4",
+  "custom_kiyuu_5",
+  "custom_kiyuu_6",
+  "custom_kiyuu",
+  "custom_krazden",
+  "custom_leica",
+  "custom_liha",
+  "custom_lilaccc",
+  "custom_lsx",
+  "custom_marchosias",
+  "custom_matoasakura",
+  "custom_mengmenguwu",
+  "custom_metzli",
+  "custom_miuca",
+  "custom_mooooooooo",
+  "custom_neronex",
+  "custom_nyepi",
+  "custom_oguri",
+  "custom_quadraele",
+  "custom_renerdgyink",
+  "custom_rose",
+  "custom_toillian",
+  "custom_touya",
+  "custom_weijia",
+  "custom_weilan",
+  "custom_windoge",
+  "custom_zyford",
+  "dress_10",
+  "dress_11",
+  "dress_12",
+  "dress_2",
+  "dress_3",
+  "dress_4",
+  "dress_5",
+  "dress_6",
+  "dress_7",
+  "dress_8",
+  "dress_9",
+  "gingerbread",
+  "halloween_ghost",
+  "halloween_suit",
+  "koi_dress",
+  "kraken_equipment",
+  "luna_equipment",
+  "maelstrom_equipment",
+  "mage_2",
+  "pirate_2",
+  "pumpkin_dress",
+  "ranger_2",
+  "royal_fire_equipment",
+  "royal_nature_equipment",
+  "royal_water_equipment",
+  "santa_outfit",
+  "siren_dress",
+  "tshirt_alchemy",
+  "tshirt_attack",
+  "tshirt_brewing",
+  "tshirt_cheesesmithing",
+  "tshirt_cooking",
+  "tshirt_crafting",
+  "tshirt_default",
+  "tshirt_defense",
+  "tshirt_enhancing",
+  "tshirt_foraging",
+  "tshirt_intelligence",
+  "tshirt_magic",
+  "tshirt_melee",
+  "tshirt_milking",
+  "tshirt_ranged",
+  "tshirt_stamina",
+  "tshirt_tailoring",
+  "tshirt_woodcutting",
+  "uniform_alchemy",
+  "uniform_brewing",
+  "uniform_cheesesmithing",
+  "uniform_cooking",
+  "uniform_crafting",
+  "uniform_enhancing",
+  "uniform_foraging",
+  "uniform_milking",
+  "uniform_tailoring",
+  "uniform_woodcutting",
+  "warrior_2",
+  "spring_festival_boy",
+  "spring_festival_girl",
+  "suit_1",
+  "suit_2",
+  "suit_3",
+  "suit_4",
+  "suit_5",
+  "suit_6",
+  "suit_7",
+  "suit_8"
  ],
  "hands": true,
  "arms": {
@@ -265,6 +479,2574 @@
    "armb": {
     "fill": "#d9d7d8",
     "line": "#777676",
+    "cover": 0.96
+   }
+  },
+  "o_anchorbound_equipment": {
+   "armf": {
+    "fill": "#929091",
+    "line": "#504f4f",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#939192",
+    "line": "#504f50",
+    "cover": 0.93
+   }
+  },
+  "a_blue_person_2": {
+   "armf": {
+    "fill": "#b2dafc",
+    "line": "#61778a",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#b2dafc",
+    "line": "#61778a",
+    "cover": 0.93
+   }
+  },
+  "o_christmas_tree_dress": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_blue_person_3": {
+   "armf": {
+    "fill": "#aed7fa",
+    "line": "#5f7689",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#aed7fa",
+    "line": "#5f7689",
+    "cover": 0.93
+   }
+  },
+  "o_cow_dress": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_bunny_2": {
+   "armf": {
+    "fill": "#fefdfc",
+    "line": "#8b8b8a",
+    "cover": 0.91
+   },
+   "armb": {
+    "fill": "#fefdfc",
+    "line": "#8b8b8a",
+    "cover": 0.92
+   }
+  },
+  "o_custom_888ray888": {
+   "armf": {
+    "fill": "#dc3e12",
+    "line": "#792209",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#dc3f12",
+    "line": "#792209",
+    "cover": 0.98
+   }
+  },
+  "o_custom_aaron0701": {
+   "armf": {
+    "fill": "#bc1e27",
+    "line": "#671015",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#bc1e27",
+    "line": "#671015",
+    "cover": 0.98
+   }
+  },
+  "a_cat_2": {
+   "armf": {
+    "fill": "#716e6e",
+    "line": "#3e3c3c",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#716e6e",
+    "line": "#3e3c3c",
+    "cover": 0.96
+   }
+  },
+  "o_custom_aowoo": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_cat_3": {
+   "armf": {
+    "fill": "#f8f6f4",
+    "line": "#888786",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#f9f8f7",
+    "line": "#888887",
+    "cover": 0.93
+   }
+  },
+  "o_custom_auspiciousdragon": {
+   "armf": {
+    "fill": "#8b131d",
+    "line": "#4c0a0f",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#8b131d",
+    "line": "#4c0a0f",
+    "cover": 0.99
+   }
+  },
+  "a_cat_4": {
+   "armf": {
+    "fill": "#fdc571",
+    "line": "#8b6c3e",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#fdc470",
+    "line": "#8b6b3d",
+    "cover": 0.93
+   }
+  },
+  "o_custom_bestcow": {
+   "armf": {
+    "fill": "#555253",
+    "line": "#2e2d2d",
+    "cover": 0.86
+   },
+   "armb": {
+    "fill": "#565354",
+    "line": "#2f2d2e",
+    "cover": 0.88
+   }
+  },
+  "a_cat_5": {
+   "armf": {
+    "fill": "#9c9b9a",
+    "line": "#555554",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#9e9c9d",
+    "line": "#565556",
+    "cover": 0.95
+   }
+  },
+  "o_custom_bigoppaioneesan": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_custom_cainan": {
+   "armf": {
+    "fill": "#f9b7be",
+    "line": "#886468",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#f9b7bd",
+    "line": "#886467",
+    "cover": 0.95
+   }
+  },
+  "a_custom_aaron0701": {
+   "armf": {
+    "fill": "#fcb7a2",
+    "line": "#8a6459",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fcb6a1",
+    "line": "#8a6458",
+    "cover": 0.99
+   }
+  },
+  "o_custom_catopia": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_aowoo": {
+   "armf": {
+    "fill": "#75bcf8",
+    "line": "#406788",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#75bbf8",
+    "line": "#406688",
+    "cover": 0.99
+   }
+  },
+  "o_custom_daddyvladi": {
+   "armf": {
+    "fill": "#8e8b8c",
+    "line": "#4e4c4d",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#8d8a8c",
+    "line": "#4d4b4d",
+    "cover": 1.0
+   }
+  },
+  "o_custom_dripyy": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_bestcow": {
+   "armf": {
+    "fill": "#ece2dc",
+    "line": "#817c79",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#ece6df",
+    "line": "#817e7a",
+    "cover": 0.93
+   }
+  },
+  "o_custom_goldenhound": {
+   "armf": {
+    "fill": "#a5a2a4",
+    "line": "#5a595a",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#a5a2a4",
+    "line": "#5a595a",
+    "cover": 0.94
+   }
+  },
+  "a_custom_bigoppaioneesan": {
+   "armf": {
+    "fill": "#fdecec",
+    "line": "#8b8181",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#fdecec",
+    "line": "#8b8181",
+    "cover": 0.98
+   }
+  },
+  "o_custom_goodguyjack_2": {
+   "armf": {
+    "fill": "#343030",
+    "line": "#1c1a1a",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#533132",
+    "line": "#2d1a1b",
+    "cover": 0.95
+   }
+  },
+  "a_custom_cainan": {
+   "armf": {
+    "fill": "#fef0d8",
+    "line": "#8b8476",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fef0d8",
+    "line": "#8b8476",
+    "cover": 0.98
+   }
+  },
+  "o_custom_goodguyjack": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_catopia": {
+   "armf": {
+    "fill": "#f9f8f8",
+    "line": "#888888",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#f9f8f8",
+    "line": "#888888",
+    "cover": 0.91
+   }
+  },
+  "o_custom_h0lyduck": {
+   "armf": {
+    "fill": "#333f8f",
+    "line": "#1c224e",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#333f90",
+    "line": "#1c224f",
+    "cover": 0.98
+   }
+  },
+  "a_custom_daddyvladi": {
+   "armf": {
+    "fill": "#216599",
+    "line": "#123754",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#216599",
+    "line": "#123754",
+    "cover": 0.98
+   }
+  },
+  "o_custom_hamunekouwuo": {
+   "armf": {
+    "fill": "#3e55c5",
+    "line": "#222e6c",
+    "cover": 0.17
+   },
+   "armb": {
+    "fill": "#465fe0",
+    "line": "#26347b",
+    "cover": 0.18
+   }
+  },
+  "a_custom_goldenhound": {
+   "armf": {
+    "fill": "#8195ec",
+    "line": "#465181",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#8195ec",
+    "line": "#465181",
+    "cover": 0.97
+   }
+  },
+  "o_custom_hasumi": {
+   "armf": {
+    "fill": "#2f3e8c",
+    "line": "#19224d",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#2f3e8c",
+    "line": "#19224d",
+    "cover": 0.95
+   }
+  },
+  "a_custom_goodguyjack_2": {
+   "armf": {
+    "fill": "#3d383a",
+    "line": "#211e1f",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#3c383a",
+    "line": "#211e1f",
+    "cover": 0.96
+   }
+  },
+  "o_custom_immortalphoenix": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_goodguyjack": {
+   "armf": {
+    "fill": "#cfcdce",
+    "line": "#717071",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#cfcdce",
+    "line": "#717071",
+    "cover": 1.0
+   }
+  },
+  "o_custom_invincbriv14jump": {
+   "armf": {
+    "fill": "#fbfbfa",
+    "line": "#8a8a89",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fbfbfa",
+    "line": "#8a8a89",
+    "cover": 0.97
+   }
+  },
+  "a_custom_h0lyduck": {
+   "armf": {
+    "fill": "#fafaf9",
+    "line": "#898988",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#faf9f9",
+    "line": "#898888",
+    "cover": 0.93
+   }
+  },
+  "a_custom_888ray888": {
+   "armf": {
+    "fill": "#fab5a4",
+    "line": "#89635a",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fab5a4",
+    "line": "#89635a",
+    "cover": 0.99
+   }
+  },
+  "a_custom_hamunekouwuo": {
+   "armf": {
+    "fill": "#feeeed",
+    "line": "#8b8282",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fdeeed",
+    "line": "#8b8282",
+    "cover": 0.99
+   }
+  },
+  "a_custom_hasumi": {
+   "armf": {
+    "fill": "#fbddd3",
+    "line": "#8a7974",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fbdcd3",
+    "line": "#8a7974",
+    "cover": 0.98
+   }
+  },
+  "a_custom_jiojio": {
+   "armf": {
+    "fill": "#fcd3c8",
+    "line": "#8a746e",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fcd2c7",
+    "line": "#8a736d",
+    "cover": 0.99
+   }
+  },
+  "a_custom_kathur": {
+   "armf": {
+    "fill": "#fbd8cd",
+    "line": "#8a7670",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fbd8cc",
+    "line": "#8a7670",
+    "cover": 0.99
+   }
+  },
+  "a_custom_kiyuu_2": {
+   "armf": {
+    "fill": "#fbd7cb",
+    "line": "#8a766f",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fbd6ca",
+    "line": "#8a756f",
+    "cover": 0.93
+   }
+  },
+  "o_custom_jbq": {
+   "armf": {
+    "fill": "#19a695",
+    "line": "#0d5b51",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#18a695",
+    "line": "#0d5b51",
+    "cover": 0.99
+   }
+  },
+  "o_custom_jiojio": {
+   "armf": {
+    "fill": "#fde1a0",
+    "line": "#8b7b58",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fde19f",
+    "line": "#8b7b57",
+    "cover": 0.97
+   }
+  },
+  "o_custom_joey": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_immortalphoenix": {
+   "armf": {
+    "fill": "#feddd1",
+    "line": "#8b7972",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#feddd1",
+    "line": "#8b7972",
+    "cover": 0.99
+   }
+  },
+  "o_custom_kiyuu_2": {
+   "armf": {
+    "fill": "#b51c28",
+    "line": "#630f16",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#b51c29",
+    "line": "#630f16",
+    "cover": 0.99
+   }
+  },
+  "a_custom_invincbriv14jump": {
+   "armf": {
+    "fill": "#fdb233",
+    "line": "#8b611c",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#fdb133",
+    "line": "#8b611c",
+    "cover": 0.92
+   }
+  },
+  "o_custom_kiyuu_3": {
+   "armf": {
+    "fill": "#fbfafa",
+    "line": "#8a8989",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#fbfafa",
+    "line": "#8a8989",
+    "cover": 0.88
+   }
+  },
+  "a_custom_jbq": {
+   "armf": {
+    "fill": "#a0ece6",
+    "line": "#58817e",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#a0ece6",
+    "line": "#58817e",
+    "cover": 0.94
+   }
+  },
+  "o_custom_kiyuu_4": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_custom_kiyuu_5": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_joey": {
+   "armf": {
+    "fill": "#a29fa1",
+    "line": "#595758",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#a29fa0",
+    "line": "#595758",
+    "cover": 0.94
+   }
+  },
+  "o_custom_kiyuu_6": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_karlding": {
+   "armf": {
+    "fill": "#feeed4",
+    "line": "#8b8274",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#feeed3",
+    "line": "#8b8274",
+    "cover": 0.95
+   }
+  },
+  "o_custom_kiyuu": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_custom_krazden": {
+   "armf": {
+    "fill": "#1f2d70",
+    "line": "#11183d",
+    "cover": 0.79
+   },
+   "armb": {
+    "fill": "#1f2d70",
+    "line": "#11183d",
+    "cover": 0.73
+   }
+  },
+  "o_custom_leica": {
+   "armf": {
+    "fill": "#fcfcfc",
+    "line": "#8a8a8a",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#fcfcfb",
+    "line": "#8a8a8a",
+    "cover": 0.93
+   }
+  },
+  "a_custom_kiyuu_3": {
+   "armf": {
+    "fill": "#fbdbd1",
+    "line": "#8a7872",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fbdbd1",
+    "line": "#8a7872",
+    "cover": 0.99
+   }
+  },
+  "o_custom_liha": {
+   "armf": {
+    "fill": "#fdc667",
+    "line": "#8b6c38",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#fdc768",
+    "line": "#8b6d39",
+    "cover": 1.0
+   }
+  },
+  "a_custom_kiyuu_4": {
+   "armf": {
+    "fill": "#fcebea",
+    "line": "#8a8180",
+    "cover": 0.91
+   },
+   "armb": {
+    "fill": "#fcebea",
+    "line": "#8a8180",
+    "cover": 0.9
+   }
+  },
+  "o_custom_lilaccc": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_kiyuu_6": {
+   "armf": {
+    "fill": "#feebea",
+    "line": "#8b8180",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#feeae9",
+    "line": "#8b8080",
+    "cover": 0.97
+   }
+  },
+  "o_custom_lsx": {
+   "armf": {
+    "fill": "#cd3911",
+    "line": "#701f09",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#cc3911",
+    "line": "#701f09",
+    "cover": 0.99
+   }
+  },
+  "a_custom_kiyuu": {
+   "armf": {
+    "fill": "#798df6",
+    "line": "#424d87",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#798df6",
+    "line": "#424d87",
+    "cover": 1.0
+   }
+  },
+  "o_custom_marchosias": {
+   "armf": {
+    "fill": "#201e1f",
+    "line": "#111011",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#201e1e",
+    "line": "#111010",
+    "cover": 0.97
+   }
+  },
+  "a_custom_krazden": {
+   "armf": {
+    "fill": "#828082",
+    "line": "#474647",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#827f81",
+    "line": "#474546",
+    "cover": 0.96
+   }
+  },
+  "o_custom_matoasakura": {
+   "armf": {
+    "fill": "#cbcdf7",
+    "line": "#6f7087",
+    "cover": 0.91
+   },
+   "armb": {
+    "fill": "#cbcdf7",
+    "line": "#6f7087",
+    "cover": 0.89
+   }
+  },
+  "a_custom_leica": {
+   "armf": {
+    "fill": "#fec770",
+    "line": "#8b6d3d",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fdc770",
+    "line": "#8b6d3d",
+    "cover": 0.97
+   }
+  },
+  "o_custom_mengmenguwu": {
+   "armf": {
+    "fill": "#555254",
+    "line": "#2e2d2e",
+    "cover": 0.83
+   },
+   "armb": {
+    "fill": "#555253",
+    "line": "#2e2d2d",
+    "cover": 0.73
+   }
+  },
+  "a_custom_liha": {
+   "armf": {
+    "fill": "#dad8d8",
+    "line": "#777676",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#d9d7d8",
+    "line": "#777676",
+    "cover": 0.93
+   }
+  },
+  "o_custom_metzli": {
+   "armf": {
+    "fill": "#be2f0c",
+    "line": "#681906",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#be300c",
+    "line": "#681a06",
+    "cover": 0.95
+   }
+  },
+  "a_custom_lilaccc": {
+   "armf": {
+    "fill": "#fdefef",
+    "line": "#8b8383",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fdefef",
+    "line": "#8b8383",
+    "cover": 0.96
+   }
+  },
+  "o_custom_miuca": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_lsx": {
+   "armf": {
+    "fill": "#8e8b8e",
+    "line": "#4e4c4e",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#8e8b8e",
+    "line": "#4e4c4e",
+    "cover": 0.99
+   }
+  },
+  "o_custom_mooooooooo": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_marchosias": {
+   "armf": {
+    "fill": "#f8b9a9",
+    "line": "#88655c",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#f8b8a9",
+    "line": "#88655c",
+    "cover": 0.95
+   }
+  },
+  "o_custom_neronex": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_matoasakura": {
+   "armf": {
+    "fill": "#fbdacf",
+    "line": "#8a7771",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#fbdacf",
+    "line": "#8a7771",
+    "cover": 0.92
+   }
+  },
+  "o_custom_nyepi": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_mengmenguwu": {
+   "armf": {
+    "fill": "#fdedee",
+    "line": "#8b8282",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fdedee",
+    "line": "#8b8282",
+    "cover": 0.99
+   }
+  },
+  "o_custom_oguri": {
+   "armf": {
+    "fill": "#f4f5fd",
+    "line": "#86868b",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#f4f5fd",
+    "line": "#86868b",
+    "cover": 0.94
+   }
+  },
+  "a_custom_miuca": {
+   "armf": {
+    "fill": "#fdd8cd",
+    "line": "#8b7670",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fdd8cd",
+    "line": "#8b7670",
+    "cover": 0.99
+   }
+  },
+  "o_custom_quadraele": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_mooooooooo": {
+   "armf": {
+    "fill": "#fdf7ee",
+    "line": "#8b8782",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#fdf7ee",
+    "line": "#8b8782",
+    "cover": 0.9
+   }
+  },
+  "o_custom_renerdgyink": {
+   "armf": {
+    "fill": "#302d2e",
+    "line": "#1a1819",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#302d2e",
+    "line": "#1a1819",
+    "cover": 0.99
+   }
+  },
+  "a_custom_neronex": {
+   "armf": {
+    "fill": "#dedcdc",
+    "line": "#7a7979",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#dedbdc",
+    "line": "#7a7879",
+    "cover": 0.91
+   }
+  },
+  "o_custom_rose": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_oguri": {
+   "armf": {
+    "fill": "#fcd7ca",
+    "line": "#8a766f",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#fcd6ca",
+    "line": "#8a756f",
+    "cover": 1.0
+   }
+  },
+  "o_custom_toillian": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_owengod": {
+   "armf": {
+    "fill": "#d8d6d7",
+    "line": "#767576",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#d8d5d7",
+    "line": "#767576",
+    "cover": 0.93
+   }
+  },
+  "o_custom_touya": {
+   "armf": {
+    "fill": "#e99010",
+    "line": "#804f08",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#e99010",
+    "line": "#804f08",
+    "cover": 0.96
+   }
+  },
+  "a_custom_perxmon": {
+   "armf": {
+    "fill": "#1f1d1d",
+    "line": "#110f0f",
+    "cover": 0.86
+   },
+   "armb": {
+    "fill": "#1f1d1d",
+    "line": "#110f0f",
+    "cover": 0.86
+   }
+  },
+  "o_custom_weijia": {
+   "armf": {
+    "fill": "#106db9",
+    "line": "#083b65",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#106cb9",
+    "line": "#083b65",
+    "cover": 0.98
+   }
+  },
+  "a_custom_pyrothefolf": {
+   "armf": {
+    "fill": "#6b6869",
+    "line": "#3a3939",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#6b6869",
+    "line": "#3a3939",
+    "cover": 0.97
+   }
+  },
+  "o_custom_weilan": {
+   "armf": {
+    "fill": "#504c4e",
+    "line": "#2c292a",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#504b4e",
+    "line": "#2c292a",
+    "cover": 0.97
+   }
+  },
+  "a_custom_quadraele": {
+   "armf": {
+    "fill": "#fdeeee",
+    "line": "#8b8282",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fdeeee",
+    "line": "#8b8282",
+    "cover": 0.99
+   }
+  },
+  "o_custom_windoge": {
+   "armf": {
+    "fill": "#514d4f",
+    "line": "#2c2a2b",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#504c4e",
+    "line": "#2c292a",
+    "cover": 0.98
+   }
+  },
+  "a_custom_rose": {
+   "armf": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.99
+   }
+  },
+  "o_custom_zyford": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_sumimiuniverse": {
+   "armf": {
+    "fill": "#fcdad1",
+    "line": "#8a7772",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fcdad1",
+    "line": "#8a7772",
+    "cover": 0.99
+   }
+  },
+  "o_dress_10": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_taichislippers": {
+   "armf": {
+    "fill": "#fedca4",
+    "line": "#8b795a",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#fedca4",
+    "line": "#8b795a",
+    "cover": 0.98
+   }
+  },
+  "o_dress_11": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_toillian": {
+   "armf": {
+    "fill": "#dc8205",
+    "line": "#794702",
+    "cover": 0.85
+   },
+   "armb": {
+    "fill": "#dc8205",
+    "line": "#794702",
+    "cover": 0.83
+   }
+  },
+  "o_dress_12": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_touya": {
+   "armf": {
+    "fill": "#fddcd3",
+    "line": "#8b7974",
+    "cover": 0.89
+   },
+   "armb": {
+    "fill": "#fddcd3",
+    "line": "#8b7974",
+    "cover": 0.86
+   }
+  },
+  "a_custom_weijia": {
+   "armf": {
+    "fill": "#fddfd5",
+    "line": "#8b7a75",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#fddfd5",
+    "line": "#8b7a75",
+    "cover": 0.92
+   }
+  },
+  "o_dress_2": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_weilan": {
+   "armf": {
+    "fill": "#feca78",
+    "line": "#8b6f42",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fec978",
+    "line": "#8b6e42",
+    "cover": 0.99
+   }
+  },
+  "o_dress_3": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_windoge": {
+   "armf": {
+    "fill": "#fbfafa",
+    "line": "#8a8989",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#615d5e",
+    "line": "#353333",
+    "cover": 0.98
+   }
+  },
+  "o_dress_4": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_custom_xialu": {
+   "armf": {
+    "fill": "#fdba47",
+    "line": "#8b6627",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fdb946",
+    "line": "#8b6526",
+    "cover": 0.94
+   }
+  },
+  "o_dress_5": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_dog_1": {
+   "armf": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.95
+   }
+  },
+  "o_dress_6": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_dog_2": {
+   "armf": {
+    "fill": "#faf9f8",
+    "line": "#898888",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#f9f9f8",
+    "line": "#888888",
+    "cover": 0.94
+   }
+  },
+  "o_dress_7": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_dog_3": {
+   "armf": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.95
+   }
+  },
+  "o_dress_8": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_dog_4": {
+   "armf": {
+    "fill": "#fdc86f",
+    "line": "#8b6e3d",
+    "cover": 0.89
+   },
+   "armb": {
+    "fill": "#fdc76f",
+    "line": "#8b6d3d",
+    "cover": 0.87
+   }
+  },
+  "o_dress_9": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_dog_5": {
+   "armf": {
+    "fill": "#fcfbfb",
+    "line": "#8a8a8a",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#fcfbfa",
+    "line": "#8a8a89",
+    "cover": 0.91
+   }
+  },
+  "o_gingerbread": {
+   "armf": {
+    "fill": "#d27805",
+    "line": "#734202",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#d27805",
+    "line": "#734202",
+    "cover": 0.99
+   }
+  },
+  "o_halloween_ghost": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_frog_2": {
+   "armf": {
+    "fill": "#a5b0f9",
+    "line": "#5a6088",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#a5aff9",
+    "line": "#5a6088",
+    "cover": 0.89
+   }
+  },
+  "o_halloween_suit": {
+   "armf": {
+    "fill": "#3b3839",
+    "line": "#201e1f",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#3b3839",
+    "line": "#201e1f",
+    "cover": 0.96
+   }
+  },
+  "a_gingerbread": {
+   "armf": {
+    "fill": "#d67804",
+    "line": "#754202",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#d67804",
+    "line": "#754202",
+    "cover": 0.98
+   }
+  },
+  "o_koi_dress": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_golden_bunny": {
+   "armf": {
+    "fill": "#fdbd45",
+    "line": "#8b6725",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#fdbd45",
+    "line": "#8b6725",
+    "cover": 1.0
+   }
+  },
+  "o_kraken_equipment": {
+   "armf": {
+    "fill": "#3c51b1",
+    "line": "#212c61",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#4561d7",
+    "line": "#253576",
+    "cover": 0.99
+   }
+  },
+  "a_golden_cat": {
+   "armf": {
+    "fill": "#fdb740",
+    "line": "#8b6423",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fdb73f",
+    "line": "#8b6422",
+    "cover": 0.95
+   }
+  },
+  "o_luna_equipment": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_golden_cow": {
+   "armf": {
+    "fill": "#fdb332",
+    "line": "#8b621b",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fda316",
+    "line": "#8b590c",
+    "cover": 0.95
+   }
+  },
+  "o_maelstrom_equipment": {
+   "armf": {
+    "fill": "#0c0b0f",
+    "line": "#060608",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#0c0b0e",
+    "line": "#060607",
+    "cover": 0.98
+   }
+  },
+  "a_golden_frog": {
+   "armf": {
+    "fill": "#fdb842",
+    "line": "#8b6524",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#fdb842",
+    "line": "#8b6524",
+    "cover": 0.94
+   }
+  },
+  "a_golden_hamster": {
+   "armf": {
+    "fill": "#fdba3e",
+    "line": "#8b6622",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#fdb93d",
+    "line": "#8b6521",
+    "cover": 0.93
+   }
+  },
+  "o_mage_2": {
+   "armf": {
+    "fill": "#7788e7",
+    "line": "#414a7f",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#7687e7",
+    "line": "#404a7f",
+    "cover": 0.94
+   }
+  },
+  "a_golden_retriever": {
+   "armf": {
+    "fill": "#feb93b",
+    "line": "#8b6520",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#feb83a",
+    "line": "#8b651f",
+    "cover": 0.96
+   }
+  },
+  "a_green_person_1": {
+   "armf": {
+    "fill": "#adeff0",
+    "line": "#5f8384",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#aceff0",
+    "line": "#5e8384",
+    "cover": 0.93
+   }
+  },
+  "o_pirate_2": {
+   "armf": {
+    "fill": "#0c57a0",
+    "line": "#062f58",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#0c569f",
+    "line": "#062f57",
+    "cover": 0.96
+   }
+  },
+  "a_green_person_2": {
+   "armf": {
+    "fill": "#acede5",
+    "line": "#5e827d",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#abede5",
+    "line": "#5e827d",
+    "cover": 0.93
+   }
+  },
+  "o_pumpkin_dress": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_green_person_3": {
+   "armf": {
+    "fill": "#aaebe5",
+    "line": "#5d817d",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#a9eae5",
+    "line": "#5c807d",
+    "cover": 0.93
+   }
+  },
+  "a_hamster_1": {
+   "armf": {
+    "fill": "#fedb99",
+    "line": "#8b7854",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fedb98",
+    "line": "#8b7853",
+    "cover": 0.94
+   }
+  },
+  "o_ranger_2": {
+   "armf": {
+    "fill": "#b12e11",
+    "line": "#611909",
+    "cover": 0.45
+   },
+   "armb": {
+    "fill": "#b02d11",
+    "line": "#601809",
+    "cover": 0.51
+   }
+  },
+  "a_hamster_2": {
+   "armf": {
+    "fill": "#d6d4d5",
+    "line": "#757475",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#d6d4d4",
+    "line": "#757474",
+    "cover": 0.92
+   }
+  },
+  "o_royal_fire_equipment": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_iron_cow": {
+   "armf": {
+    "fill": "#a5a2a3",
+    "line": "#5a5959",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#a4a2a2",
+    "line": "#5a5959",
+    "cover": 0.93
+   }
+  },
+  "o_royal_nature_equipment": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_jack_o_lantern": {
+   "armf": {
+    "fill": "#dc8304",
+    "line": "#794802",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#dd8304",
+    "line": "#794802",
+    "cover": 0.98
+   }
+  },
+  "o_royal_water_equipment": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_lucky_koi": {
+   "armf": {
+    "fill": "#fef0d7",
+    "line": "#8b8476",
+    "cover": 0.92
+   },
+   "armb": {
+    "fill": "#feefd6",
+    "line": "#8b8375",
+    "cover": 0.92
+   }
+  },
+  "o_santa_outfit": {
+   "armf": {
+    "fill": "#d82430",
+    "line": "#76131a",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#d8242f",
+    "line": "#761319",
+    "cover": 0.97
+   }
+  },
+  "a_person_default": {
+   "armf": {
+    "fill": "#c6ccf8",
+    "line": "#6c7088",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#c6ccf8",
+    "line": "#6c7088",
+    "cover": 0.97
+   }
+  },
+  "o_siren_dress": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_alchemy": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_spring_festival_boy": {
+   "armf": {
+    "fill": "#fedb9f",
+    "line": "#8b7857",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#feda9e",
+    "line": "#8b7756",
+    "cover": 0.94
+   }
+  },
+  "o_tshirt_attack": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_spring_festival_girl": {
+   "armf": {
+    "fill": "#fedca6",
+    "line": "#8b795b",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fedca5",
+    "line": "#8b795a",
+    "cover": 0.98
+   }
+  },
+  "o_tshirt_brewing": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_yellow_person_1": {
+   "armf": {
+    "fill": "#fecd77",
+    "line": "#8b7041",
+    "cover": 0.94
+   },
+   "armb": {
+    "fill": "#fecd77",
+    "line": "#8b7041",
+    "cover": 0.94
+   }
+  },
+  "o_tshirt_cheesesmithing": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_yellow_person_2": {
+   "armf": {
+    "fill": "#fec975",
+    "line": "#8b6e40",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#fec974",
+    "line": "#8b6e3f",
+    "cover": 0.99
+   }
+  },
+  "o_tshirt_cooking": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "a_yellow_person_3": {
+   "armf": {
+    "fill": "#fecb73",
+    "line": "#8b6f3f",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#feca72",
+    "line": "#8b6f3e",
+    "cover": 0.95
+   }
+  },
+  "o_tshirt_crafting": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_default": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_defense": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_enhancing": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_foraging": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_intelligence": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_magic": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_melee": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_milking": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_ranged": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_stamina": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_tailoring": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_tshirt_woodcutting": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_uniform_alchemy": {
+   "armf": {
+    "fill": "#a1cff3",
+    "line": "#587185",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#a1cef3",
+    "line": "#587185",
+    "cover": 0.94
+   }
+  },
+  "o_uniform_brewing": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_uniform_cheesesmithing": {
+   "armf": {
+    "fill": "#bbb8b9",
+    "line": "#666565",
+    "cover": 0.84
+   },
+   "armb": {
+    "fill": "#bbb8b9",
+    "line": "#666565",
+    "cover": 0.71
+   }
+  },
+  "o_uniform_cooking": {
+   "armf": {
+    "fill": "#fbfbfc",
+    "line": "#8a8a8a",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#fbfbfc",
+    "line": "#8a8a8a",
+    "cover": 0.93
+   }
+  },
+  "o_uniform_crafting": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_uniform_enhancing": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_uniform_foraging": {
+   "armf": {
+    "fill": "#175749",
+    "line": "#0c2f28",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#165649",
+    "line": "#0c2f28",
+    "cover": 1.0
+   }
+  },
+  "o_uniform_milking": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_uniform_tailoring": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_uniform_woodcutting": {
+   "armf": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   },
+   "armb": {
+    "fill": "#000000",
+    "line": "#000000",
+    "cover": 0.0
+   }
+  },
+  "o_warrior_2": {
+   "armf": {
+    "fill": "#5c350b",
+    "line": "#321d06",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#5c350b",
+    "line": "#321d06",
+    "cover": 0.97
+   }
+  },
+  "a_pirate_1": {
+   "armf": {
+    "fill": "#fbb7bc",
+    "line": "#8a6467",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fab6bb",
+    "line": "#896466",
+    "cover": 0.95
+   }
+  },
+  "o_spring_festival_boy": {
+   "armf": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fefdfd",
+    "line": "#8b8b8b",
+    "cover": 0.96
+   }
+  },
+  "a_pirate_2": {
+   "armf": {
+    "fill": "#fdc565",
+    "line": "#8b6c37",
+    "cover": 0.97
+   },
+   "armb": {
+    "fill": "#fdc564",
+    "line": "#8b6c37",
+    "cover": 0.95
+   }
+  },
+  "o_spring_festival_girl": {
+   "armf": {
+    "fill": "#fcd6da",
+    "line": "#8a7577",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#fcd5d9",
+    "line": "#8a7577",
+    "cover": 0.94
+   }
+  },
+  "a_purple_person_1": {
+   "armf": {
+    "fill": "#dec4ed",
+    "line": "#7a6b82",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#dec3ed",
+    "line": "#7a6b82",
+    "cover": 0.93
+   }
+  },
+  "o_suit_1": {
+   "armf": {
+    "fill": "#4f4c4d",
+    "line": "#2b292a",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#4f4b4d",
+    "line": "#2b292a",
+    "cover": 0.97
+   }
+  },
+  "a_purple_person_2": {
+   "armf": {
+    "fill": "#d6b9e9",
+    "line": "#756580",
+    "cover": 0.96
+   },
+   "armb": {
+    "fill": "#d6b9e9",
+    "line": "#756580",
+    "cover": 0.96
+   }
+  },
+  "o_suit_2": {
+   "armf": {
+    "fill": "#d0cecf",
+    "line": "#727171",
+    "cover": 0.93
+   },
+   "armb": {
+    "fill": "#d0cdcf",
+    "line": "#727071",
+    "cover": 0.94
+   }
+  },
+  "a_purple_person_3": {
+   "armf": {
+    "fill": "#d7bbf1",
+    "line": "#766684",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#d7baf0",
+    "line": "#766684",
+    "cover": 0.96
+   }
+  },
+  "o_suit_3": {
+   "armf": {
+    "fill": "#3d53b5",
+    "line": "#212d63",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#3d53b5",
+    "line": "#212d63",
+    "cover": 0.97
+   }
+  },
+  "o_suit_4": {
+   "armf": {
+    "fill": "#efeeed",
+    "line": "#838282",
+    "cover": 0.88
+   },
+   "armb": {
+    "fill": "#efeeed",
+    "line": "#838282",
+    "cover": 0.88
+   }
+  },
+  "a_red_person_2": {
+   "armf": {
+    "fill": "#fcafb5",
+    "line": "#8a6063",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#fcafb5",
+    "line": "#8a6063",
+    "cover": 0.94
+   }
+  },
+  "o_suit_5": {
+   "armf": {
+    "fill": "#951725",
+    "line": "#510c14",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#951725",
+    "line": "#510c14",
+    "cover": 0.98
+   }
+  },
+  "a_red_person_3": {
+   "armf": {
+    "fill": "#f6acb0",
+    "line": "#875e60",
+    "cover": 0.9
+   },
+   "armb": {
+    "fill": "#f6abb0",
+    "line": "#875e60",
+    "cover": 0.86
+   }
+  },
+  "o_suit_6": {
+   "armf": {
+    "fill": "#c2c7f4",
+    "line": "#6a6d86",
+    "cover": 0.95
+   },
+   "armb": {
+    "fill": "#c1c6f4",
+    "line": "#6a6c86",
+    "cover": 0.94
+   }
+  },
+  "a_santa": {
+   "armf": {
+    "fill": "#fac3c7",
+    "line": "#896b6d",
+    "cover": 1.0
+   },
+   "armb": {
+    "fill": "#f9c3c7",
+    "line": "#886b6d",
+    "cover": 0.99
+   }
+  },
+  "o_suit_7": {
+   "armf": {
+    "fill": "#9c9a9b",
+    "line": "#555455",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#9c999b",
+    "line": "#555455",
+    "cover": 0.99
+   }
+  },
+  "a_siamese_cat": {
+   "armf": {
+    "fill": "#f0eeee",
+    "line": "#848282",
+    "cover": 0.86
+   },
+   "armb": {
+    "fill": "#efeeed",
+    "line": "#838282",
+    "cover": 0.95
+   }
+  },
+  "o_suit_8": {
+   "armf": {
+    "fill": "#156e60",
+    "line": "#0b3c34",
+    "cover": 0.99
+   },
+   "armb": {
+    "fill": "#156d60",
+    "line": "#0b3b34",
+    "cover": 0.99
+   }
+  },
+  "a_siren": {
+   "armf": {
+    "fill": "#c9c6f6",
+    "line": "#6e6c87",
+    "cover": 0.98
+   },
+   "armb": {
+    "fill": "#c9c5f6",
+    "line": "#6e6c87",
     "cover": 0.96
    }
   }
