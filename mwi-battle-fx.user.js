@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.38
+// @version      0.21.39
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "c466771e3d"
+  const ASSET_REV = "86668f9cd5"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7594,6 +7594,59 @@ void main(){
         cast: { dur: 1100, keys: [{ t: 0, a: {} }, { t: 200, e: "out", a: { torso: 4 } }, { t: 450, e: "out", a: { torso: -8, arm_m: 165, weapon: 178, arm_o: 150 }, y: 0.05 }, { t: 850, a: { torso: -8, arm_m: 168, weapon: 180, arm_o: 155 }, y: 0.04 }, { t: 1100, a: {} }] },
         dead: { rel: true, fall: true, lift: 0.05, dur: 900, keys: [{ t: 0, a: {} }, { t: 180, e: "out", a: { torso: -15, arm_m: -20, arm_o: -30 }, x: -0.04, y: 0.03 }, { t: 900, e: "in", a: { torso: -86, arm_m: -60, arm_o: -45 }, x: -0.1 }] },
       },
+      // quad: a four-legged beast (the bears), after Lost Castle's zombie boar. Parts: torso (turning on its back hips:
+      // - rears up), head (+ nods down: a bite), leg_fn / leg_ff (front legs, nearer / farther), leg_bn / leg_bf (back);
+      // legs swing forward with +, as their own direction on the ground.
+      quad: {
+        idle: { rel: true, dur: 2000, loop: true, keys: [{ t: 0, a: { head: 0 } }, { t: 1000, a: { torso: -1.5, head: 3 }, y: -0.006 }, { t: 2000, a: { head: 0 } }] },
+        hurt: { rel: true, dur: 500, keys: [{ t: 0, a: {} }, { t: 90, e: "out", a: { torso: -8, head: -18, leg_fn: -10 }, x: -0.04 }, { t: 250, a: { torso: -5, head: -10, leg_fn: -5 }, x: -0.035 }, { t: 500, a: {} }] },
+        // a buff (a roar): up on the hind legs a little, the head thrown back
+        cast: { dur: 1100, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -18, head: -28, leg_fn: 15, leg_ff: 10 } }, { t: 850, a: { torso: -19, head: -30, leg_fn: 16, leg_ff: 11 } }, { t: 1100, a: {} }] },
+        // down on its belly, legs folded out
+        dead: { rel: true, fall: true, lift: 0, dur: 800, keys: [{ t: 0, a: {} }, { t: 150, e: "out", a: { torso: -8, head: -20 }, x: -0.03 }, { t: 800, e: "in", a: { torso: 6, head: 30, leg_fn: 75, leg_ff: 65, leg_bn: -70, leg_bf: -60 }, x: -0.06, y: -0.2 }] },
+      },
+      "quad:stab": {
+        // a bite: the head drawn back on a crouch, then a lunge with the jaws snapping down on the foe
+        attack: {
+          dur: 900, hit: 430, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -6, head: -22, leg_fn: -12, leg_bn: 8 }, x: -0.05 }, { t: 360, a: { torso: -7, head: -24, leg_fn: -13 }, x: -0.055 }, { t: 430, e: "in", a: { torso: 10, head: 28, leg_fn: 28, leg_ff: 18, leg_bn: -18, leg_bf: -12 }, x: 0.14 }, { t: 700, a: { torso: 9, head: 26, leg_fn: 26, leg_ff: 16, leg_bn: -16, leg_bf: -10 }, x: 0.135 }, { t: 900, a: {} }],
+        },
+        // two snaps
+        attack2: {
+          dur: 1000, hit: 600, hits: [340], lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 240, e: "out", a: { torso: -5, head: -20 }, x: -0.03 }, { t: 340, e: "in", a: { torso: 8, head: 25, leg_fn: 20, leg_bn: -10 }, x: 0.09 }, { t: 470, e: "out", a: { torso: 0, head: -18, leg_fn: 5 }, x: 0.07 }, { t: 600, e: "in", a: { torso: 10, head: 30, leg_fn: 25, leg_ff: 15, leg_bn: -15 }, x: 0.13 }, { t: 820, a: { torso: 9, head: 28, leg_fn: 23, leg_ff: 14, leg_bn: -14 }, x: 0.125 }, { t: 1000, a: {} }],
+        },
+        // a skill: a pounce, all four legs stretched out, landing jaws first
+        skill: {
+          dur: 1300, hit: 720, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: 6, head: -10, leg_fn: -20, leg_ff: -15, leg_bn: 20, leg_bf: 15 }, x: -0.04 }, { t: 560, e: "out", a: { torso: -12, head: -15, leg_fn: 55, leg_ff: 45, leg_bn: -50, leg_bf: -40 }, x: 0.08, y: 0.25 }, { t: 720, e: "in", a: { torso: 14, head: 32, leg_fn: 30, leg_ff: 20, leg_bn: -20, leg_bf: -15 }, x: 0.16 }, { t: 1050, a: { torso: 12, head: 30, leg_fn: 28, leg_ff: 18, leg_bn: -18, leg_bf: -13 }, x: 0.155 }, { t: 1300, a: {} }],
+        },
+      },
+      "quad:slash": {
+        // up on the hind legs, the near forepaw raised high, raked down through the foe
+        attack: {
+          dur: 1000, hit: 520, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -21, head: -12, leg_fn: 125, leg_ff: 40 }, x: -0.02 }, { t: 450, a: { torso: -22, head: -14, leg_fn: 130, leg_ff: 42 }, x: -0.025 }, { t: 520, e: "in", a: { torso: 8, head: 15, leg_fn: 25, leg_ff: 30 }, x: 0.1 }, { t: 780, a: { torso: 7, head: 13, leg_fn: 23, leg_ff: 28 }, x: 0.095 }, { t: 1000, a: {} }],
+        },
+        attack2: null,
+        // a skill: reared right up, both forepaws high, brought down together with a shock ring
+        skill: {
+          dur: 1300, hit: 760, ring: 760, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 500, e: "out", a: { torso: -32, head: -20, leg_fn: 135, leg_ff: 120 }, y: 0.02 }, { t: 660, a: { torso: -33, head: -22, leg_fn: 140, leg_ff: 125 }, y: 0.02 }, { t: 760, e: "in", a: { torso: 12, head: 20, leg_fn: 30, leg_ff: 25 }, x: 0.1 }, { t: 1050, a: { torso: 10, head: 18, leg_fn: 28, leg_ff: 23 }, x: 0.095 }, { t: 1300, a: {} }],
+        },
+      },
+      "quad:smash": {
+        // reared up on the hind legs, both forepaws slammed down on the foe
+        attack: {
+          dur: 1100, hit: 600, ring: 600, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 420, e: "out", a: { torso: -28, head: -18, leg_fn: 70, leg_ff: 55 }, y: 0.02 }, { t: 520, a: { torso: -30, head: -20, leg_fn: 72, leg_ff: 57 }, y: 0.02 }, { t: 600, e: "in", a: { torso: 12, head: 18, leg_fn: 20, leg_ff: 15 }, x: 0.09 }, { t: 880, a: { torso: 10, head: 16, leg_fn: 18, leg_ff: 13 }, x: 0.085 }, { t: 1100, a: {} }],
+        },
+        attack2: null,
+        skill: {
+          dur: 1400, hit: 820, ring: 820, lunge: true,
+          keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: 6, head: 5, leg_fn: -15, leg_bn: 15 }, x: -0.03 }, { t: 600, e: "out", a: { torso: -30, head: -20, leg_fn: 80, leg_ff: 65, leg_bn: -20 }, x: 0.05, y: 0.25 }, { t: 720, a: { torso: -32, head: -22, leg_fn: 82, leg_ff: 67, leg_bn: -20 }, x: 0.07, y: 0.26 }, { t: 820, e: "in", a: { torso: 14, head: 22, leg_fn: 20, leg_ff: 15 }, x: 0.12 }, { t: 1150, a: { torso: 12, head: 20, leg_fn: 18, leg_ff: 13 }, x: 0.115 }, { t: 1400, a: {} }],
+        },
+      },
       "biped:slash": {
         // an overhead chop: the blade up behind the head, brought down through the foe
         attack: {
@@ -7667,6 +7720,8 @@ void main(){
         },
       },
     }
+    // a beast that rakes or slams also bites
+    MT["quad:slash"].attack2 = MT["quad:smash"].attack2 = MT["quad:stab"].attack
     // a monster's set: its template, its style's attacks, then its own entries. Directions become turns from its rest
     // (rig.json aim: an arm's from shoulder to fist, a weapon's from grip to tip): the arm turns to its direction and
     // the wrist turns the weapon to its own; a two-handed weapon (rig.json two) keeps its grip, the arms turn it to its
@@ -7699,7 +7754,7 @@ void main(){
             if (a.arm_o != null) a.arm_o += t - rest("arm_o")
           }
           if (def.two) a.arm_o = a.arm_m
-          if (!act.fall && t) for (const n of ["leg_f", "leg_b"]) a[n] = (a[n] || 0) + t
+          if (!act.fall && t) for (const n of Object.keys(P)) if (n.startsWith("leg")) a[n] = (a[n] || 0) + t
         }
         // whole turns taken off so the first move leaves the rest the short way round (the rest of the action follows on)
         if (!act.rel)
@@ -8607,7 +8662,8 @@ void main(){
           // a body tipped over turns about its feet and would sink: it is lifted to lie on the ground instead (an action's
           // lift, in heights: less for a body turning about the hem of a robe)
           const tip = Math.max(0, Math.min(1, (Math.abs(pose.a.body || pose.a.torso || 0) - 30) / 58))
-          q.y = q.p.at[1] - R.def.foot[1] - (Math.max(0, pose.y) + v[1] + (A?.def.lift ?? 0.3) * tip) * h
+          // (a fall may sink below the feet' line: a beast lying down with its legs folded)
+          q.y = q.p.at[1] - R.def.foot[1] - ((A?.def.fall ? pose.y : Math.max(0, pose.y)) + v[1] + (A?.def.lift ?? 0.3) * tip) * h
           q.wr = r + q.rest
           // something floating round a monster (rig.json float = its phase): bobs on its own, gone when it falls
           if (q.p.float != null) {
