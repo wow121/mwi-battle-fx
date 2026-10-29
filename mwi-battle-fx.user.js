@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.43
+// @version      0.21.44
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "ba0dec7701"
+  const ASSET_REV = "ccf2319cb3"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -7877,6 +7877,68 @@ void main(){
       },
     }
     MT["fish:magic"] = MT["fish:ranged"]
+    // bug: an arthropod (a crab, a scorpion, a mantis, a beetle). One body on its walking legs (torso, standing on its
+    // belly's bottom middle: + leans at the foe; the legs stay on the ground), its pincers / scythe arms (claws: - drawn
+    // back and up, + struck at the foe), a scorpion's tail (tail: - curled back, + the sting), a head of its own (head: +
+    // butts / nods at the foe), the legs scuttling (scut: how far each one kicks, in turn). It dies on its back, legs up.
+    MT.bug = {
+      idle: { rel: true, dur: 1600, loop: true, keys: [{ t: 0, a: { claws: 0 } }, { t: 800, e: "inout", a: { torso: -1.5, claws: -6, tail: -5, head: -3, sq: 2 } }, { t: 1600, e: "inout", a: { claws: 0 } }] },
+      hurt: { rel: true, dur: 500, keys: [{ t: 0, a: {} }, { t: 80, e: "out", a: { torso: -10, claws: -25, tail: -20, head: -15, scut: 10, sq: -6 }, x: -0.05 }, { t: 250, a: { torso: -6, claws: -12, tail: -10, head: -8, scut: 6 }, x: -0.045 }, { t: 500, a: {} }] },
+      // a buff: reared up, the claws flung up and back
+      cast: { rel: true, dur: 1100, keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -12, claws: -50, tail: -30, head: -20, sq: 6 } }, { t: 800, a: { torso: -13, claws: -55, tail: -32, head: -22, sq: 6 } }, { t: 1100, a: {} }] },
+      dead: { rel: true, fall: true, dur: 900, keys: [{ t: 0, a: {} }, { t: 150, e: "out", a: { torso: -15, claws: -30, tail: -20, scut: 15 }, x: -0.03 }, { t: 900, e: "in", a: { torso: -170, claws: 40, tail: 30, head: 20, scut: 25 }, x: -0.06 }] },
+    }
+    MT["bug:smash"] = {
+      // the claws (or the horned head) raised high, a scuttle at the foe and slammed down on it
+      attack: {
+        dur: 1000, hit: 560, ring: 560, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 380, e: "out", a: { torso: -12, claws: -60, head: -25, tail: -20, scut: 12 }, x: -0.02 }, { t: 470, a: { torso: -13, claws: -64, head: -27, tail: -22, scut: 12 }, x: -0.025 }, { t: 560, e: "in", a: { torso: 12, claws: 40, head: 25, tail: 10, sq: -6 }, x: 0.12 }, { t: 800, a: { torso: 10, claws: 35, head: 22, tail: 8 }, x: 0.115 }, { t: 1000, a: {} }],
+      },
+      // two snips (a butt and a butt)
+      attack2: {
+        dur: 950, hit: 560, hits: [330], lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { torso: -8, claws: -35, head: -20, scut: 10 }, x: -0.02 }, { t: 330, e: "in", a: { torso: 8, claws: 30, head: 18 }, x: 0.08 }, { t: 450, e: "out", a: { torso: -4, claws: -30, head: -18, scut: 10 }, x: 0.06 }, { t: 560, e: "in", a: { torso: 10, claws: 35, head: 22 }, x: 0.12 }, { t: 760, a: { torso: 9, claws: 32, head: 20 }, x: 0.115 }, { t: 950, a: {} }],
+      },
+      // a skill: a leap, everything up, crashing down with a shock ring
+      skill: {
+        dur: 1300, hit: 780, ring: 780, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: 6, sq: -12, scut: 8 } }, { t: 600, e: "out", a: { torso: -16, claws: -70, head: -30, tail: -25, sq: 8, legs: 25 }, x: 0.06, y: 0.3 }, { t: 690, a: { torso: -17, claws: -72, head: -32, tail: -26, sq: 8, legs: 25 }, x: 0.08, y: 0.31 }, { t: 780, e: "in", a: { torso: 14, claws: 45, head: 28, tail: 12, sq: -10 }, x: 0.13 }, { t: 1050, a: { torso: 12, claws: 40, head: 25, tail: 10 }, x: 0.125 }, { t: 1300, a: {} }],
+      },
+    }
+    MT["bug:stab"] = {
+      // the tail curled back over the body, then the sting driven at the foe (a crab or a mantis: a claw jab)
+      attack: {
+        dur: 900, hit: 450, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 320, e: "out", a: { torso: -8, tail: -30, claws: -20, head: -10, scut: 10 }, x: -0.03 }, { t: 380, a: { torso: -9, tail: -33, claws: -22, head: -11, scut: 10 }, x: -0.035 }, { t: 450, e: "in", a: { torso: 10, tail: 60, claws: 30, head: 12 }, x: 0.1 }, { t: 700, a: { torso: 9, tail: 55, claws: 26, head: 10 }, x: 0.095 }, { t: 900, a: {} }],
+      },
+      // pinched twice
+      attack2: {
+        dur: 950, hit: 560, hits: [330], lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 220, e: "out", a: { torso: -6, claws: -35, tail: -10, scut: 10 }, x: -0.02 }, { t: 330, e: "in", a: { torso: 8, claws: 35, tail: 5 }, x: 0.09 }, { t: 450, e: "out", a: { torso: -2, claws: -30, scut: 10 }, x: 0.07 }, { t: 560, e: "in", a: { torso: 10, claws: 40, tail: 10 }, x: 0.12 }, { t: 760, a: { torso: 9, claws: 36, tail: 8 }, x: 0.115 }, { t: 950, a: {} }],
+      },
+      // a skill: a long wind-up, then the sting through the foe
+      skill: {
+        dur: 1250, hit: 720, lunge: true, through: true,
+        keys: [{ t: 0, a: {} }, { t: 480, e: "out", a: { torso: -14, tail: -45, claws: -40, head: -15, scut: 14 }, x: -0.06 }, { t: 640, a: { torso: -15, tail: -48, claws: -42, head: -16, scut: 14 }, x: -0.065 }, { t: 720, e: "in", a: { torso: 14, tail: 75, claws: 40, head: 15 }, x: 0.16 }, { t: 1000, a: { torso: 12, tail: 70, claws: 36, head: 13 }, x: 0.15 }, { t: 1250, a: {} }],
+      },
+    }
+    MT["bug:slash"] = {
+      // the scythes raised high and back, swept down through the foe
+      attack: {
+        dur: 950, hit: 470, lunge: true,
+        keys: [{ t: 0, a: {} }, { t: 340, e: "out", a: { torso: -15, claws: -70, head: -10, tail: -15, scut: 10 }, x: -0.02 }, { t: 400, a: { torso: -16, claws: -74, head: -11, tail: -16, scut: 10 }, x: -0.025 }, { t: 470, e: "in", a: { torso: 15, claws: 80, head: 12, tail: 10 }, x: 0.12 }, { t: 720, a: { torso: 13, claws: 72, head: 10, tail: 8 }, x: 0.115 }, { t: 950, a: {} }],
+      },
+      attack2: MT["bug:smash"].attack2,
+      // a skill: two sweeps, the second through the foe
+      skill: {
+        dur: 1300, hit: 760, hits: [420], lunge: true, through: true,
+        keys: [{ t: 0, a: {} }, { t: 300, e: "out", a: { torso: -15, claws: -70, scut: 12 }, x: -0.03 }, { t: 420, e: "in", a: { torso: 12, claws: 70 }, x: 0.08 }, { t: 640, e: "out", a: { torso: -12, claws: -75, scut: 12 }, x: 0.06 }, { t: 760, e: "in", a: { torso: 16, claws: 85, head: 12 }, x: 0.17 }, { t: 1050, a: { torso: 14, claws: 78, head: 10 }, x: 0.16 }, { t: 1300, a: {} }],
+      },
+    }
+    MT["bug:ranged"] = MT["bug:magic"] = {
+      attack: { ...MT["fish:ranged"].attack, keys: MT["bug:stab"].attack.keys.map(k => ({ ...k, x: (k.x || 0) * 0.3 })), shot: 450, hit: 670 },
+      skill: { ...MT["fish:ranged"].skill, keys: MT["bug:stab"].skill.keys.map(k => ({ ...k, x: (k.x || 0) * 0.3 })), shot: 720, hit: 950, through: false },
+    }
     // a beast that rakes or slams also bites
     MT["quad:slash"].attack2 = MT["quad:smash"].attack2 = MT["quad:stab"].attack
     // a beast that shoots or casts: the head drawn back and thrust at the foe, the shot (quills, spit, a spell) from its mouth
@@ -8830,8 +8892,13 @@ void main(){
         if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / 38 + q.p.wing) * 28
         // a limbless one's appendage (rig.json sway = its phase): sways slowly on its root, and all of them reach
         // together by the action's limbs (+ toward the foe); limp once it has fallen
-        // (a fish's fins and tail beat faster and wider: it swims)
-        if (q.p.sway != null) deg += (pose.a.limbs || 0) + (a.dead ? 0 : R.def.tmpl === "fish" ? Math.sin(t / 130 + q.p.sway) * 16 : Math.sin(t / 320 + q.p.sway) * 9)
+        // (a fish's fins and tail beat faster and wider: it swims; an arthropod's kinds each follow a channel of their own,
+        // rig.json ch, with their own sway, amp degrees every per ms a radian, and its legs scuttle by the action's scut)
+        if (q.p.sway != null) {
+          const fish = R.def.tmpl === "fish"
+          deg += (pose.a[q.p.ch || "limbs"] || 0) * (R.def.chk?.[q.p.ch] ?? 1) + (a.dead ? 0 : Math.sin(t / (q.p.per || (fish ? 130 : 320)) + q.p.sway) * (q.p.amp ?? (fish ? 16 : 9)))
+          if (q.p.ch === "legs" && pose.a.scut && !(A?.name === "dead" && at >= A.def.dur)) deg += Math.sin(t / 40 + q.p.sway * 1.6) * pose.a.scut
+        }
         const r = deg * q.sign * D
         const par = q.p.parent && R.by[q.p.parent]
         if (par) {
