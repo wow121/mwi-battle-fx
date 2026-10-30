@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.67
+// @version      0.21.68
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -28,7 +28,7 @@
   const W = typeof unsafeWindow !== "undefined" ? unsafeWindow : window
 
   const DEV = false
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig" }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   const ASSET_REV = "002ac0efe2"
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
@@ -974,6 +974,7 @@
       worldEl = stageEl.querySelector(".bfx-world")
       bgEl = stageEl.querySelector(".bfx-bg")
       canvas = stageEl.querySelector("canvas")
+      canvas.style.opacity = cfg.fxAlpha
       ctx = canvas.getContext("2d")
       banner = stageEl.querySelector(".bfx-banner")
       waitEl = stageEl.querySelector(".bfx-wait")
@@ -7095,7 +7096,7 @@ void main(){
       return { a: { ...z.a }, x: z.x || 0, y: z.y || 0, r: z.r || 0 }
     }
 
-    let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
+    let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom, glowLayer
     const GONE = { children: true, context: true }
     const loadMip = url => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true } })
     const mipTex = c => new P.Texture({ source: new P.CanvasSource({ resource: c, autoGenerateMipmaps: true }) })
@@ -7296,7 +7297,7 @@ void main(){
       lights.blendMode = fxLayer.blendMode = partLayer.blendMode = "add"
       bloom = new F.AdvancedBloomFilter({ threshold: 0.45, bloomScale: 1, brightness: 1, blur: 8, quality: 6 })
       bloom.blendMode = "add"
-      const glowLayer = new P.Container()
+      glowLayer = new P.Container()
       glowLayer.addChild(fxLayer, partLayer)
       glowLayer.blendMode = "add"
       glowLayer.filters = [bloom]
@@ -7308,6 +7309,7 @@ void main(){
       scene.addChild(back, shotLayer, glowLayer)
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
+      setFxAlpha()
       app.ticker.add(frame)
       camera(app.canvas)
       resizer = new ResizeObserver(() =>
@@ -9904,6 +9906,10 @@ void main(){
       perf.dropped = true
       sharp()
     }
+    function setFxAlpha() {
+      if (!app) return
+      for (const l of [glowLayer, shotLayer, lights, smokeLayer, decalLayer]) l.alpha = cfg.fxAlpha
+    }
     function info() {
       if (!app || !host) return null
       const r = host.getBoundingClientRect()
@@ -10003,13 +10009,13 @@ void main(){
         }
       }
       dim *= Math.pow(0.05, dt)
-      const d = Math.round(255 * (1 - dim))
+      const d = Math.round(255 * (1 - dim * cfg.fxAlpha))
       bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
     }
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
-    return { info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
+    return { setFxAlpha, info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
 
@@ -10042,6 +10048,15 @@ void main(){
       }),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
+      GM_registerMenuCommand(L(`技能特效透明度：${Math.round(cfg.fxAlpha * 100)}%（点击调整）`, `Skill effect opacity: ${Math.round(cfg.fxAlpha * 100)}% (click to change)`), () => {
+        const v = parseFloat(prompt(L("技能特效的不透明度（0 ~ 100，100 = 原样，0 = 不显示）", "Skill effect opacity (0 – 100; 100 = as is, 0 = hidden)"), Math.round(cfg.fxAlpha * 100)))
+        if (!(v >= 0 && v <= 100)) return
+        cfg.fxAlpha = v / 100
+        saveCfg()
+        Arena.setFxAlpha()
+        document.querySelectorAll(".bfx-stage canvas").forEach(c => (c.style.opacity = cfg.fxAlpha))
+        menu()
+      }),
       GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
         const v = parseFloat(prompt(L("动画大小倍率（0.5 ~ 2）", "Animation size (0.5 – 2)"), cfg.scale))
         if (v >= 0.3 && v <= 3) {
