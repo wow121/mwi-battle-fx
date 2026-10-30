@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.71
+// @version      0.21.72
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -10353,15 +10353,19 @@ void main(){
       })
       if (!many) tween(dur, p => (dim = Math.max(dim, 0.45 * Math.sin(Math.PI * Math.min(1, p)))))
     }
+    // the numbers and skill names sized to the stage: as drawn on a stage 760 px wide or more, smaller on a narrower one
+    // (a phone's, about 340 px: at full size they covered the show), down to 55 %
+    const textK = () => Math.max(0.55, Math.min(1, app.screen.width / 760))
     function number(a, text, color, big) {
-      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: (big ? 30 : 20) * (many ? 0.65 : 1), fontWeight: "900", fill: color, stroke: { color: "#000", width: big ? 6 : 4 }, dropShadow: { color: "#000", blur: 4, distance: 0, alpha: 0.8 } } })
+      const k = textK()
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: (big ? 30 : 20) * (many ? 0.65 : 1) * k, fontWeight: "900", fill: color, stroke: { color: "#000", width: (big ? 6 : 4) * k }, dropShadow: { color: "#000", blur: 4 * k, distance: 0, alpha: 0.8 } } })
       tx.anchor.set(0.5)
       const x = a.x0 + (Math.random() - 0.5) * a.h * 0.3
       const y = a.y0 - a.h * 0.95
       tx.position.set(x, y)
       textLayer.addChild(tx)
       tween(big ? 1100 : 850, p => {
-        tx.position.y = y - 46 * ease(p)
+        tx.position.y = y - 46 * k * ease(p)
         tx.scale.set(p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1)
         tx.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
         if (p >= 1) tx.destroy()
@@ -10487,14 +10491,15 @@ void main(){
     }
     function banner(a, text, color) {
       if (!text || many) return
-      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 }, dropShadow: { color: "#000", blur: 6, distance: 0, alpha: 0.9 } } })
+      const k = textK()
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22 * k, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 * k }, dropShadow: { color: "#000", blur: 6 * k, distance: 0, alpha: 0.9 } } })
       tx.anchor.set(0.5)
       const y = a.y0 - a.h * 1.25
       tx.position.set(a.x0, y)
       textLayer.addChild(tx)
       tween(1000, p => {
         tx.scale.set(p < 0.12 ? lerp(1.8, 1, p / 0.12) : 1)
-        tx.position.y = y - 14 * p
+        tx.position.y = y - 14 * k * p
         tx.alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25
         if (p >= 1) tx.destroy()
       })
@@ -10598,7 +10603,7 @@ void main(){
       if (!a.stars) {
         a.stars = new P.Container()
         for (let k = 0; k < 3; k++) {
-          const s = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18, fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
+          const s = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18 * textK(), fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
           s.anchor.set(0.5)
           a.stars.addChild(s)
         }
