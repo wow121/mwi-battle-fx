@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.63
+// @version      0.21.64
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8346,6 +8346,11 @@ void main(){
     }
 
     let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
+    // how pieces are taken down: with their children, and each drawn shape with its context (PixiJS 8 frees a
+    // Graphics' context, its geometry and its GPU buffers only when destroy gets no options or context: true;
+    // { children: true } alone left them all behind, a few MB more with every set-up until the GPU gave out and the
+    // whole page went white for a moment). Shared textures are kept.
+    const GONE = { children: true, context: true }
     // what it shows: { units, loc(), tier(), live } (the lab's sandbox, or the real battle laid over the game's cards)
     let source = null
     let resizer = null
@@ -8681,7 +8686,7 @@ void main(){
     // set-up again would pile more of them up until the WebGL context gives out
     function teardown(a) {
       const fs = new Set([a.filter, ...(a.glowFs || []), ...(a.ench || []).map(g => g.f)])
-      a.cont.destroy({ children: true })
+      a.cont.destroy(GONE)
       for (const f of fs) f?.destroy?.()
     }
     // every effect still on the stage finished at once and swept away (its last step is what removes it: an effect
@@ -8694,7 +8699,7 @@ void main(){
           } catch (e) {}
       for (const q of parts.splice(0)) q.s.destroy()
       for (const layer of [fxLayer, shotLayer, partLayer, textLayer, lights, decalLayer, smokeLayer])
-        for (const c of layer.removeChildren()) if (c !== trailG) c.destroy({ children: true })
+        for (const c of layer.removeChildren()) if (c !== trailG) c.destroy(GONE)
       if (trailG) fxLayer.addChild(trailG)
       worldFx.clear()
       setWorldFx()
@@ -9211,7 +9216,7 @@ void main(){
       // (the old body's glow filters freed with it; its body shader a.filter goes on to the new one)
       for (const f of [...(a.glowFs || []), ...(a.ench || []).map(g => g.f)]) f?.destroy?.()
       a.glowFs = []
-      a.rig?.root.destroy({ children: true })
+      a.rig?.root.destroy(GONE)
       const root = new P.Container()
       const list = Object.entries(def.parts)
         .sort((x, y) => x[1].z - y[1].z)
@@ -9301,7 +9306,7 @@ void main(){
       return flats[id]
     }
     function buildFlat(a, tex) {
-      a.flat?.root.destroy({ children: true })
+      a.flat?.root.destroy(GONE)
       const root = new P.Container()
       let body
       if (tex) {
@@ -10047,7 +10052,7 @@ void main(){
         const s = p < 0.15 ? 0.6 + 0.4 * (p / 0.15) : 1
         g.scale.set(s)
         c.alpha = p < 0.15 ? p / 0.15 : 1 - Math.max(0, p - 0.6) / 0.4
-        if (p >= 1) c.destroy({ children: true })
+        if (p >= 1) c.destroy(GONE)
       })
       emit(a.x0, a.y0 - a.h * 0.2, { n: 12, color: [color, 0xffffff], size: 0.35, speed: 60, up: 120, gravity: -120, life: dur, jitter: a.h * 0.4 })
     }
@@ -10278,7 +10283,7 @@ void main(){
       ;(kind === "vines" ? smokeLayer : decalLayer).addChild(g)
       tween(dur, p => {
         g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
-        if (p >= 1) g.destroy({ children: true })
+        if (p >= 1) g.destroy(GONE)
       })
     }
     // a crescent of light (a blade's wave) thrown forward through the foes
@@ -10795,7 +10800,7 @@ void main(){
       const key = list.join() + "|" + Math.round(a.box || 0)
       if (key === a.chipKey) return
       a.chipKey = key
-      a.chips.removeChildren().forEach(c => c.destroy())
+      a.chips.removeChildren().forEach(c => c.destroy(GONE))
       const size = Math.max(8, Math.min(14, Math.round((a.box || a.h) * 0.16)))
       const fit = Math.max(1, Math.floor(((a.box || a.h) + 2) / (size + 2)))
       const vis = list.length > fit ? list.slice(0, fit - 1) : list
@@ -11562,7 +11567,7 @@ void main(){
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     // (what is on the stage right now: for checking that effects go away and nothing piles up)
-    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started }
+    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
     return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
