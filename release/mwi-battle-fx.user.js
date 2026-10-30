@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.65
+// @version      0.21.66
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -7097,6 +7097,8 @@ void main(){
 
     let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
     const GONE = { children: true, context: true }
+    const loadMip = url => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true } })
+    const mipTex = c => new P.Texture({ source: new P.CanvasSource({ resource: c, autoGenerateMipmaps: true }) })
     let source = null
     let resizer = null
     let loading = null
@@ -7198,7 +7200,7 @@ void main(){
       }
       view.textContent = ""
       app = new P.Application()
-      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(2, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
+      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(3, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
       view.appendChild(app.canvas)
       dot = radial([[0, "rgba(255,255,255,1)"], [0.35, "rgba(255,255,255,.8)"], [1, "rgba(255,255,255,0)"]], 32)
       glow = radial([[0, "rgba(255,255,255,.9)"], [0.4, "rgba(255,255,255,.35)"], [1, "rgba(255,255,255,0)"]], 256)
@@ -7662,7 +7664,7 @@ void main(){
           const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
-          for (const [n, q] of Object.entries(def.parts)) tex[n] = await P.Assets.load(Assets.url(`rig/${id}/${q.img}`))
+          for (const [n, q] of Object.entries(def.parts)) tex[n] = await loadMip(Assets.url(`rig/${id}/${q.img}`))
           return { def, tex }
         })().catch(e => {
           delete rigs[id]
@@ -7737,7 +7739,7 @@ void main(){
               if (!(d1 < cut.keep[4] && (d2 > cut.drop[4] || d1 < cut.core))) im.data[(y * N + x) * 4 + 3] = 0
             }
           g.putImageData(im, 0, 0)
-          return (iconTex[key] = { tex: P.Texture.from(c), axis: cut.axis.map(v => v * q), k: 0.5 })
+          return (iconTex[key] = { tex: mipTex(c), axis: cut.axis.map(v => v * q), k: 0.5 })
         }
         let axis = ICON_FLIP.has(id) ? [hi[0], hi[1], lo[0], lo[1]] : [lo[0], lo[1], hi[0], hi[1]]
         if (line) {
@@ -7747,7 +7749,7 @@ void main(){
           const B = px(line[2], line[3])
           axis = A[0] - A[1] < B[0] - B[1] ? [...A, ...B] : [...B, ...A]
         }
-        return (iconTex[key] = { tex: P.Texture.from(c), axis, k: 0.5 })
+        return (iconTex[key] = { tex: mipTex(c), axis, k: 0.5 })
       } catch (e) {
         console.warn("[动画测试] icon", id, e)
         return (iconTex[key] = null)
@@ -7780,7 +7782,7 @@ void main(){
       g.filter = "none"
       g.drawImage(src, x0, y0, w, h, t, 0, fw, h)
       const cx = t + fw / 2
-      return (shieldTex[id] = { tex: P.Texture.from(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
+      return (shieldTex[id] = { tex: mipTex(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
     }
     let playerBase = null
     const FULL_OUTFITS = new Set(["halloween_ghost"])
@@ -7794,7 +7796,7 @@ void main(){
       const avatar = base.avatars.includes(u.avatar) ? u.avatar : base.avatars[0]
       const outfit = base.outfits.includes(u.outfit) ? u.outfit : base.outfits[0]
       const def = { ...base, parts: { ...base.parts } }
-      const L = n => P.Assets.load(Assets.url(`rig/player/${n}.webp`))
+      const L = n => loadMip(Assets.url(`rig/player/${n}.webp`))
       const tex = {}
       const whole = FULL_OUTFITS.has(outfit)
       for (const part of Object.keys(base.parts)) tex[part] = [!whole && (await L(`a_${avatar}_${part}`)), outfit && (await L(`o_${outfit}_${part}`))]
@@ -7812,13 +7814,13 @@ void main(){
         if (shield) return shield
         const k = String(id || "").replace(/_refined$/, "")
         if (k && Assets.list("weapons").includes(k)) {
-          const t = await P.Assets.load(Assets.url(`rig/weapons/${k}.webp`))
+          const t = await loadMip(Assets.url(`rig/weapons/${k}.webp`))
           const axis = WEAPON_AXIS["rig:" + k]
           return { tex: t, grip: RIG_GRIP["rig:" + k] || [t.width / 2, t.height / 2], axis }
         }
         const h = id && Doll.held(id)
         if (!h) return null
-        const t = await P.Assets.load(h.url)
+        const t = await loadMip(h.url)
         return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip, axis: WEAPON_AXIS[String(id).replace(/_refined$/, "")] }
       }
       const along = (ax, f) => [ax[0] + (ax[2] - ax[0]) * f, ax[1] + (ax[3] - ax[1]) * f]
@@ -7937,7 +7939,7 @@ void main(){
     const flats = {}
     function loadFlat(id) {
       if (!Assets.has("m", id)) return Promise.resolve(null)
-      flats[id] ||= Promise.all(FLAT_POSES.map(n => P.Assets.load(Assets.url(`m/${id}/${n}.webp`)).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
+      flats[id] ||= Promise.all(FLAT_POSES.map(n => loadMip(Assets.url(`m/${id}/${n}.webp`)).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
       return flats[id]
     }
     function buildFlat(a, tex) {
@@ -9869,7 +9871,25 @@ void main(){
       }
     }
     let many = false
+    const perf = { t: 0, n: 0, low: 0, last: 0 }
+    function keepUp() {
+      const at = performance.now()
+      const gap = at - perf.last
+      perf.last = at
+      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen()) return
+      perf.t += gap
+      perf.n++
+      if (perf.t < 3000) return
+      const fps = (perf.n * 1000) / perf.t
+      perf.t = perf.n = 0
+      perf.low = fps < 45 ? perf.low + 1 : 0
+      if (perf.low < 2) return
+      app.renderer.resolution = 2
+      app.renderer.resize(host.clientWidth, host.clientHeight)
+      layout()
+    }
     function frameBody() {
+      keepUp()
       many = crowd()
       if (stale) freshen()
       const k = performance.now() < slowUntil ? slowK : 1
