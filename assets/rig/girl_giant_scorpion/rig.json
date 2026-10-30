@@ -10,12 +10,12 @@
   "torso": {
    "img": "torso.webp",
    "pivot": [
-    147,
-    257
+    104,
+    200
    ],
    "at": [
-    233,
-    282
+    190,
+    290
    ],
    "z": 3,
    "sign": -1
@@ -23,42 +23,42 @@
   "arm_m": {
    "img": "arm_m.webp",
    "pivot": [
-    24,
-    11
+    30,
+    10
    ],
    "at": [
-    123,
-    239
+    129,
+    238
    ],
    "z": 2,
    "parent": "torso",
-   "aim": -91,
+   "aim": -100,
    "sign": 1
   },
   "arm_o": {
    "img": "arm_o.webp",
    "pivot": [
-    23,
+    20,
     12
    ],
    "at": [
-    228,
+    225,
     238
    ],
-   "z": 6,
+   "z": 1.5,
    "parent": "torso",
-   "aim": -30,
+   "aim": -32,
    "sign": 1
   },
   "head": {
    "img": "head.webp",
    "pivot": [
-    97,
-    81
+    98,
+    82
    ],
    "at": [
-    183,
-    171
+    184,
+    172
    ],
    "z": 4,
    "parent": "torso"
@@ -66,12 +66,12 @@
   "leg_f": {
    "img": "leg_f.webp",
    "pivot": [
-    49,
+    51,
     2
    ],
    "at": [
-    161,
-    292
+    163,
+    290
    ],
    "z": 1,
    "parent": "torso",
@@ -80,17 +80,71 @@
   "leg_b": {
    "img": "leg_b.webp",
    "pivot": [
-    20,
+    19,
     2
    ],
    "at": [
-    217,
-    295
+    215,
+    294
    ],
    "z": 0,
    "parent": "torso",
    "sign": 1
+  },
+  "tail_f1": {
+   "img": "tail_f1.webp",
+   "pivot": [
+    50,
+    191
+   ],
+   "at": [
+    266,
+    216
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 3.3,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f2": {
+   "img": "tail_f2.webp",
+   "pivot": [
+    7,
+    11
+   ],
+   "at": [
+    272,
+    185
+   ],
+   "z": 1.1,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 4.4,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f3": {
+   "img": "tail_f3.webp",
+   "pivot": [
+    4,
+    7
+   ],
+   "at": [
+    222,
+    261
+   ],
+   "z": 1.2,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 5.5,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
   }
  },
- "lie": 0.062
+ "lie": 0.207
 }

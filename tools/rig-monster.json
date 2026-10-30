@@ -218,5 +218,29 @@
  },
  "girl_ice_sorcerer": {
   "tmpl": "robed"
+ },
+ "girl_fly": {
+  "flap": [
+   20,
+   32
+  ]
+ },
+ "girl_trial_dragonfly": {
+  "flap": [
+   20,
+   32
+  ]
+ },
+ "girl_trial_firefly": {
+  "flap": [
+   20,
+   32
+  ]
+ },
+ "girl_trial_wasp": {
+  "flap": [
+   20,
+   32
+  ]
  }
 }

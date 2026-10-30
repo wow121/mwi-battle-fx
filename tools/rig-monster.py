@@ -57,6 +57,11 @@ KEYS = {
     "leg_r": (255, 0, 255),
     "float": (255, 128, 0),
 }
+# a monster girl's map has two more: her wings (violet) and her tails / free-hanging tentacles (brown)
+GIRL = A.id.startswith("girl_")
+if GIRL:
+    KEYS["wing"] = (128, 0, 255)
+    KEYS["tail"] = (139, 69, 19)
 names = list(KEYS)
 seg = np.asarray(Image.open(A.seg).convert("RGB").resize((W, H), Image.BOX)).astype(np.int32)
 pal = np.array([KEYS[n] for n in names])
@@ -88,6 +93,12 @@ def shrink(m, n=1):
     return ~grow(~m, n)
 
 
+# (violet and brown are also where blue meets red or red meets the black background: only solid areas of them count,
+# the thin seams between two other parts are left unsure)
+for n in ("wing", "tail"):
+    if n in KEYS:
+        m = lab == names.index(n)
+        lab[m & ~(grow(shrink(m, 2), 2))] = -1
 # every visible pixel of the monster gets the label of the nearest sure one (the map's outline may be off a pixel or two)
 L = np.where(fg, lab, -1)
 L[fg & (L < 0)] = -2
@@ -160,6 +171,15 @@ if BLOB:
     for n in ("leg_l", "leg_r", "weapon"):
         mask["trunk"] |= mask[n]
         mask[n][:] = False
+# a monster girl's wings: each one its own part behind her, beating gently; her tails and free-hanging tentacles: each
+# its own part behind her, swaying on its root (on her head when it grows from it)
+if GIRL:
+    if mask["wing"].any():
+        wings["wing_f"] = mask["wing"].copy()
+    if mask["tail"].any():
+        GROUPS["tail_f"] = ("tail", 1, "tail", 8, 420, 1.1)
+        limbs["tail_f"] = mask["tail"].copy()
+    mask["wing"][:] = mask["tail"][:] = False
 print("parts", {n: int(m.sum()) for n, m in mask.items() if m.any()})
 
 # ----- roles -----
@@ -460,7 +480,7 @@ for pre, group in limbs.items():
         if ch != "limbs":
             meta.update(ch=ch, amp=amp, per=per)
         # (a centaur's hind legs: behind the middle of its horse)
-        if CENT and pivots[n][0] > np.median(tx):
+        if CENT and pre.startswith("leg") and pivots[n][0] > np.median(tx):
             meta["ch"] = "legs_b"
         limb_meta[n] = meta
 # things floating round it: each piece its own part (float1, float2 …), bobbing on its own (rig.json float = its phase)
@@ -571,6 +591,9 @@ for n, (m, src_im) in pix.items():
         q["sign"] = -1
     if n.startswith("wing"):
         q["wing"] = 0 if n.startswith("wing_n") else 0.7
+        # (a girl's wings beat slower and narrower than a flier's, an insect girl's as fast: rig-monster.json "flap")
+        if GIRL:
+            q["wamp"], q["wper"] = OVER.get("flap", [14, 110])
     # (each appendage a little behind the one before it: a wave along a row of tentacles, legs stepping in turn)
     if n in limb_meta:
         q.update(limb_meta[n])

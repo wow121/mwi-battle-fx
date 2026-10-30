@@ -10,12 +10,12 @@
   "torso": {
    "img": "torso.webp",
    "pivot": [
-    155,
-    256
+    97,
+    225
    ],
    "at": [
-    198,
-    301
+    197,
+    270
    ],
    "z": 3,
    "sign": -1
@@ -23,42 +23,42 @@
   "arm_m": {
    "img": "arm_m.webp",
    "pivot": [
-    15,
+    20,
     8
    ],
    "at": [
-    133,
-    210
+    137,
+    201
    ],
    "z": 6,
    "parent": "torso",
-   "aim": -48,
+   "aim": -88,
    "sign": 1
   },
   "arm_o": {
    "img": "arm_o.webp",
    "pivot": [
-    9,
-    11
+    19,
+    8
    ],
    "at": [
-    221,
-    213
+    242,
+    227
    ],
    "z": 6,
    "parent": "torso",
-   "aim": -25,
+   "aim": 10,
    "sign": 1
   },
   "head": {
    "img": "head.webp",
    "pivot": [
     96,
-    120
+    117
    ],
    "at": [
     198,
-    165
+    162
    ],
    "z": 4,
    "parent": "torso"
@@ -66,12 +66,12 @@
   "leg_f": {
    "img": "leg_f.webp",
    "pivot": [
-    48,
+    45,
     2
    ],
    "at": [
-    165,
-    278
+    162,
+    268
    ],
    "z": 1,
    "parent": "torso",
@@ -80,17 +80,87 @@
   "leg_b": {
    "img": "leg_b.webp",
    "pivot": [
-    13,
+    17,
     2
    ],
    "at": [
     213,
-    283
+    274
    ],
    "z": 0,
    "parent": "torso",
    "sign": 1
+  },
+  "wing_f1": {
+   "img": "wing_f1.webp",
+   "pivot": [
+    21,
+    66
+   ],
+   "at": [
+    287,
+    213
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": 1,
+   "wing": 0.7,
+   "wamp": 14,
+   "wper": 110
+  },
+  "wing_f2": {
+   "img": "wing_f2.webp",
+   "pivot": [
+    70,
+    61
+   ],
+   "at": [
+    113,
+    194
+   ],
+   "z": 1.1,
+   "parent": "torso",
+   "sign": 1,
+   "wing": 0.7,
+   "wamp": 14,
+   "wper": 110
+  },
+  "tail_f1": {
+   "img": "tail_f1.webp",
+   "pivot": [
+    46,
+    10
+   ],
+   "at": [
+    124,
+    257
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 3.3,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f2": {
+   "img": "tail_f2.webp",
+   "pivot": [
+    4,
+    10
+   ],
+   "at": [
+    286,
+    265
+   ],
+   "z": 1.1,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 4.4,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
   }
  },
- "lie": 0.266
+ "lie": 0.179
 }

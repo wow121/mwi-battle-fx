@@ -10,12 +10,12 @@
   "torso": {
    "img": "torso.webp",
    "pivot": [
-    131,
-    238
+    115,
+    236
    ],
    "at": [
-    206,
-    305
+    203,
+    303
    ],
    "z": 3,
    "sign": -1
@@ -23,42 +23,42 @@
   "arm_m": {
    "img": "arm_m.webp",
    "pivot": [
-    29,
-    10
+    25,
+    11
    ],
    "at": [
-    115,
-    198
+    121,
+    214
    ],
    "z": 6,
    "parent": "torso",
-   "aim": -54,
+   "aim": -67,
    "sign": 1
   },
   "arm_o": {
    "img": "arm_o.webp",
    "pivot": [
-    25,
-    11
+    18,
+    10
    ],
    "at": [
-    246,
-    236
+    238,
+    243
    ],
-   "z": 6,
+   "z": 1.5,
    "parent": "torso",
-   "aim": -30,
+   "aim": -60,
    "sign": 1
   },
   "head": {
    "img": "head.webp",
    "pivot": [
-    137,
-    97
+    115,
+    95
    ],
    "at": [
-    212,
-    164
+    203,
+    162
    ],
    "z": 4,
    "parent": "torso"
@@ -66,12 +66,12 @@
   "leg_f": {
    "img": "leg_f.webp",
    "pivot": [
-    39,
+    36,
     2
    ],
    "at": [
-    150,
-    286
+    153,
+    292
    ],
    "z": 1,
    "parent": "torso",
@@ -80,17 +80,233 @@
   "leg_b": {
    "img": "leg_b.webp",
    "pivot": [
-    38,
+    31,
     2
    ],
    "at": [
-    247,
+    246,
     305
    ],
    "z": 0,
    "parent": "torso",
    "sign": 1
+  },
+  "tail_f1": {
+   "img": "tail_f1.webp",
+   "pivot": [
+    3,
+    4
+   ],
+   "at": [
+    293,
+    204
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 3.3,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f2": {
+   "img": "tail_f2.webp",
+   "pivot": [
+    8,
+    27
+   ],
+   "at": [
+    277,
+    277
+   ],
+   "z": 1.1,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 4.4,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f3": {
+   "img": "tail_f3.webp",
+   "pivot": [
+    40,
+    9
+   ],
+   "at": [
+    115,
+    195
+   ],
+   "z": 1.2,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 5.5,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f4": {
+   "img": "tail_f4.webp",
+   "pivot": [
+    20,
+    27
+   ],
+   "at": [
+    266,
+    197
+   ],
+   "z": 1.3,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 6.6,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f5": {
+   "img": "tail_f5.webp",
+   "pivot": [
+    23,
+    20
+   ],
+   "at": [
+    126,
+    131
+   ],
+   "z": 1.4,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 7.7,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f6": {
+   "img": "tail_f6.webp",
+   "pivot": [
+    11,
+    19
+   ],
+   "at": [
+    286,
+    181
+   ],
+   "z": 1.5,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 8.8,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f7": {
+   "img": "tail_f7.webp",
+   "pivot": [
+    14,
+    27
+   ],
+   "at": [
+    97,
+    249
+   ],
+   "z": 1.6,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 9.9,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f8": {
+   "img": "tail_f8.webp",
+   "pivot": [
+    11,
+    19
+   ],
+   "at": [
+    251,
+    154
+   ],
+   "z": 1.7000000000000002,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 11.0,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f9": {
+   "img": "tail_f9.webp",
+   "pivot": [
+    17,
+    8
+   ],
+   "at": [
+    110,
+    166
+   ],
+   "z": 1.8,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 12.1,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f10": {
+   "img": "tail_f10.webp",
+   "pivot": [
+    6,
+    12
+   ],
+   "at": [
+    301,
+    247
+   ],
+   "z": 1.9,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 13.2,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f11": {
+   "img": "tail_f11.webp",
+   "pivot": [
+    8,
+    8
+   ],
+   "at": [
+    304,
+    314
+   ],
+   "z": 2.0,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 14.3,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f12": {
+   "img": "tail_f12.webp",
+   "pivot": [
+    4,
+    5
+   ],
+   "at": [
+    123,
+    159
+   ],
+   "z": 2.1,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 15.4,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
   }
  },
- "lie": 0.215
+ "lie": 0.219
 }

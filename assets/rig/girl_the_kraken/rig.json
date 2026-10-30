@@ -10,12 +10,12 @@
   "torso": {
    "img": "torso.webp",
    "pivot": [
-    157,
-    239
+    112,
+    245
    ],
    "at": [
-    205,
-    279
+    201,
+    285
    ],
    "z": 3,
    "sign": -1
@@ -23,42 +23,42 @@
   "arm_m": {
    "img": "arm_m.webp",
    "pivot": [
-    57,
+    62,
     9
    ],
    "at": [
-    170,
-    211
+    164,
+    206
    ],
    "z": 6,
    "parent": "torso",
-   "aim": 68,
+   "aim": 69,
    "sign": 1
   },
   "arm_o": {
    "img": "arm_o.webp",
    "pivot": [
-    8,
+    9,
     11
    ],
    "at": [
-    228,
-    215
+    225,
+    207
    ],
-   "z": 6,
+   "z": 1.5,
    "parent": "torso",
-   "aim": -42,
+   "aim": -40,
    "sign": 1
   },
   "head": {
    "img": "head.webp",
    "pivot": [
-    161,
-    130
+    116,
+    109
    ],
    "at": [
-    209,
-    170
+    205,
+    149
    ],
    "z": 4,
    "parent": "torso"
@@ -66,12 +66,12 @@
   "leg_f": {
    "img": "leg_f.webp",
    "pivot": [
-    50,
+    46,
     2
    ],
    "at": [
-    169,
-    282
+    165,
+    283
    ],
    "z": 1,
    "parent": "torso",
@@ -84,13 +84,85 @@
     2
    ],
    "at": [
-    242,
-    291
+    241,
+    294
    ],
    "z": 0,
    "parent": "torso",
    "sign": 1
+  },
+  "tail_f1": {
+   "img": "tail_f1.webp",
+   "pivot": [
+    47,
+    102
+   ],
+   "at": [
+    307,
+    231
+   ],
+   "z": 1.0,
+   "parent": "torso",
+   "sign": -1,
+   "sway": 3.3,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f2": {
+   "img": "tail_f2.webp",
+   "pivot": [
+    54,
+    64
+   ],
+   "at": [
+    102,
+    199
+   ],
+   "z": 1.1,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 4.4,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f3": {
+   "img": "tail_f3.webp",
+   "pivot": [
+    22,
+    5
+   ],
+   "at": [
+    260,
+    217
+   ],
+   "z": 1.2,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 5.5,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
+  },
+  "tail_f4": {
+   "img": "tail_f4.webp",
+   "pivot": [
+    13,
+    5
+   ],
+   "at": [
+    313,
+    224
+   ],
+   "z": 1.3,
+   "parent": "torso",
+   "sign": 1,
+   "sway": 6.6,
+   "ch": "tail",
+   "amp": 8,
+   "per": 420
   }
  },
- "lie": 0.185
+ "lie": 0.215
 }

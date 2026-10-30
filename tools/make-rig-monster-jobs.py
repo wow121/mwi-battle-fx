@@ -185,10 +185,19 @@ GIRL_SEG = PROMPT["seg"].replace(
     "- RED #FF0000: the trunk: body and head together (for a creature whose head is part of its body), including ears, hair, horns, tail "
     "and anything worn on the body.\n"
     "- YELLOW #FFFF00: the head, ONLY if it is a separate head on a neck; otherwise do not use yellow.\n",
-    "- RED #FF0000: the trunk: neck, chest, belly, hips, the clothes on them (dress, skirt, tunic, cape, scarf), and a tail or wings.\n"
+    "- RED #FF0000: the trunk: neck, chest, belly, hips and the clothes on them (dress, skirt, tunic, cape, scarf).\n"
     "- YELLOW #FFFF00: the WHOLE head: face, ALL of the hair (including long hair hanging down behind the shoulders and back, and "
-    "every strand and bun), ears, horns, antennae, hat and hair ornaments, as one piece.\n",
+    "every strand and bun), ears, horns, antennae, hat and hair ornaments, as one piece.\n"
+    "- VIOLET #8000FF: each WING (bat, bird, butterfly or insect wings), each one whole out to its tip.\n"
+    "- BROWN #8B4513: each TAIL, and each tentacle or long fin that hangs or curls free from her body or head, each one whole "
+    "from where it joins her to its tip.\n",
 )
+# her trunk piece loses her wings and tails too (they move on their own)
+GIRL_TRUNK = PROMPT["trunk"].replace(
+    "and anything floating in the air around it removed.",
+    "her WINGS, her TAILS and any tentacles or long fins hanging free from her body or head taken off, and anything floating "
+    "in the air around it removed.",
+).replace("horns, tail, wings and anything worn", "horns and anything worn")
 TMPL = {k: v.get("tmpl") for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rig-monster.json"))).items()}
 BGS = {"white #FFFFFF": (255, 255, 255), "green #00FF00": (0, 255, 0), "magenta #FF00FF": (255, 0, 255), "blue #0000FF": (0, 0, 255)}
 
@@ -216,7 +225,7 @@ for mid in IDS:
     prompt = os.path.join(MON, "prompts", f"{mid}_{PHASE}.txt")
     # a monster Codex keeps getting wrong: a note of its own (<raw>/rig/mon/hints.tsv: id, phase, note)
     note = "".join(f"Important for this monster: {t}\n" for i, ph, t in HINTS if i == mid and ph == PHASE)
-    open(prompt, "w").write((GIRL_SEG if GIRL and PHASE == "seg" and TMPL.get("girl_" + mid) in (None, "biped", "robed") else PROMPT.get((PHASE, TMPL.get("girl_" + mid if GIRL else mid)), PROMPT[PHASE])).replace("{bg}", bg) + note)
+    open(prompt, "w").write((GIRL_SEG if GIRL and PHASE == "seg" and TMPL.get("girl_" + mid) in (None, "biped", "robed") else GIRL_TRUNK if GIRL and PHASE == "trunk" and TMPL.get("girl_" + mid) in (None, "biped", "robed") else PROMPT.get((PHASE, TMPL.get("girl_" + mid if GIRL else mid)), PROMPT[PHASE])).replace("{bg}", bg) + note)
     rows.append(f"{mid}_{PHASE}\t{prompt}\t{ref}")
     print(mid, bg)
 open(os.path.join(MON, f"jobs-{PHASE}.tsv"), "w").write("\n".join(rows) + "\n")
