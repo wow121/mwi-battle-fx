@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.65
+// @version      0.21.66
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8351,6 +8351,11 @@ void main(){
     // { children: true } alone left them all behind, a few MB more with every set-up until the GPU gave out and the
     // whole page went white for a moment). Shared textures are kept.
     const GONE = { children: true, context: true }
+    // a body part or a held piece is drawn big and shown small (a 280 px weapon at 40 px on a phone): with mipmaps (the
+    // GPU's own smaller copies) it stays clean instead of breaking up into a few picked pixels; not for the effects'
+    // own textures and buffers, which are drawn near their size or redrawn every frame
+    const loadMip = url => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true } })
+    const mipTex = c => new P.Texture({ source: new P.CanvasSource({ resource: c, autoGenerateMipmaps: true }) })
     // what it shows: { units, loc(), tier(), live } (the lab's sandbox, or the real battle laid over the game's cards)
     let source = null
     let resizer = null
@@ -8462,7 +8467,7 @@ void main(){
       }
       view.textContent = ""
       app = new P.Application()
-      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(2, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
+      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(3, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
       view.appendChild(app.canvas)
       dot = radial([[0, "rgba(255,255,255,1)"], [0.35, "rgba(255,255,255,.8)"], [1, "rgba(255,255,255,0)"]], 32)
       glow = radial([[0, "rgba(255,255,255,.9)"], [0.4, "rgba(255,255,255,.35)"], [1, "rgba(255,255,255,0)"]], 256)
@@ -8971,7 +8976,7 @@ void main(){
           const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
-          for (const [n, q] of Object.entries(def.parts)) tex[n] = await P.Assets.load(Assets.url(`rig/${id}/${q.img}`))
+          for (const [n, q] of Object.entries(def.parts)) tex[n] = await loadMip(Assets.url(`rig/${id}/${q.img}`))
           return { def, tex }
         })().catch(e => {
           delete rigs[id]
@@ -9056,7 +9061,7 @@ void main(){
               if (!(d1 < cut.keep[4] && (d2 > cut.drop[4] || d1 < cut.core))) im.data[(y * N + x) * 4 + 3] = 0
             }
           g.putImageData(im, 0, 0)
-          return (iconTex[key] = { tex: P.Texture.from(c), axis: cut.axis.map(v => v * q), k: 0.5 })
+          return (iconTex[key] = { tex: mipTex(c), axis: cut.axis.map(v => v * q), k: 0.5 })
         }
         // the head is at the top right in most icons, the bottom left in a few (ICON_FLIP)
         let axis = ICON_FLIP.has(id) ? [hi[0], hi[1], lo[0], lo[1]] : [lo[0], lo[1], hi[0], hi[1]]
@@ -9068,7 +9073,7 @@ void main(){
           const B = px(line[2], line[3])
           axis = A[0] - A[1] < B[0] - B[1] ? [...A, ...B] : [...B, ...A]
         }
-        return (iconTex[key] = { tex: P.Texture.from(c), axis, k: 0.5 })
+        return (iconTex[key] = { tex: mipTex(c), axis, k: 0.5 })
       } catch (e) {
         console.warn("[动画测试] icon", id, e)
         return (iconTex[key] = null)
@@ -9105,7 +9110,7 @@ void main(){
       g.filter = "none"
       g.drawImage(src, x0, y0, w, h, t, 0, fw, h)
       const cx = t + fw / 2
-      return (shieldTex[id] = { tex: P.Texture.from(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
+      return (shieldTex[id] = { tex: mipTex(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
     }
     // a player: the shared 3/4 battle-view template with this avatar's and outfit's registered layers (body, upper
     // arm, forearm), the paper-doll weapon piece in the fist (turned from the doll's arm angle) and the off-hand behind
@@ -9121,7 +9126,7 @@ void main(){
       const avatar = base.avatars.includes(u.avatar) ? u.avatar : base.avatars[0]
       const outfit = base.outfits.includes(u.outfit) ? u.outfit : base.outfits[0]
       const def = { ...base, parts: { ...base.parts } }
-      const L = n => P.Assets.load(Assets.url(`rig/player/${n}.webp`))
+      const L = n => loadMip(Assets.url(`rig/player/${n}.webp`))
       const tex = {}
       // (an outfit that covers the whole figure, the ghost sheet, is drawn alone: no hair, skin or limbs of the avatar
       // under it to show through)
@@ -9149,13 +9154,13 @@ void main(){
         // read by the character, painted over a parallel-projection layout: RIG_GRIP)
         const k = String(id || "").replace(/_refined$/, "")
         if (k && Assets.list("weapons").includes(k)) {
-          const t = await P.Assets.load(Assets.url(`rig/weapons/${k}.webp`))
+          const t = await loadMip(Assets.url(`rig/weapons/${k}.webp`))
           const axis = WEAPON_AXIS["rig:" + k]
           return { tex: t, grip: RIG_GRIP["rig:" + k] || [t.width / 2, t.height / 2], axis }
         }
         const h = id && Doll.held(id)
         if (!h) return null
-        const t = await P.Assets.load(h.url)
+        const t = await loadMip(h.url)
         return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip, axis: WEAPON_AXIS[String(id).replace(/_refined$/, "")] }
       }
       // a point along the weapon's axis (0 butt … 1 head) and the axis's angle (degrees from straight down, + forward)
@@ -9302,7 +9307,7 @@ void main(){
     const flats = {}
     function loadFlat(id) {
       if (!Assets.has("m", id)) return Promise.resolve(null)
-      flats[id] ||= Promise.all(FLAT_POSES.map(n => P.Assets.load(Assets.url(`m/${id}/${n}.webp`)).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
+      flats[id] ||= Promise.all(FLAT_POSES.map(n => loadMip(Assets.url(`m/${id}/${n}.webp`)).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
       return flats[id]
     }
     function buildFlat(a, tex) {
@@ -11463,7 +11468,28 @@ void main(){
     }
     // (crowd(), kept for the frame: asked by every effect)
     let many = false
+    // a phone drawn at its full pixel density (3) that cannot keep up drops to 2: under 45 frames a second for two
+    // 3-second spells in a row (the picture a little softer, smooth again)
+    // (real time between frames: the ticker's deltaMS is capped at 100 ms, a slow frame would count for too little)
+    const perf = { t: 0, n: 0, low: 0, last: 0 }
+    function keepUp() {
+      const at = performance.now()
+      const gap = at - perf.last
+      perf.last = at
+      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen()) return
+      perf.t += gap
+      perf.n++
+      if (perf.t < 3000) return
+      const fps = (perf.n * 1000) / perf.t
+      perf.t = perf.n = 0
+      perf.low = fps < 45 ? perf.low + 1 : 0
+      if (perf.low < 2) return
+      app.renderer.resolution = 2
+      app.renderer.resize(host.clientWidth, host.clientHeight)
+      layout()
+    }
     function frameBody() {
+      keepUp()
       many = crowd()
       if (stale) freshen()
       const k = performance.now() < slowUntil ? slowK : 1
