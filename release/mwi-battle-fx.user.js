@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.73
+// @version      0.21.77
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -28,9 +28,9 @@
   const W = typeof unsafeWindow !== "undefined" ? unsafeWindow : window
 
   const DEV = false
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
-  const ASSET_REV = "caf1470507"
+  const ASSET_REV = "803fa8e59c"
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
     "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json",
@@ -6819,7 +6819,7 @@ void main(){
     function monsterActions(id, def) {
       const tmpl = def.tmpl
       if (!MT[tmpl] || ACTIONS[id]?.__tmpl) return
-      const style = MONSTERS[id]?.[1] || "smash"
+      const style = MONSTERS[id.replace(/^girl_/, "")]?.[1] || "smash"
       const src = { ...MT[tmpl], ...(MT[tmpl + ":" + style] || MT["biped:" + style] || MT[tmpl + ":smash"] || MT["biped:smash"]) }
       const P = def.parts
       const rest = n => P[n]?.aim || 0
@@ -7449,7 +7449,7 @@ void main(){
           if (run !== syncing) return
           if (r) buildRig(a, r)
           else if (side === "m") {
-            const f = await loadFlat(a.kind)
+            const f = await loadFlat(a.kind.replace(/^girl_/, ""))
             if (run !== syncing) return
             buildFlat(a, f)
           }
@@ -7462,8 +7462,9 @@ void main(){
       if (!source?.live || source.guild) return source?.tier() ?? null
       return where.labyrinth || DUNGEON_ZONES.has(where.zone) ? null : where.tier ?? null
     }
+    const monKind = id => (cfg.monGirl && Assets.has("rig", "girl_" + id) ? "girl_" + id : id)
     function makeUnit(side, i, u) {
-      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
+      const a = { side, i, u, kind: side === "p" ? playerKind(u) : monKind((u.hrid || "").split("/").pop()), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       a.filter = P.Filter.from({
         resolution: "inherit",
@@ -7935,7 +7936,7 @@ void main(){
       a.bodyOn = null
       a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
       a.glowKey = ""
-      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.face !== "right" && !FALLERS.has(def.tmpl) }
+      a.rig = { root, parts: list, by, order, def, arms, str, fallen: false, back: 0, crumble: def.face !== "right" && !FALLERS.has(def.tmpl) && !a.kind.startsWith("girl_") }
       enchGlow(a)
       layout()
       if (a.dead) {
@@ -8080,7 +8081,7 @@ void main(){
         if (q.name === "body") deg = Math.max(-88, Math.min(88, deg))
         if (q.name === "head" && R.def.headk != null) deg *= R.def.headk
         if (q.name === "body" || q.name === "torso" || (q.name === "head" && !R.def.hands)) deg -= wob
-        if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / 38 + q.p.wing) * 28
+        if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / (q.p.wper || 38) + q.p.wing) * (q.p.wamp ?? 28)
         if (q.p.sway != null) {
           const fish = R.def.tmpl === "fish"
           deg += (pose.a[q.p.ch || "limbs"] || 0) * (R.def.chk?.[q.p.ch] ?? 1) + (a.dead ? 0 : Math.sin(t / (q.p.per || (fish ? 130 : 320)) + q.p.sway) * (q.p.amp ?? (fish ? 16 : 9)))
@@ -10176,6 +10177,7 @@ void main(){
     menuIds = [
       GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
       toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
+      toggle("monGirl", L("怪物娘化（新版舞台；形象参考 LaoTY 的「娘化怪物换皮」）", "Monster girls (new stage; designs after LaoTY's 娘化怪物换皮)"), () => Arena.sync()),
       GM_registerMenuCommand(L(`战斗舞台：${cfg.stageEngine === "classic" ? "老版（整张立绘）" : "新版（骨骼动画）"}（点击切换）`, `Battle stage: ${cfg.stageEngine === "classic" ? "old (pose pictures)" : "new (rigged)"} (click to switch)`), () =>
         Live.setEngine(cfg.stageEngine === "classic" ? "rig" : "classic"),
       ),
