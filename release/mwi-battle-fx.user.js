@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.66
+// @version      0.21.67
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -7200,7 +7200,7 @@ void main(){
       }
       view.textContent = ""
       app = new P.Application()
-      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(3, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
+      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.max(1, Math.min(3, (devicePixelRatio || 1) * (view.clientWidth ? view.getBoundingClientRect().width / view.clientWidth : 1))), autoDensity: true, preference: "webgl" })
       view.appendChild(app.canvas)
       dot = radial([[0, "rgba(255,255,255,1)"], [0.35, "rgba(255,255,255,.8)"], [1, "rgba(255,255,255,0)"]], 32)
       glow = radial([[0, "rgba(255,255,255,.9)"], [0.4, "rgba(255,255,255,.35)"], [1, "rgba(255,255,255,0)"]], 256)
@@ -7314,6 +7314,7 @@ void main(){
         requestAnimationFrame(() => {
           if (!app || !host) return
           if (app.screen.width !== host.clientWidth || app.screen.height !== host.clientHeight) app.renderer.resize(host.clientWidth, host.clientHeight)
+          sharp()
           layout()
         }),
       )
@@ -7427,6 +7428,7 @@ void main(){
     }
     async function sync() {
       if (!app || !source) return
+      settle()
       const run = ++syncing
       if (source.guild) zoomButtons(host)
       background()
@@ -9871,12 +9873,26 @@ void main(){
       }
     }
     let many = false
-    const perf = { t: 0, n: 0, low: 0, last: 0 }
+    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0 }
+    const settle = () => ((perf.grace = performance.now() + 8000), (perf.t = perf.n = perf.low = 0))
+    function wantRes() {
+      const scale = host?.clientWidth ? host.getBoundingClientRect().width / host.clientWidth : 1
+      return Math.max(1, Math.min(perf.cap, (devicePixelRatio || 1) * (scale || 1)))
+    }
+    function sharp() {
+      if (!app || !host?.clientWidth) return
+      const want = wantRes()
+      if (Math.abs(want - app.renderer.resolution) < 0.05) return
+      app.renderer.resolution = want
+      app.renderer.resize(host.clientWidth, host.clientHeight)
+      layout()
+    }
     function keepUp() {
       const at = performance.now()
       const gap = at - perf.last
       perf.last = at
-      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen()) return
+      if (at - perf.check > 2000) (perf.check = at), sharp()
+      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen() || at < perf.grace) return
       perf.t += gap
       perf.n++
       if (perf.t < 3000) return
@@ -9884,9 +9900,14 @@ void main(){
       perf.t = perf.n = 0
       perf.low = fps < 45 ? perf.low + 1 : 0
       if (perf.low < 2) return
-      app.renderer.resolution = 2
-      app.renderer.resize(host.clientWidth, host.clientHeight)
-      layout()
+      perf.cap = 2
+      perf.dropped = true
+      sharp()
+    }
+    function info() {
+      if (!app || !host) return null
+      const r = host.getBoundingClientRect()
+      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
     }
     function frameBody() {
       keepUp()
@@ -9988,7 +10009,7 @@ void main(){
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
-    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
+    return { info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
 
@@ -10009,6 +10030,16 @@ void main(){
       GM_registerMenuCommand(L(`战斗舞台：${cfg.stageEngine === "classic" ? "老版（整张立绘）" : "新版（骨骼动画）"}（点击切换）`, `Battle stage: ${cfg.stageEngine === "classic" ? "old (pose pictures)" : "new (rigged)"} (click to switch)`), () =>
         Live.setEngine(cfg.stageEngine === "classic" ? "rig" : "classic"),
       ),
+      GM_registerMenuCommand(L("战斗舞台清晰度信息", "Battle stage sharpness info"), () => {
+        const i = Arena.info()
+        if (!i) return alert(L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
+        alert(
+          L(
+            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.dropped ? "因为帧率低，已自动降到 2 倍" : "没有因为帧率降低倍率"}`,
+            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.dropped ? "Dropped to 2x for a low frame rate" : "Not dropped for frame rate"}`,
+          ),
+        )
+      }),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
       GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
