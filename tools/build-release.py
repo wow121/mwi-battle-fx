@@ -74,8 +74,130 @@ def build(src: str) -> str:
     return head + sep + body
 
 
+# ----- comments: the release leaves out the lines that hold only a comment (about a sixth of the script; the dev copy
+# keeps them). A comment is found by a small JavaScript scanner, not by the look of a line: strings, template literals
+# (their ${...} parts scanned as code) and regular expressions are stepped over, so a "//" inside them is never taken
+# for one. Indentation and everything else stay as they are (Greasy Fork does not allow minified code).
+KEYWORDS_BEFORE_REGEX = {"return", "typeof", "case", "in", "of", "new", "delete", "void", "throw", "instanceof", "do", "else", "yield", "await"}
+
+
+def comment_spans(src: str):
+    """(start, end) of every // and /* */ comment in src"""
+    spans = []
+    n = len(src)
+    prev = ""  # the last significant token: a punctuator character, or "id" / a keyword, or "val" for a literal
+
+    def skip_string(i, q):
+        i += 1
+        while i < n and src[i] != q:
+            i += 2 if src[i] == "\\" else 1
+        return i + 1
+
+    def skip_regex(i):
+        i += 1
+        cls = False
+        while i < n:
+            c = src[i]
+            if c == "\\":
+                i += 2
+                continue
+            if c == "[":
+                cls = True
+            elif c == "]":
+                cls = False
+            elif c == "/" and not cls:
+                i += 1
+                break
+            elif c == "\n":
+                raise ValueError(f"unterminated regex at {i}")
+            i += 1
+        while i < n and (src[i].isalnum() or src[i] == "_"):
+            i += 1
+        return i
+
+    def scan(i, until_brace):
+        nonlocal prev
+        depth = 0
+        while i < n:
+            c = src[i]
+            if c in " \t\r\n":
+                i += 1
+            elif src.startswith("//", i):
+                j = src.find("\n", i)
+                j = n if j < 0 else j
+                spans.append((i, j))
+                i = j
+            elif src.startswith("/*", i):
+                j = src.find("*/", i + 2)
+                if j < 0:
+                    raise ValueError(f"unterminated comment at {i}")
+                spans.append((i, j + 2))
+                i = j + 2
+            elif c in "'\"":
+                i = skip_string(i, c)
+                prev = "val"
+            elif c == "`":
+                i += 1
+                while i < n and src[i] != "`":
+                    if src[i] == "\\":
+                        i += 2
+                    elif src.startswith("${", i):
+                        prev = "("
+                        i = scan(i + 2, True)
+                    else:
+                        i += 1
+                i += 1
+                prev = "val"
+            elif c == "/":
+                if prev in ("", "val", "id", ")", "]", "}"):
+                    i += 1
+                    prev = "/"
+                else:
+                    i = skip_regex(i)
+                    prev = "val"
+            elif c.isalnum() or c in "_$":
+                j = i
+                while j < n and (src[j].isalnum() or src[j] in "_$"):
+                    j += 1
+                word = src[i:j]
+                prev = "kw" if word in KEYWORDS_BEFORE_REGEX else ("val" if word[0].isdigit() else "id")
+                i = j
+            else:
+                if c == "{":
+                    depth += 1
+                elif c == "}":
+                    if until_brace and depth == 0:
+                        return i + 1
+                    depth -= 1
+                prev = c
+                i += 1
+        return i
+
+    scan(0, False)
+    return spans
+
+
+def drop_comment_lines(text: str) -> str:
+    """the lines that hold nothing but a comment, left out (the userscript header kept)"""
+    body_at = text.index("// ==/UserScript==") + len("// ==/UserScript==")
+    drop = set()
+    for a, b in comment_spans(text):
+        if a < body_at:
+            continue
+        ls = text.rfind("\n", 0, a) + 1
+        if text[ls:a].strip():
+            continue  # code before it on its line: kept
+        le = text.find("\n", b)
+        le = len(text) if le < 0 else le
+        if text[b:le].strip():
+            continue  # code after it on its line
+        first = text.count("\n", 0, ls)
+        drop.update(range(first, first + text.count("\n", ls, le) + 1))
+    return "\n".join(l for k, l in enumerate(text.split("\n")) if k not in drop)
+
+
 def main():
-    text = build(SRC.read_text(encoding="utf-8"))
+    text = drop_comment_lines(build(SRC.read_text(encoding="utf-8")))
     for word in ("__mwiBattleFx", "cfg.debug", "const Lab = (() =>", "GM_setClipboard("):
         if word in text:
             sys.exit(f"release still contains {word!r}")
