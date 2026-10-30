@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.68
+// @version      0.21.69
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8694,7 +8694,7 @@ void main(){
     // a unit taken down with its GPU filters (its body shader, buff glows, enhancement glows): left behind, every
     // set-up again would pile more of them up until the WebGL context gives out
     function teardown(a) {
-      const fs = new Set([a.filter, ...(a.glowFs || []), ...(a.ench || []).map(g => g.f)])
+      const fs = new Set([a.filter])
       a.cont.destroy(GONE)
       for (const f of fs) f?.destroy?.()
     }
@@ -8755,7 +8755,9 @@ void main(){
     function makeUnit(side, i, u) {
       const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
+      // (at the screen's density: a filter draws its object at 1x by default, soft on a phone's 3x screen)
       a.filter = P.Filter.from({
+        resolution: "inherit",
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
         resources: { u: { uFlash: { value: 0, type: "f32" }, uColor: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" }, uDis: { value: a.dead ? 1 : 0, type: "f32" }, uSeed: { value: Math.random() * 50, type: "f32" } } },
       })
@@ -9224,8 +9226,9 @@ void main(){
     const FALLERS = new Set(["quad", "centaur"])
     function buildRig(a, { def, tex }) {
       // (the old body's glow filters freed with it; its body shader a.filter goes on to the new one)
-      for (const f of [...(a.glowFs || []), ...(a.ench || []).map(g => g.f)]) f?.destroy?.()
-      a.glowFs = []
+      for (const h of a.halos || []) h.destroy()
+      a.halos = []
+      a.glowKey = ""
       a.rig?.root.destroy(GONE)
       const root = new P.Container()
       const list = Object.entries(def.parts)
@@ -9331,7 +9334,6 @@ void main(){
       }
       root.addChild(body)
       a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
-      a.glowFs ||= []
       a.bodyOn = null
       a.flat = { root, body, tex, melee: !/ranged|magic/.test(a.u.style || "") }
       layout()
@@ -10130,7 +10132,7 @@ void main(){
     // size1 and color / color1 change over the life; drag slows them (share of speed kept per second); to() pulls them
     // toward a moving point; tex "streak" draws them as streaks along their flight, "smoke" as puffs that do not glow
     function emit(x, y, o = {}) {
-      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1)), MAX_PARTS - parts.length)
+      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1) * perf.fx), MAX_PARTS - parts.length)
       const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : o.tex === "leaf" ? leafTex : dot
       // smoke and leaves are solid things: drawn over the bodies without glowing
       const layer = o.tex === "smoke" || o.tex === "leaf" ? smokeLayer : partLayer
@@ -10859,19 +10861,34 @@ void main(){
       if (a.flat) return bodyFilters(a)
       if (!a.rig) return
       a.rig.root.alpha = buffs.includes("elusiveness") ? 0.72 : 1
+      // a self buff: a soft halo of its colour behind the body, pulsing (a glow filter round the body was a render of the
+      // whole body into a texture with a many-sample shader every frame, and drew it at 1x)
       const glows = many && a.side === "p" ? [] : buffs.filter(k => BUFF_C[k]).slice(0, 2)
       const key = glows.join()
       if (key !== a.glowKey) {
         a.glowKey = key
-        for (const f of a.glowFs) f.destroy()
-        a.glowFs = glows.map((k, n) => new F.GlowFilter({ distance: 10 + n * 6, outerStrength: 2.2, color: BUFF_C[k], quality: 0.2 }))
-        a.bodyOn = null
+        for (const h of a.halos || []) h.destroy()
+        a.halos = glows.map(k => {
+          const h = new P.Sprite(glow)
+          h.anchor.set(0.5)
+          h.tint = BUFF_C[k]
+          h.blendMode = "add"
+          a.cont.addChildAt(h, a.cont.getChildIndex(a.shadow) + 1)
+          return h
+        })
       }
+      ;(a.halos || []).forEach((h, n) => {
+        const r = a.h * (1.15 + n * 0.25)
+        h.width = r
+        h.height = r * 1.15
+        h.position.set(0, -a.h * 0.5)
+        h.alpha = 0.55 + 0.25 * Math.sin(t / 320 + n)
+      })
       bodyFilters(a)
       // the enhancement glow breathes from +10, cycles the rainbow from +15
       for (const g of a.ench || []) {
-        if (g.breathe) g.f.outerStrength = g.strength * (0.55 + 0.45 * Math.sin(t / g.breathe))
-        if (g.rainbow) g.f.color = new P.Color({ h: (t / 8) % 360, s: 90, l: 60 }).toNumber()
+        if (g.breathe) g.s.alpha = 0.5 + 0.5 * Math.sin(t / g.breathe)
+        if (g.rainbow) g.s.tint = new P.Color({ h: (t / 8) % 360, s: 90, l: 60 }).toNumber()
       }
     }
     // The body shader (a flash, burning away) costs a render of the whole body into a texture of its own every frame, so
@@ -10883,8 +10900,43 @@ void main(){
       root.visible = a.uni.uDis < 1
       if (on === a.bodyOn) return
       a.bodyOn = on
-      const fs = on ? [a.filter, ...a.glowFs] : a.glowFs
-      root.filters = fs.length ? fs : null
+      root.filters = on ? [a.filter] : null
+    }
+    // a held piece's glow, made once per texture: its silhouette in white, spread out and softened (copies of it round a
+    // few rings, fading outward), tinted by the tier when drawn
+    const haloTex = new Map()
+    function haloOf(tex) {
+      if (haloTex.has(tex.uid)) return haloTex.get(tex.uid)
+      let out = null
+      try {
+        const f = tex.frame
+        const src = tex.source.resource
+        const pad = Math.ceil(Math.max(f.width, f.height) * 0.06) + 4
+        const w = Math.ceil(f.width) + pad * 2
+        const h = Math.ceil(f.height) + pad * 2
+        const sil = document.createElement("canvas")
+        sil.width = w
+        sil.height = h
+        const sg = sil.getContext("2d")
+        sg.drawImage(src, f.x, f.y, f.width, f.height, pad, pad, f.width, f.height)
+        sg.globalCompositeOperation = "source-in"
+        sg.fillStyle = "#fff"
+        sg.fillRect(0, 0, w, h)
+        const c = document.createElement("canvas")
+        c.width = w
+        c.height = h
+        const g = c.getContext("2d")
+        for (const [r, al] of [[pad * 0.95, 0.12], [pad * 0.7, 0.18], [pad * 0.45, 0.25], [pad * 0.22, 0.3]])
+          for (let k = 0; k < 16; k++) {
+            g.globalAlpha = al
+            g.drawImage(sil, Math.cos((k / 16) * Math.PI * 2) * r, Math.sin((k / 16) * Math.PI * 2) * r)
+          }
+        out = { tex: mipTex(c), pad }
+      } catch (e) {
+        console.warn("[战斗动画] glow", e)
+      }
+      haloTex.set(tex.uid, out)
+      return out
     }
     const ENCH_T = [[15, "rainbow", 4, 260], [12, 0xff5a3c, 3.6, 220], [10, 0xffa53a, 3.2, 380], [8, 0xc07bff, 2.8, 0], [5, 0x6fb6ff, 2.4, 0]]
     function enchGlow(a) {
@@ -10896,10 +10948,17 @@ void main(){
         const q = a.rig.by[part]
         const tier = ENCH_T.find(([n]) => (level || 0) >= n)
         if (!q || !tier) continue
-        const [, color, strength, breathe] = tier
-        const f = new F.GlowFilter({ distance: 12, outerStrength: strength, color: color === "rainbow" ? 0xff4d4d : color, quality: 0.2 })
-        q.s.filters = [f]
-        a.ench.push({ f, strength, breathe: breathe || (color === "rainbow" ? 300 : 0), rainbow: color === "rainbow" })
+        const [, color, , breathe] = tier
+        const sp = q.s.children[0]
+        const g = sp && haloOf(sp.texture)
+        if (!g) continue
+        // (behind the piece, on its pivot and scale: the piece itself stays a plain sprite, sharp and cheap)
+        const s = new P.Sprite(g.tex)
+        s.pivot.set(sp.pivot.x + g.pad, sp.pivot.y + g.pad)
+        s.scale.copyFrom(sp.scale)
+        s.tint = color === "rainbow" ? 0xff4d4d : color
+        q.s.addChildAt(s, 0)
+        a.ench.push({ s, breathe: breathe || (color === "rainbow" ? 300 : 0), rainbow: color === "rainbow" })
       }
     }
     function shockRing(x, y, h, color) {
@@ -11478,7 +11537,19 @@ void main(){
     // (real time between frames: the ticker's deltaMS is capped at 100 ms, a slow frame would count for too little; not
     // judged in the first 8 s after the stage opens, is set up again or comes back on screen: loading the parts, making
     // their mipmaps and compiling the shaders is slow on any phone, and used to drop it to 2 for good at once)
-    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0 }
+    // quality steps down, one step for each two 3-second spells under 45 frames a second: 1 at most 2x, 2 half the
+    // particles and a lighter glow, 3 at most 1.5x, a third of the particles and no glow pass, 4 at 1x
+    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0, level: 0, fx: 1 }
+    function stepDown() {
+      perf.level++
+      perf.dropped = true
+      if (perf.level === 1) perf.cap = 2
+      if (perf.level === 2) (perf.fx = 0.5), (bloom.quality = 3), (bloom.blur = 6)
+      if (perf.level === 3) (perf.cap = 1.5), (perf.fx = 0.33), (glowLayer.filters = null)
+      if (perf.level === 4) perf.cap = 1
+      settle()
+      sharp()
+    }
     const settle = () => ((perf.grace = performance.now() + 8000), (perf.t = perf.n = perf.low = 0))
     // the density to draw at: the screen's pixels per CSS pixel times the scale the page shows the stage at (a zoomed
     // page or panel: drawn for its own size and shown bigger it would be soft), at most perf.cap
@@ -11500,7 +11571,7 @@ void main(){
       perf.last = at
       // (the density looked at again every 2 s: the page zoomed, the phone turned)
       if (at - perf.check > 2000) (perf.check = at), sharp()
-      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen() || at < perf.grace) return
+      if (perf.level >= 4 || gap > 1000 || !onScreen() || at < perf.grace) return
       perf.t += gap
       perf.n++
       if (perf.t < 3000) return
@@ -11508,9 +11579,10 @@ void main(){
       perf.t = perf.n = 0
       perf.low = fps < 45 ? perf.low + 1 : 0
       if (perf.low < 2) return
-      perf.cap = 2
-      perf.dropped = true
-      sharp()
+      perf.low = 0
+      // (a step that changes nothing here, 2x on a screen drawn at 2 or less, is passed over)
+      if (perf.level === 0 && app.renderer.resolution <= 2) perf.level = 1
+      stepDown()
     }
     // how see-through the skill effects are (cfg.fxAlpha, 0–1): the glowing effects and sparks, missiles, lights,
     // smoke and ground marks; the numbers, skill names, aura rings and buff glows stay as they are
@@ -11522,7 +11594,7 @@ void main(){
     function info() {
       if (!app || !host) return null
       const r = host.getBoundingClientRect()
-      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
+      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, level: perf.level, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
     }
     function frameBody() {
       keepUp()
@@ -11739,8 +11811,8 @@ void main(){
         if (!i) return alert(L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
         alert(
           L(
-            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.dropped ? "因为帧率低，已自动降到 2 倍" : "没有因为帧率降低倍率"}`,
-            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.dropped ? "Dropped to 2x for a low frame rate" : "Not dropped for frame rate"}`,
+            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.level ? `因为帧率低，画质已自动降到第 ${i.level} 级（共 4 级：1 最高 2 倍，2 减少粒子和光晕，3 最高 1.5 倍且关掉光晕，4 为 1 倍）` : "画质没有因为帧率降低"}`,
+            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.level ? `Quality lowered to step ${i.level} of 4 for a low frame rate` : "Quality not lowered for frame rate"}`,
           ),
         )
       }),
