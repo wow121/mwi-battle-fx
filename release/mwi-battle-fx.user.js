@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.70
+// @version      0.21.73
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -2585,7 +2585,7 @@
       saveCfg()
       ensure()
       GuildLive.ensure()
-      menu()
+      menuSoon()
     }
     return { ensure, setEngine }
   })()
@@ -7311,6 +7311,7 @@ void main(){
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       setFxAlpha()
+      warmUp()
       app.ticker.add(frame)
       camera(app.canvas)
       resizer = new ResizeObserver(() =>
@@ -8675,9 +8676,9 @@ void main(){
       const c = sh => Math.round(lerp((a >> sh) & 255, (b >> sh) & 255, p)) << sh
       return c(16) | c(8) | c(0)
     }
-    const MAX_PARTS = 1600
+    const MAX_PARTS = 700
     function emit(x, y, o = {}) {
-      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1) * perf.fx), MAX_PARTS - parts.length)
+      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1) * perf.fx), Math.floor(MAX_PARTS * perf.fx) - parts.length)
       const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : o.tex === "leaf" ? leafTex : dot
       const layer = o.tex === "smoke" || o.tex === "leaf" ? smokeLayer : partLayer
       const cols = [].concat(o.color ?? 0xffffff)
@@ -8753,6 +8754,7 @@ void main(){
       focus = { x, y, amt, t0: now(), until: now() + ms }
     }
     function haze(x, y, w, h, dur, amp = 7) {
+      if (perf.level >= 2) return
       const map = new P.Sprite(hazeTex)
       map.anchor.set(0.5)
       map.position.set(x, y)
@@ -8776,7 +8778,7 @@ void main(){
       })
     }
     function zoomBlur(x, y, dur, strength = 0.05) {
-      if (!F.ZoomBlurFilter) return
+      if (!F.ZoomBlurFilter || perf.level >= 2) return
       const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90 })
       worldFx.add(f)
       setWorldFx()
@@ -8877,15 +8879,17 @@ void main(){
       })
       if (!many) tween(dur, p => (dim = Math.max(dim, 0.45 * Math.sin(Math.PI * Math.min(1, p)))))
     }
+    const textK = () => Math.max(0.55, Math.min(1, app.screen.width / 760))
     function number(a, text, color, big) {
-      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: (big ? 30 : 20) * (many ? 0.65 : 1), fontWeight: "900", fill: color, stroke: { color: "#000", width: big ? 6 : 4 }, dropShadow: { color: "#000", blur: 4, distance: 0, alpha: 0.8 } } })
+      const k = textK()
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: (big ? 30 : 20) * (many ? 0.65 : 1) * k, fontWeight: "900", fill: color, stroke: { color: "#000", width: (big ? 6 : 4) * k }, dropShadow: { color: "#000", blur: 4 * k, distance: 0, alpha: 0.8 } } })
       tx.anchor.set(0.5)
       const x = a.x0 + (Math.random() - 0.5) * a.h * 0.3
       const y = a.y0 - a.h * 0.95
       tx.position.set(x, y)
       textLayer.addChild(tx)
       tween(big ? 1100 : 850, p => {
-        tx.position.y = y - 46 * ease(p)
+        tx.position.y = y - 46 * k * ease(p)
         tx.scale.set(p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1)
         tx.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
         if (p >= 1) tx.destroy()
@@ -8897,7 +8901,7 @@ void main(){
       tween(dur, p => (a.uni.uFlash = p >= 1 ? 0 : 0.9 * (1 - p)))
     }
     function crit(a) {
-      if (many) return
+      if (many || perf.level >= 2) return
       shake = Math.max(shake, 1)
       punch = 1
       const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
@@ -8999,14 +9003,15 @@ void main(){
     }
     function banner(a, text, color) {
       if (!text || many) return
-      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 }, dropShadow: { color: "#000", blur: 6, distance: 0, alpha: 0.9 } } })
+      const k = textK()
+      const tx = new P.Text({ text, style: { fontFamily: "sans-serif", fontSize: 22 * k, fontWeight: "900", fill: new P.Color(color).toHex(), stroke: { color: "#000", width: 5 * k }, dropShadow: { color: "#000", blur: 6 * k, distance: 0, alpha: 0.9 } } })
       tx.anchor.set(0.5)
       const y = a.y0 - a.h * 1.25
       tx.position.set(a.x0, y)
       textLayer.addChild(tx)
       tween(1000, p => {
         tx.scale.set(p < 0.12 ? lerp(1.8, 1, p / 0.12) : 1)
-        tx.position.y = y - 14 * p
+        tx.position.y = y - 14 * k * p
         tx.alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25
         if (p >= 1) tx.destroy()
       })
@@ -9100,7 +9105,7 @@ void main(){
       if (!a.stars) {
         a.stars = new P.Container()
         for (let k = 0; k < 3; k++) {
-          const s = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18, fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
+          const s = new P.Text({ text: "★", style: { fontFamily: "sans-serif", fontSize: 18 * textK(), fill: "#ffe14a", stroke: { color: "#6b4a00", width: 3 } } })
           s.anchor.set(0.5)
           a.stars.addChild(s)
         }
@@ -9970,6 +9975,28 @@ void main(){
       if (perf.level === 0 && app.renderer.resolution <= 2) perf.level = 1
       stepDown()
     }
+    function warmUp() {
+      try {
+        const rt = P.RenderTexture.create({ width: 8, height: 8 })
+        const c = new P.Container()
+        const s = new P.Sprite(dot)
+        s.width = s.height = 8
+        c.addChild(s)
+        const map = new P.Sprite(hazeTex)
+        const fs = [bloom, new P.DisplacementFilter({ sprite: map, scale: 1 }), F.ZoomBlurFilter && new F.ZoomBlurFilter({ strength: 0.01 }), new F.ShockwaveFilter({ center: { x: 4, y: 4 } }), P.Filter.from({ resolution: "inherit", gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" }, resources: { u: { uFlash: { value: 0, type: "f32" }, uColor: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" }, uDis: { value: 0, type: "f32" }, uSeed: { value: 0, type: "f32" } } } })].filter(Boolean)
+        for (const f of fs) {
+          c.filters = [f]
+          app.renderer.render({ container: c, target: rt })
+        }
+        c.filters = null
+        for (const f of fs) if (f !== bloom) f.destroy()
+        c.destroy(GONE)
+        map.destroy()
+        rt.destroy(true)
+      } catch (e) {
+        console.warn("[战斗动画] warm up", e)
+      }
+    }
     function setFxAlpha() {
       if (!app) return
       for (const l of [glowLayer, shotLayer, lights, smokeLayer, decalLayer]) l.alpha = cfg.fxAlpha
@@ -10084,7 +10111,59 @@ void main(){
 
 
 
+  function panel(title, build) {
+    document.querySelector(".bfx-dlg")?.remove()
+    const wrap = document.createElement("div")
+    wrap.className = "bfx-dlg"
+    Object.assign(wrap.style, { position: "fixed", inset: "0", zIndex: "2147483000", background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", font: "14px/1.5 sans-serif" })
+    const box = document.createElement("div")
+    Object.assign(box.style, { background: "#1d2440", color: "#e6ebff", border: "1px solid #4a5590", borderRadius: "10px", padding: "14px 16px", width: "min(320px, 86vw)", boxShadow: "0 6px 30px rgba(0,0,0,.6)" })
+    const h = document.createElement("div")
+    h.textContent = title
+    Object.assign(h.style, { fontWeight: "700", marginBottom: "10px" })
+    box.appendChild(h)
+    const close = () => wrap.remove()
+    wrap.addEventListener("click", e => e.target === wrap && close())
+    build(box, close)
+    wrap.appendChild(box)
+    document.body.appendChild(wrap)
+  }
+  const dlgButton = (text, onClick, main) => {
+    const b = document.createElement("button")
+    b.textContent = text
+    Object.assign(b.style, { padding: "6px 14px", borderRadius: "6px", border: "1px solid #4a5590", background: main ? "#3f5bd8" : "#2a3460", color: "#fff", font: "14px sans-serif", cursor: "pointer" })
+    b.addEventListener("click", onClick)
+    return b
+  }
+  function showInfo(title, text) {
+    panel(title, (box, close) => {
+      const t = document.createElement("div")
+      t.textContent = text
+      Object.assign(t.style, { whiteSpace: "pre-wrap", fontSize: "13px", marginBottom: "12px" })
+      const row = document.createElement("div")
+      Object.assign(row.style, { display: "flex", justifyContent: "flex-end" })
+      row.appendChild(dlgButton(L("关闭", "Close"), close, true))
+      box.append(t, row)
+    })
+  }
+  function askNumber(title, value, min, max, step, fmtV, onSet) {
+    panel(title, (box, close) => {
+      const v = document.createElement("div")
+      Object.assign(v.style, { textAlign: "center", fontSize: "20px", fontWeight: "700", margin: "4px 0 8px" })
+      const r = document.createElement("input")
+      Object.assign(r, { type: "range", min, max, step, value })
+      Object.assign(r.style, { width: "100%" })
+      const show = () => (v.textContent = fmtV(+r.value))
+      r.addEventListener("input", show)
+      show()
+      const row = document.createElement("div")
+      Object.assign(row.style, { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" })
+      row.append(dlgButton(L("取消", "Cancel"), close), dlgButton(L("确定", "OK"), () => (close(), onSet(+r.value)), true))
+      box.append(v, r, row)
+    })
+  }
   let menuIds = []
+  const menuSoon = () => setTimeout(menu, 50)
   function menu() {
     menuIds.forEach(id => GM_unregisterMenuCommand?.(id))
     const toggle = (key, label, after) =>
@@ -10092,7 +10171,7 @@ void main(){
         cfg[key] = !cfg[key]
         saveCfg()
         after?.()
-        menu()
+        menuSoon()
       })
     menuIds = [
       GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
@@ -10102,8 +10181,10 @@ void main(){
       ),
       GM_registerMenuCommand(L("战斗舞台清晰度信息", "Battle stage sharpness info"), () => {
         const i = Arena.info()
-        if (!i) return alert(L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
-        alert(
+        const title = L("战斗舞台清晰度信息", "Battle stage sharpness info")
+        if (!i) return showInfo(title, L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
+        showInfo(
+          title,
           L(
             `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.level ? `因为帧率低，画质已自动降到第 ${i.level} 级（共 4 级：1 最高 2 倍，2 减少粒子和光晕，3 最高 1.5 倍且关掉光晕，4 为 1 倍）` : "画质没有因为帧率降低"}`,
             `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.level ? `Quality lowered to step ${i.level} of 4 for a low frame rate` : "Quality not lowered for frame rate"}`,
@@ -10112,24 +10193,23 @@ void main(){
       }),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
-      GM_registerMenuCommand(L(`技能特效透明度：${Math.round(cfg.fxAlpha * 100)}%（点击调整）`, `Skill effect opacity: ${Math.round(cfg.fxAlpha * 100)}% (click to change)`), () => {
-        const v = parseFloat(prompt(L("技能特效的不透明度（0 ~ 100，100 = 原样，0 = 不显示）", "Skill effect opacity (0 – 100; 100 = as is, 0 = hidden)"), Math.round(cfg.fxAlpha * 100)))
-        if (!(v >= 0 && v <= 100)) return
-        cfg.fxAlpha = v / 100
-        saveCfg()
-        Arena.setFxAlpha()
-        document.querySelectorAll(".bfx-stage canvas").forEach(c => (c.style.opacity = cfg.fxAlpha))
-        menu()
-      }),
-      GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
-        const v = parseFloat(prompt(L("动画大小倍率（0.5 ~ 2）", "Animation size (0.5 – 2)"), cfg.scale))
-        if (v >= 0.3 && v <= 3) {
-          cfg.scale = v
+      GM_registerMenuCommand(L(`技能特效透明度：${Math.round(cfg.fxAlpha * 100)}%（点击调整）`, `Skill effect opacity: ${Math.round(cfg.fxAlpha * 100)}% (click to change)`), () =>
+        askNumber(L("技能特效的不透明度（100% = 原样，0% = 不显示）", "Skill effect opacity (100% = as is, 0% = hidden)"), Math.round(cfg.fxAlpha * 100), 0, 100, 5, v => v + "%", v => {
+          cfg.fxAlpha = v / 100
+          saveCfg()
+          Arena.setFxAlpha()
+          document.querySelectorAll(".bfx-stage canvas").forEach(c => (c.style.opacity = cfg.fxAlpha))
+          menuSoon()
+        }),
+      ),
+      GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () =>
+        askNumber(L("动画大小倍率", "Animation size"), cfg.scale, 0.5, 2, 0.05, v => v.toFixed(2) + "×", v => {
+          cfg.scale = Math.round(v * 100) / 100
           saveCfg()
           Stage.layout()
-          menu()
-        }
-      }),
+          menuSoon()
+        }),
+      ),
     ]
   }
   menu()
