@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.67
+// @version      0.21.68
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig" }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
@@ -1120,6 +1120,8 @@
       worldEl = stageEl.querySelector(".bfx-world")
       bgEl = stageEl.querySelector(".bfx-bg")
       canvas = stageEl.querySelector("canvas")
+      // (the skill effects drawn on it, as see-through as cfg.fxAlpha)
+      canvas.style.opacity = cfg.fxAlpha
       ctx = canvas.getContext("2d")
       banner = stageEl.querySelector(".bfx-banner")
       waitEl = stageEl.querySelector(".bfx-wait")
@@ -8345,7 +8347,7 @@ void main(){
       return { a: { ...z.a }, x: z.x || 0, y: z.y || 0, r: z.r || 0 }
     }
 
-    let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom
+    let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom, glowLayer
     // how pieces are taken down: with their children, and each drawn shape with its context (PixiJS 8 frees a
     // Graphics' context, its geometry and its GPU buffers only when destroy gets no options or context: true;
     // { children: true } alone left them all behind, a few MB more with every set-up until the GPU gave out and the
@@ -8570,7 +8572,7 @@ void main(){
       bloom.blendMode = "add"
       // (one bloom over the effects and the particles together: a filter is a pass over the whole stage, two of them
       // cost twice the one)
-      const glowLayer = new P.Container()
+      glowLayer = new P.Container()
       glowLayer.addChild(fxLayer, partLayer)
       glowLayer.blendMode = "add"
       glowLayer.filters = [bloom]
@@ -8583,6 +8585,7 @@ void main(){
       scene.addChild(back, shotLayer, glowLayer)
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
+      setFxAlpha()
       app.ticker.add(frame)
       camera(app.canvas)
       // (the canvas follows its box whenever the box changes size: PixiJS's own resizeTo only listens for the window's
@@ -11509,6 +11512,12 @@ void main(){
       perf.dropped = true
       sharp()
     }
+    // how see-through the skill effects are (cfg.fxAlpha, 0–1): the glowing effects and sparks, missiles, lights,
+    // smoke and ground marks; the numbers, skill names, aura rings and buff glows stay as they are
+    function setFxAlpha() {
+      if (!app) return
+      for (const l of [glowLayer, shotLayer, lights, smokeLayer, decalLayer]) l.alpha = cfg.fxAlpha
+    }
     // what the stage draws at, for the menu: the screen's density, the page's scale, the density drawn at, and why
     function info() {
       if (!app || !host) return null
@@ -11614,14 +11623,14 @@ void main(){
         }
       }
       dim *= Math.pow(0.05, dt)
-      const d = Math.round(255 * (1 - dim))
+      const d = Math.round(255 * (1 - dim * cfg.fxAlpha))
       bg.tint = (d << 16) | (d << 8) | Math.min(255, Math.round(d + 30 * dim))
     }
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     // (what is on the stage right now: for checking that effects go away and nothing piles up)
     const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
-    return { info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
+    return { setFxAlpha, info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
   // #dev-start
@@ -11756,6 +11765,16 @@ void main(){
         Assets.refresh(true)
       }),
       // #dev-end
+      // how see-through the skill effects are, on both stages
+      GM_registerMenuCommand(L(`技能特效透明度：${Math.round(cfg.fxAlpha * 100)}%（点击调整）`, `Skill effect opacity: ${Math.round(cfg.fxAlpha * 100)}% (click to change)`), () => {
+        const v = parseFloat(prompt(L("技能特效的不透明度（0 ~ 100，100 = 原样，0 = 不显示）", "Skill effect opacity (0 – 100; 100 = as is, 0 = hidden)"), Math.round(cfg.fxAlpha * 100)))
+        if (!(v >= 0 && v <= 100)) return
+        cfg.fxAlpha = v / 100
+        saveCfg()
+        Arena.setFxAlpha()
+        document.querySelectorAll(".bfx-stage canvas").forEach(c => (c.style.opacity = cfg.fxAlpha))
+        menu()
+      }),
       GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
         const v = parseFloat(prompt(L("动画大小倍率（0.5 ~ 2）", "Animation size (0.5 – 2)"), cfg.scale))
         if (v >= 0.3 && v <= 3) {
