@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.66
+// @version      0.21.67
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8467,7 +8467,7 @@ void main(){
       }
       view.textContent = ""
       app = new P.Application()
-      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.min(3, devicePixelRatio || 1), autoDensity: true, preference: "webgl" })
+      await app.init({ resizeTo: view, backgroundColor: 0x10142a, antialias: true, resolution: Math.max(1, Math.min(3, (devicePixelRatio || 1) * (view.clientWidth ? view.getBoundingClientRect().width / view.clientWidth : 1))), autoDensity: true, preference: "webgl" })
       view.appendChild(app.canvas)
       dot = radial([[0, "rgba(255,255,255,1)"], [0.35, "rgba(255,255,255,.8)"], [1, "rgba(255,255,255,0)"]], 32)
       glow = radial([[0, "rgba(255,255,255,.9)"], [0.4, "rgba(255,255,255,.35)"], [1, "rgba(255,255,255,0)"]], 256)
@@ -8591,6 +8591,7 @@ void main(){
         requestAnimationFrame(() => {
           if (!app || !host) return
           if (app.screen.width !== host.clientWidth || app.screen.height !== host.clientHeight) app.renderer.resize(host.clientWidth, host.clientHeight)
+          sharp()
           layout()
         }),
       )
@@ -8717,6 +8718,7 @@ void main(){
     }
     async function sync() {
       if (!app || !source) return
+      settle()
       const run = ++syncing
       // (put in here, not on opening: the first opening's "载入 PixiJS…" text replaces what the view holds)
       if (source.guild) zoomButtons(host)
@@ -11470,13 +11472,32 @@ void main(){
     let many = false
     // a phone drawn at its full pixel density (3) that cannot keep up drops to 2: under 45 frames a second for two
     // 3-second spells in a row (the picture a little softer, smooth again)
-    // (real time between frames: the ticker's deltaMS is capped at 100 ms, a slow frame would count for too little)
-    const perf = { t: 0, n: 0, low: 0, last: 0 }
+    // (real time between frames: the ticker's deltaMS is capped at 100 ms, a slow frame would count for too little; not
+    // judged in the first 8 s after the stage opens, is set up again or comes back on screen: loading the parts, making
+    // their mipmaps and compiling the shaders is slow on any phone, and used to drop it to 2 for good at once)
+    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0 }
+    const settle = () => ((perf.grace = performance.now() + 8000), (perf.t = perf.n = perf.low = 0))
+    // the density to draw at: the screen's pixels per CSS pixel times the scale the page shows the stage at (a zoomed
+    // page or panel: drawn for its own size and shown bigger it would be soft), at most perf.cap
+    function wantRes() {
+      const scale = host?.clientWidth ? host.getBoundingClientRect().width / host.clientWidth : 1
+      return Math.max(1, Math.min(perf.cap, (devicePixelRatio || 1) * (scale || 1)))
+    }
+    function sharp() {
+      if (!app || !host?.clientWidth) return
+      const want = wantRes()
+      if (Math.abs(want - app.renderer.resolution) < 0.05) return
+      app.renderer.resolution = want
+      app.renderer.resize(host.clientWidth, host.clientHeight)
+      layout()
+    }
     function keepUp() {
       const at = performance.now()
       const gap = at - perf.last
       perf.last = at
-      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen()) return
+      // (the density looked at again every 2 s: the page zoomed, the phone turned)
+      if (at - perf.check > 2000) (perf.check = at), sharp()
+      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen() || at < perf.grace) return
       perf.t += gap
       perf.n++
       if (perf.t < 3000) return
@@ -11484,9 +11505,15 @@ void main(){
       perf.t = perf.n = 0
       perf.low = fps < 45 ? perf.low + 1 : 0
       if (perf.low < 2) return
-      app.renderer.resolution = 2
-      app.renderer.resize(host.clientWidth, host.clientHeight)
-      layout()
+      perf.cap = 2
+      perf.dropped = true
+      sharp()
+    }
+    // what the stage draws at, for the menu: the screen's density, the page's scale, the density drawn at, and why
+    function info() {
+      if (!app || !host) return null
+      const r = host.getBoundingClientRect()
+      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
     }
     function frameBody() {
       keepUp()
@@ -11594,7 +11621,7 @@ void main(){
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     // (what is on the stage right now: for checking that effects go away and nothing piles up)
     const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
-    return { open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
+    return { info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
   // #dev-start
@@ -11697,6 +11724,17 @@ void main(){
       GM_registerMenuCommand(L(`战斗舞台：${cfg.stageEngine === "classic" ? "老版（整张立绘）" : "新版（骨骼动画）"}（点击切换）`, `Battle stage: ${cfg.stageEngine === "classic" ? "old (pose pictures)" : "new (rigged)"} (click to switch)`), () =>
         Live.setEngine(cfg.stageEngine === "classic" ? "rig" : "classic"),
       ),
+      // what the rigged stage draws at (for a report of a soft picture)
+      GM_registerMenuCommand(L("战斗舞台清晰度信息", "Battle stage sharpness info"), () => {
+        const i = Arena.info()
+        if (!i) return alert(L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
+        alert(
+          L(
+            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.dropped ? "因为帧率低，已自动降到 2 倍" : "没有因为帧率降低倍率"}`,
+            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.dropped ? "Dropped to 2x for a low frame rate" : "Not dropped for frame rate"}`,
+          ),
+        )
+      }),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
       // #dev-start
