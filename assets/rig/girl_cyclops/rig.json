@@ -1,0 +1,111 @@
+{
+ "foot": [
+  237,
+  341
+ ],
+ "h": 273,
+ "tmpl": "biped",
+ "crumble": false,
+ "parts": {
+  "torso": {
+   "img": "torso.webp",
+   "pivot": [
+    76,
+    211
+   ],
+   "at": [
+    196,
+    277
+   ],
+   "z": 3,
+   "sign": -1
+  },
+  "arm_m": {
+   "img": "arm_m.webp",
+   "pivot": [
+    20,
+    10
+   ],
+   "at": [
+    108,
+    194
+   ],
+   "z": 2,
+   "parent": "torso",
+   "aim": -29,
+   "sign": 1
+  },
+  "arm_o": {
+   "img": "arm_o.webp",
+   "pivot": [
+    15,
+    13
+   ],
+   "at": [
+    230,
+    213
+   ],
+   "z": 1.5,
+   "parent": "torso",
+   "aim": -36,
+   "sign": 1
+  },
+  "head": {
+   "img": "head.webp",
+   "pivot": [
+    78,
+    78
+   ],
+   "at": [
+    198,
+    144
+   ],
+   "z": 4,
+   "parent": "torso"
+  },
+  "weapon": {
+   "img": "weapon.webp",
+   "pivot": [
+    41,
+    33
+   ],
+   "at": [
+    117,
+    210
+   ],
+   "z": 1.75,
+   "parent": "arm_m",
+   "aim": 59,
+   "sign": 1
+  },
+  "leg_f": {
+   "img": "leg_f.webp",
+   "pivot": [
+    41,
+    2
+   ],
+   "at": [
+    156,
+    274
+   ],
+   "z": 1,
+   "parent": "torso",
+   "sign": 1
+  },
+  "leg_b": {
+   "img": "leg_b.webp",
+   "pivot": [
+    17,
+    2
+   ],
+   "at": [
+    216,
+    277
+   ],
+   "z": 0,
+   "parent": "torso",
+   "sign": 1
+  }
+ },
+ "lie": 0.066
+}

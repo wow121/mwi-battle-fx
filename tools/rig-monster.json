@@ -205,5 +205,18 @@
  "girl_gobo_shooty": {
   "weapon": "arm_l",
   "two": false
+ },
+ "girl_acrobat": {
+  "merge": {
+   "weapon": "trunk"
+  }
+ },
+ "girl_centaur_archer": {
+  "tmpl": "centaur",
+  "two": false,
+  "reclaim": true
+ },
+ "girl_ice_sorcerer": {
+  "tmpl": "robed"
  }
 }

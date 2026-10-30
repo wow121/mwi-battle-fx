@@ -10,6 +10,7 @@ phase idle -> <raw>/rig/girl/sheets/<id>_idle.png; tools/rig-girl-idle.py keys a
 usage: make-rig-girl-jobs.py <raw_dir> <id> ...
 A monster Codex keeps getting wrong takes a note of its own from <raw_dir>/rig/girl/hints.tsv (id, phase, note).
 """
+import json
 import os
 import sys
 
@@ -26,14 +27,24 @@ PROMPT = (
     "Task: draw that monster girl as a game sprite: the girl of image 2 (her face, hair colour and style, ears, horns, antennae, tail, "
     "wings, outfit and its colours, and the monster's features she keeps) with the chibi proportions of image 3, in the art style of "
     "image 1 (flat colours, soft cel shading, smooth clean shapes, no pixel art, no black outlines).\n"
-    "Pose: EXACTLY the pose of image 1: same position and size in the picture, feet on the same ground line, standing in 3/4 view facing "
-    "LEFT, and holding the SAME object as image 1 (same weapon, same size) in the SAME hand at the same place; if image 1 holds nothing, "
-    "the hands are empty fists. Both arms clearly apart from the body with a gap between arm and body, both legs apart and both feet "
-    "visible, like image 3.\n"
+    "{pose}"
+    "Both arms clearly apart from the body with a gap between arm and body, both legs apart and both feet visible, like image 3.\n"
     "She is fully clothed in the outfit of image 2 (a modest dress, tunic or armour covering the body), a friendly cute game character.\n"
     "Background: perfectly flat {bg} everywhere outside her. No text, no shadow, no floor, no frame. Do not use {bg} on her.\n"
     "Output: square, same framing as image 1.\n"
 )
+# a monster standing on two legs (its rig a biped, robed or centaur) gives her its pose and what it holds; a beast, a flier,
+# a blob, a fish or a bug gives only its features, she stands like the player chibi
+POSE = {
+    "copy": "Pose: EXACTLY the pose of image 1: same position and size in the picture, feet on the same ground line, standing in 3/4 "
+    "view facing LEFT, and holding the SAME object as image 1 (same weapon, same size) in the SAME hand at the same place; if image 1 "
+    "holds nothing, the hands are empty fists.\n",
+    "stand": "Pose: the fighting stance of image 3: standing on two legs in 3/4 view facing LEFT, empty fists, about as tall in the "
+    "picture as image 1's monster is wide or tall, feet near the bottom of the picture. She keeps the monster's features of images 1 "
+    "and 2 on her body (its ears, horns, antennae, wings, shell, tail, fins, spots or fur as a hood, cape or accessories), but she has "
+    "a girl's arms and legs and holds nothing.\n",
+}
+COPY = {"biped", "robed", "centaur"}
 BGS = {"green #00FF00": (0, 255, 0), "magenta #FF00FF": (255, 0, 255), "blue #0000FF": (0, 0, 255)}
 
 
@@ -70,7 +81,9 @@ for mid in IDS:
     w.save(des)
     prompt = os.path.join(GIRL, "prompts", f"{mid}_idle.txt")
     note = "".join(f"Important for this monster: {t}\n" for i, ph, t in HINTS if i == mid and ph == "idle")
-    open(prompt, "w").write(PROMPT.replace("{bg}", bg) + note)
+    rp = os.path.join(ASSETS, "rig", mid, "rig.json")
+    pose = POSE["copy" if not os.path.exists(rp) or json.load(open(rp)).get("tmpl", "biped") in COPY else "stand"]
+    open(prompt, "w").write(PROMPT.replace("{pose}", pose).replace("{bg}", bg) + note)
     rows.append(f"{mid}_idle\t{prompt}\t{ref},{des},{style}")
     print(mid, bg)
 open(os.path.join(GIRL, "jobs-idle.tsv"), "w").write("\n".join(rows) + "\n")

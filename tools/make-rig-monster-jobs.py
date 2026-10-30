@@ -216,7 +216,7 @@ for mid in IDS:
     prompt = os.path.join(MON, "prompts", f"{mid}_{PHASE}.txt")
     # a monster Codex keeps getting wrong: a note of its own (<raw>/rig/mon/hints.tsv: id, phase, note)
     note = "".join(f"Important for this monster: {t}\n" for i, ph, t in HINTS if i == mid and ph == PHASE)
-    open(prompt, "w").write((GIRL_SEG if GIRL and PHASE == "seg" and TMPL.get("girl_" + mid) is None else PROMPT.get((PHASE, TMPL.get("girl_" + mid if GIRL else mid)), PROMPT[PHASE])).replace("{bg}", bg) + note)
+    open(prompt, "w").write((GIRL_SEG if GIRL and PHASE == "seg" and TMPL.get("girl_" + mid) in (None, "biped", "robed") else PROMPT.get((PHASE, TMPL.get("girl_" + mid if GIRL else mid)), PROMPT[PHASE])).replace("{bg}", bg) + note)
     rows.append(f"{mid}_{PHASE}\t{prompt}\t{ref}")
     print(mid, bg)
 open(os.path.join(MON, f"jobs-{PHASE}.tsv"), "w").write("\n".join(rows) + "\n")
