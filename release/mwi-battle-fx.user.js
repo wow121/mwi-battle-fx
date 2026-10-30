@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.68
+// @version      0.21.69
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -7405,7 +7405,7 @@ void main(){
     }
     let syncing = 0
     function teardown(a) {
-      const fs = new Set([a.filter, ...(a.glowFs || []), ...(a.ench || []).map(g => g.f)])
+      const fs = new Set([a.filter])
       a.cont.destroy(GONE)
       for (const f of fs) f?.destroy?.()
     }
@@ -7464,6 +7464,7 @@ void main(){
       const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       a.filter = P.Filter.from({
+        resolution: "inherit",
         gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" },
         resources: { u: { uFlash: { value: 0, type: "f32" }, uColor: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" }, uDis: { value: a.dead ? 1 : 0, type: "f32" }, uSeed: { value: Math.random() * 50, type: "f32" } } },
       })
@@ -7870,8 +7871,9 @@ void main(){
     }
     const FALLERS = new Set(["quad", "centaur"])
     function buildRig(a, { def, tex }) {
-      for (const f of [...(a.glowFs || []), ...(a.ench || []).map(g => g.f)]) f?.destroy?.()
-      a.glowFs = []
+      for (const h of a.halos || []) h.destroy()
+      a.halos = []
+      a.glowKey = ""
       a.rig?.root.destroy(GONE)
       const root = new P.Container()
       const list = Object.entries(def.parts)
@@ -7961,7 +7963,6 @@ void main(){
       }
       root.addChild(body)
       a.cont.addChildAt(root, a.cont.getChildIndex(a.shadow) + 1)
-      a.glowFs ||= []
       a.bodyOn = null
       a.flat = { root, body, tex, melee: !/ranged|magic/.test(a.u.style || "") }
       layout()
@@ -8675,7 +8676,7 @@ void main(){
     }
     const MAX_PARTS = 1600
     function emit(x, y, o = {}) {
-      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1)), MAX_PARTS - parts.length)
+      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1) * perf.fx), MAX_PARTS - parts.length)
       const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : o.tex === "leaf" ? leafTex : dot
       const layer = o.tex === "smoke" || o.tex === "leaf" ? smokeLayer : partLayer
       const cols = [].concat(o.color ?? 0xffffff)
@@ -9347,14 +9348,27 @@ void main(){
       const key = glows.join()
       if (key !== a.glowKey) {
         a.glowKey = key
-        for (const f of a.glowFs) f.destroy()
-        a.glowFs = glows.map((k, n) => new F.GlowFilter({ distance: 10 + n * 6, outerStrength: 2.2, color: BUFF_C[k], quality: 0.2 }))
-        a.bodyOn = null
+        for (const h of a.halos || []) h.destroy()
+        a.halos = glows.map(k => {
+          const h = new P.Sprite(glow)
+          h.anchor.set(0.5)
+          h.tint = BUFF_C[k]
+          h.blendMode = "add"
+          a.cont.addChildAt(h, a.cont.getChildIndex(a.shadow) + 1)
+          return h
+        })
       }
+      ;(a.halos || []).forEach((h, n) => {
+        const r = a.h * (1.15 + n * 0.25)
+        h.width = r
+        h.height = r * 1.15
+        h.position.set(0, -a.h * 0.5)
+        h.alpha = 0.55 + 0.25 * Math.sin(t / 320 + n)
+      })
       bodyFilters(a)
       for (const g of a.ench || []) {
-        if (g.breathe) g.f.outerStrength = g.strength * (0.55 + 0.45 * Math.sin(t / g.breathe))
-        if (g.rainbow) g.f.color = new P.Color({ h: (t / 8) % 360, s: 90, l: 60 }).toNumber()
+        if (g.breathe) g.s.alpha = 0.5 + 0.5 * Math.sin(t / g.breathe)
+        if (g.rainbow) g.s.tint = new P.Color({ h: (t / 8) % 360, s: 90, l: 60 }).toNumber()
       }
     }
     function bodyFilters(a) {
@@ -9363,8 +9377,41 @@ void main(){
       root.visible = a.uni.uDis < 1
       if (on === a.bodyOn) return
       a.bodyOn = on
-      const fs = on ? [a.filter, ...a.glowFs] : a.glowFs
-      root.filters = fs.length ? fs : null
+      root.filters = on ? [a.filter] : null
+    }
+    const haloTex = new Map()
+    function haloOf(tex) {
+      if (haloTex.has(tex.uid)) return haloTex.get(tex.uid)
+      let out = null
+      try {
+        const f = tex.frame
+        const src = tex.source.resource
+        const pad = Math.ceil(Math.max(f.width, f.height) * 0.06) + 4
+        const w = Math.ceil(f.width) + pad * 2
+        const h = Math.ceil(f.height) + pad * 2
+        const sil = document.createElement("canvas")
+        sil.width = w
+        sil.height = h
+        const sg = sil.getContext("2d")
+        sg.drawImage(src, f.x, f.y, f.width, f.height, pad, pad, f.width, f.height)
+        sg.globalCompositeOperation = "source-in"
+        sg.fillStyle = "#fff"
+        sg.fillRect(0, 0, w, h)
+        const c = document.createElement("canvas")
+        c.width = w
+        c.height = h
+        const g = c.getContext("2d")
+        for (const [r, al] of [[pad * 0.95, 0.12], [pad * 0.7, 0.18], [pad * 0.45, 0.25], [pad * 0.22, 0.3]])
+          for (let k = 0; k < 16; k++) {
+            g.globalAlpha = al
+            g.drawImage(sil, Math.cos((k / 16) * Math.PI * 2) * r, Math.sin((k / 16) * Math.PI * 2) * r)
+          }
+        out = { tex: mipTex(c), pad }
+      } catch (e) {
+        console.warn("[战斗动画] glow", e)
+      }
+      haloTex.set(tex.uid, out)
+      return out
     }
     const ENCH_T = [[15, "rainbow", 4, 260], [12, 0xff5a3c, 3.6, 220], [10, 0xffa53a, 3.2, 380], [8, 0xc07bff, 2.8, 0], [5, 0x6fb6ff, 2.4, 0]]
     function enchGlow(a) {
@@ -9376,10 +9423,16 @@ void main(){
         const q = a.rig.by[part]
         const tier = ENCH_T.find(([n]) => (level || 0) >= n)
         if (!q || !tier) continue
-        const [, color, strength, breathe] = tier
-        const f = new F.GlowFilter({ distance: 12, outerStrength: strength, color: color === "rainbow" ? 0xff4d4d : color, quality: 0.2 })
-        q.s.filters = [f]
-        a.ench.push({ f, strength, breathe: breathe || (color === "rainbow" ? 300 : 0), rainbow: color === "rainbow" })
+        const [, color, , breathe] = tier
+        const sp = q.s.children[0]
+        const g = sp && haloOf(sp.texture)
+        if (!g) continue
+        const s = new P.Sprite(g.tex)
+        s.pivot.set(sp.pivot.x + g.pad, sp.pivot.y + g.pad)
+        s.scale.copyFrom(sp.scale)
+        s.tint = color === "rainbow" ? 0xff4d4d : color
+        q.s.addChildAt(s, 0)
+        a.ench.push({ s, breathe: breathe || (color === "rainbow" ? 300 : 0), rainbow: color === "rainbow" })
       }
     }
     function shockRing(x, y, h, color) {
@@ -9875,7 +9928,17 @@ void main(){
       }
     }
     let many = false
-    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0 }
+    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0, level: 0, fx: 1 }
+    function stepDown() {
+      perf.level++
+      perf.dropped = true
+      if (perf.level === 1) perf.cap = 2
+      if (perf.level === 2) (perf.fx = 0.5), (bloom.quality = 3), (bloom.blur = 6)
+      if (perf.level === 3) (perf.cap = 1.5), (perf.fx = 0.33), (glowLayer.filters = null)
+      if (perf.level === 4) perf.cap = 1
+      settle()
+      sharp()
+    }
     const settle = () => ((perf.grace = performance.now() + 8000), (perf.t = perf.n = perf.low = 0))
     function wantRes() {
       const scale = host?.clientWidth ? host.getBoundingClientRect().width / host.clientWidth : 1
@@ -9894,7 +9957,7 @@ void main(){
       const gap = at - perf.last
       perf.last = at
       if (at - perf.check > 2000) (perf.check = at), sharp()
-      if (app.renderer.resolution <= 2 || gap > 1000 || !onScreen() || at < perf.grace) return
+      if (perf.level >= 4 || gap > 1000 || !onScreen() || at < perf.grace) return
       perf.t += gap
       perf.n++
       if (perf.t < 3000) return
@@ -9902,9 +9965,9 @@ void main(){
       perf.t = perf.n = 0
       perf.low = fps < 45 ? perf.low + 1 : 0
       if (perf.low < 2) return
-      perf.cap = 2
-      perf.dropped = true
-      sharp()
+      perf.low = 0
+      if (perf.level === 0 && app.renderer.resolution <= 2) perf.level = 1
+      stepDown()
     }
     function setFxAlpha() {
       if (!app) return
@@ -9913,7 +9976,7 @@ void main(){
     function info() {
       if (!app || !host) return null
       const r = host.getBoundingClientRect()
-      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
+      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, level: perf.level, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
     }
     function frameBody() {
       keepUp()
@@ -10041,8 +10104,8 @@ void main(){
         if (!i) return alert(L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
         alert(
           L(
-            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.dropped ? "因为帧率低，已自动降到 2 倍" : "没有因为帧率降低倍率"}`,
-            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.dropped ? "Dropped to 2x for a low frame rate" : "Not dropped for frame rate"}`,
+            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.level ? `因为帧率低，画质已自动降到第 ${i.level} 级（共 4 级：1 最高 2 倍，2 减少粒子和光晕，3 最高 1.5 倍且关掉光晕，4 为 1 倍）` : "画质没有因为帧率降低"}`,
+            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.level ? `Quality lowered to step ${i.level} of 4 for a low frame rate` : "Quality not lowered for frame rate"}`,
           ),
         )
       }),
