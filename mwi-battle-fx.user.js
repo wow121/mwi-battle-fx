@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.62
+// @version      0.21.63
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8983,14 +8983,17 @@ void main(){
     // kept, drop = [line, half width] of the other, core = the kept one's own half width where they cross; axis = butt → head)
     const ICON_FLIP = new Set(["gobo_boomstick"])
     const ICON_CUT = { gobo_stabber: { keep: [3, 48.3, 27.5, 5, 9.7], drop: [48.7, 37, 13, 2, 8.7], core: 1.05, axis: [3, 48.3, 27.5, 5] } }
-    async function gameIcon(id) {
-      if (iconTex[id] !== undefined) return iconTex[id]
+    // unstrung: a bow without its string (the straight two-point paths between its ends), its axis along where the
+    // string ran (the stage draws the string itself)
+    async function gameIcon(id, unstrung = false) {
+      const key = unstrung ? id + "|bare" : id
+      if (iconTex[key] !== undefined) return iconTex[key]
       const url = Stage.sheet("items")
       if (!url) return null
       try {
         itemsSvg = itemsSvg || new DOMParser().parseFromString(await (await fetch(url)).text(), "image/svg+xml")
         const sym = itemsSvg.getElementById(id)
-        if (!sym) return (iconTex[id] = null)
+        if (!sym) return (iconTex[key] = null)
         const N = 560
         // everything it refers to (gradients, clip paths, shared shapes: url(#id) / href="#id"), wherever the sheet keeps it
         const refs = new Map()
@@ -9007,7 +9010,13 @@ void main(){
         const defs = "<defs>" + [...refs.values()].join("") + "</defs>"
         // the symbol's own paint (fill="none" on it: paths without a fill of their own would turn black)
         const attrs = [...sym.attributes].filter(x => !/^(id|viewBox|xmlns.*)$/.test(x.name)).map(x => `${x.name}="${x.value}"`).join(" ")
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${sym.getAttribute("viewBox") || "0 0 100 100"}" width="${N}" height="${N}">${defs}<g ${attrs}>${sym.innerHTML}</g></svg>`
+        let inner = sym.innerHTML
+        let line = null
+        if (unstrung)
+          inner = inner.replace(/<path d="M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)[ ,]*(?:L\s*)?(-?[\d.]+)[ ,]+(-?[\d.]+)\s*"[^>]*?(?:\/>|><\/path>)/g, (m, a, b, c, d) => ((line ||= [+a, +b, +c, +d]), ""))
+        if (unstrung && !line) return (iconTex[key] = null)
+        const vb = (sym.getAttribute("viewBox") || "0 0 100 100").split(/[ ,]+/).map(Number)
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${vb.join(" ")}" width="${N}" height="${N}">${defs}<g ${attrs}>${inner}</g></svg>`
         const img = new Image()
         img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)
         await img.decode()
@@ -9042,15 +9051,56 @@ void main(){
               if (!(d1 < cut.keep[4] && (d2 > cut.drop[4] || d1 < cut.core))) im.data[(y * N + x) * 4 + 3] = 0
             }
           g.putImageData(im, 0, 0)
-          return (iconTex[id] = { tex: P.Texture.from(c), axis: cut.axis.map(v => v * q), k: 0.5 })
+          return (iconTex[key] = { tex: P.Texture.from(c), axis: cut.axis.map(v => v * q), k: 0.5 })
         }
         // the head is at the top right in most icons, the bottom left in a few (ICON_FLIP)
-        const axis = ICON_FLIP.has(id) ? [hi[0], hi[1], lo[0], lo[1]] : [lo[0], lo[1], hi[0], hi[1]]
-        return (iconTex[id] = { tex: P.Texture.from(c), axis, k: 0.5 })
+        let axis = ICON_FLIP.has(id) ? [hi[0], hi[1], lo[0], lo[1]] : [lo[0], lo[1], hi[0], hi[1]]
+        // (a bow's: the string's two ends, in canvas pixels (the viewBox fitted into the square, centred), lower left first)
+        if (line) {
+          const sc = N / Math.max(vb[2], vb[3])
+          const px = (x, y) => [(x - vb[0]) * sc + (N - vb[2] * sc) / 2, (y - vb[1]) * sc + (N - vb[3] * sc) / 2]
+          const A = px(line[0], line[1])
+          const B = px(line[2], line[3])
+          axis = A[0] - A[1] < B[0] - B[1] ? [...A, ...B] : [...B, ...A]
+        }
+        return (iconTex[key] = { tex: P.Texture.from(c), axis, k: 0.5 })
       } catch (e) {
         console.warn("[动画测试] icon", id, e)
-        return (iconTex[id] = null)
+        return (iconTex[key] = null)
       }
+    }
+    // a tower shield held out at the foe, seen three-quarters on: its icon's face squeezed to 60 % of its width and a
+    // darker copy of it just behind, showing the rim's thickness on the near side; held upright by its middle (the axis
+    // runs straight up it)
+    const shieldTex = {}
+    async function turnedShield(id) {
+      if (shieldTex[id] !== undefined) return shieldTex[id]
+      const ic = await gameIcon(id)
+      if (!ic) return (shieldTex[id] = null)
+      const src = ic.tex.source.resource
+      const N = src.width
+      const px = src.getContext("2d").getImageData(0, 0, N, N).data
+      let x0 = N, x1 = 0, y0 = N, y1 = 0
+      for (let y = 0; y < N; y += 2)
+        for (let x = 0; x < N; x += 2)
+          if (px[(y * N + x) * 4 + 3] > 64) (x0 = Math.min(x0, x)), (x1 = Math.max(x1, x)), (y0 = Math.min(y0, y)), (y1 = Math.max(y1, y))
+      const w = x1 - x0 + 2
+      const h = y1 - y0 + 2
+      const fw = Math.round(w * 0.6)
+      const t = Math.round(w * 0.09)
+      const c = document.createElement("canvas")
+      c.width = fw + t
+      c.height = h
+      const g = c.getContext("2d")
+      // the rim: the face's shape, darkened, one thickness nearer
+      g.filter = "brightness(0.55)"
+      g.drawImage(src, x0, y0, w, h, 0, 0, fw, h)
+      g.filter = "brightness(0.7)"
+      g.drawImage(src, x0, y0, w, h, t * 0.5, 0, fw, h)
+      g.filter = "none"
+      g.drawImage(src, x0, y0, w, h, t, 0, fw, h)
+      const cx = t + fw / 2
+      return (shieldTex[id] = { tex: P.Texture.from(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
     }
     // a player: the shared 3/4 battle-view template with this avatar's and outfit's registered layers (body, upper
     // arm, forearm), the paper-doll weapon piece in the fist (turned from the doll's arm angle) and the off-hand behind
@@ -9077,8 +9127,19 @@ void main(){
       const piece = async id => {
         // (a refined item drawn as its plain one: the game's refined icon carries a 精 mark)
         id = id && String(id).replace(/_refined$/, "")
-        const pole = id && /staff|trident|spear|boomstick|stabber/.test(id) && (await gameIcon(String(id).split("/").pop()))
+        // the game's own icon wherever it is the weapon seen from the side: poles, and swords, maces, bows, the two-handed
+        // weapons and the slingshot (crisp from the vector art, in the same flat style; the paper-doll pieces were redrawn
+        // with outlines and shading and some had broken bits); a tower shield's front-on icon turned three-quarters
+        const iid = id && String(id).split("/").pop()
+        const pole = iid && /staff|trident|spear|boomstick|stabber|sword|mace|bludgeon|slasher|smasher|shooter|(^|_)bow$/.test(iid) && (await gameIcon(iid))
+        // (a bow without the icon's own string: the stage draws it, straight at rest and pulled back when it shoots)
+        if (pole && /(^|_)bow$/.test(iid)) {
+          const bare = await gameIcon(iid, true)
+          if (bare) return { tex: bare.tex, grip: [0, 0], axis: bare.axis, k: bare.k, unstrung: true }
+        }
         if (pole) return { tex: pole.tex, grip: [0, 0], axis: pole.axis, k: pole.k }
+        const shield = iid && /bulwark/.test(iid) && (await turnedShield(iid))
+        if (shield) return shield
         // an item redrawn for the rig (assets/rig/weapons: side-view crossbows, their axes in WEAPON_AXIS too; books
         // read by the character, painted over a parallel-projection layout: RIG_GRIP)
         const k = String(id || "").replace(/_refined$/, "")
@@ -9111,6 +9172,7 @@ void main(){
           if (ax && G.two && !u.items?.off_hand) def.two = along(ax, G.two)
           // a bow's string runs between its two ends (pulled back by the drawing hand)
           if (ax && G === GRIPS.bow && wid !== "gobo_shooter") def.string = [ax.slice(0, 2), ax.slice(2)]
+          if (w.unstrung) def.stringAlways = true
         } else def.parts.weapon = base.parts.bfore
           ? // at rest the blade points up and forward from the back hand
             { pivot: w.grip, at: base.back, parent: "bfore", z: 2.2, rot: -60, scale: base.scale }
@@ -9478,6 +9540,8 @@ void main(){
         const L = Math.hypot(F2.x - E.x, F2.y - E.y) || 1
         const behind = ((F2.y - E.y) * (hm.x - E.x) - (F2.x - E.x) * (hm.y - E.y)) / L
         if (!R.back && A?.def.shot != null && behind > 4 && behind < h * 0.7) R.str.moveTo(E.x, E.y).lineTo(hm.x, hm.y).lineTo(F2.x, F2.y).stroke({ width: 3, color: 0xf4efe0, alpha: 0.95 })
+        // (a bow drawn from its icon has had its own string taken off: at rest it is drawn straight between the ends)
+        else if (R.def.stringAlways && !R.back) R.str.moveTo(E.x, E.y).lineTo(F2.x, F2.y).stroke({ width: 2, color: 0xf4efe0, alpha: 0.9 })
       }
       // a weapon held in both hands: the other hand on it too (def.two, piece pixels), turned with the holding hand
       const w = R.def.two && R.by.weapon
