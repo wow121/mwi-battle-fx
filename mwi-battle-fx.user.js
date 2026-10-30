@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.73
+// @version      0.21.74
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,12 +33,12 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "caf1470507"
+  const ASSET_REV = "7978852a33"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -8035,7 +8035,7 @@ void main(){
     function monsterActions(id, def) {
       const tmpl = def.tmpl
       if (!MT[tmpl] || ACTIONS[id]?.__tmpl) return
-      const style = MONSTERS[id]?.[1] || "smash"
+      const style = MONSTERS[id.replace(/^girl_/, "")]?.[1] || "smash"
       // (a shape without attacks of its own for this style uses the biped's)
       const src = { ...MT[tmpl], ...(MT[tmpl + ":" + style] || MT["biped:" + style] || MT[tmpl + ":smash"] || MT["biped:smash"]) }
       const P = def.parts
@@ -8743,7 +8743,7 @@ void main(){
           if (run !== syncing) return
           if (r) buildRig(a, r)
           else if (side === "m") {
-            const f = await loadFlat(a.kind)
+            const f = await loadFlat(a.kind.replace(/^girl_/, ""))
             if (run !== syncing) return
             buildFlat(a, f)
           }
@@ -8756,8 +8756,10 @@ void main(){
       if (!source?.live || source.guild) return source?.tier() ?? null
       return where.labyrinth || DUNGEON_ZONES.has(where.zone) ? null : where.tier ?? null
     }
+    // a monster as a monster girl (cfg.monGirl) where her rig is drawn (assets/rig/girl_<id>), else as itself
+    const monKind = id => (cfg.monGirl && Assets.has("rig", "girl_" + id) ? "girl_" + id : id)
     function makeUnit(side, i, u) {
-      const a = { side, i, u, kind: side === "p" ? playerKind(u) : (u.hrid || "").split("/").pop(), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
+      const a = { side, i, u, kind: side === "p" ? playerKind(u) : monKind((u.hrid || "").split("/").pop()), off: side === "p" ? (gripOf(u.items) === "sai" ? "dagger" : offOf(u.items?.off_hand)) : "", dead: u.hp <= 0, hp: u.hp, maxHp: u.maxHp, jig: 0, dash: 0, act: null, life: 0 }
       a.cont = new P.Container()
       // (at the screen's density: a filter draws its object at 1x by default, soft on a phone's 3x screen)
       a.filter = P.Filter.from({
@@ -11895,6 +11897,8 @@ void main(){
       // GM_registerMenuCommand(L(`当前版本 v${GM_info?.script?.version || "?"}`, `Version ${GM_info?.script?.version || "?"}`), () => Assets.refresh(true)),
       // #release-end
       toggle("enabled", L("战斗动画", "Battle animations"), () => Stage.ensureTab()),
+      // monsters drawn as monster girls on the rigged stage (designs after the userscript 娘化怪物换皮 by LaoTY, greasyfork 538533)
+      toggle("monGirl", L("怪物娘化（新版舞台；形象参考 LaoTY 的「娘化怪物换皮」）", "Monster girls (new stage; designs after LaoTY's 娘化怪物换皮)"), () => Arena.sync()),
       // the rigged stage (new, the default) or the pose-picture one (old)
       GM_registerMenuCommand(L(`战斗舞台：${cfg.stageEngine === "classic" ? "老版（整张立绘）" : "新版（骨骼动画）"}（点击切换）`, `Battle stage: ${cfg.stageEngine === "classic" ? "old (pose pictures)" : "new (rigged)"} (click to switch)`), () =>
         Live.setEngine(cfg.stageEngine === "classic" ? "rig" : "classic"),
