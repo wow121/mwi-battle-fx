@@ -201,5 +201,9 @@
   "z": {
    "arm_m": 6
   }
+ },
+ "girl_gobo_shooty": {
+  "weapon": "arm_l",
+  "two": false
  }
 }

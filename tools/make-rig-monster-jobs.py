@@ -4,7 +4,9 @@ over its idle frame (assets/m/<id>/idle.webp, given at 2x on a flat background):
   seg    <id>_seg.png    a PART MAP: the monster in flat key colours, one per part
   trunk  <id>_trunk.png  the monster with its arms, hands, held objects and legs taken off and the body completed,
                          so the parts can move off it without leaving a hole
-usage: make-rig-monster-jobs.py <raw_dir> seg|trunk <id> ...
+usage: make-rig-monster-jobs.py <raw_dir> seg|trunk <id> ...   [--girl]
+  --girl: the monster girl's idle frame (<raw>/rig/girl/idle/<id>.png, tools/make-rig-girl-jobs.py) instead, jobs and
+  hints in <raw>/rig/girl, her template under girl_<id> in tools/rig-monster.json (else biped)
 A monster Codex keeps getting wrong takes a note of its own from <raw_dir>/rig/mon/hints.tsv (id, phase, note).
 Writes <raw_dir>/rig/mon/ref/<id>.png and <raw_dir>/rig/mon/jobs-<phase>.tsv for tools/gen.sh <raw_dir>/rig/mon <jobs> <parallel>.
 """
@@ -14,8 +16,9 @@ import sys
 
 from PIL import Image
 
-RAW, PHASE, IDS = sys.argv[1], sys.argv[2], sys.argv[3:]
-MON = os.path.join(RAW, "rig", "mon")
+GIRL = "--girl" in sys.argv
+RAW, PHASE, IDS = sys.argv[1], sys.argv[2], [a for a in sys.argv[3:] if a != "--girl"]
+MON = os.path.join(RAW, "rig", "girl" if GIRL else "mon")
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
 HEAD = "Use your image generation tool to create ONE image, then reply with the absolute path of the saved PNG and nothing else.\n\n"
 REF = "Reference image 1 is a monster from a 2D battle game (flat vector art, soft cel shading) on a flat {bg} background, seen in 3/4 view facing LEFT.\n"
@@ -177,6 +180,15 @@ PROMPT[("seg", "fly")] = HEAD + REF + FLY
 PROMPT[("trunk", "fly")] = HEAD + REF + FLY_TRUNK
 PROMPT[("seg", "quad")] = HEAD + REF + QUAD
 PROMPT[("trunk", "quad")] = HEAD + REF + QUAD_TRUNK
+# a monster girl's head is cut whole with all her hair (Codex otherwise gives only the face, the hair stays on the body)
+GIRL_SEG = PROMPT["seg"].replace(
+    "- RED #FF0000: the trunk: body and head together (for a creature whose head is part of its body), including ears, hair, horns, tail "
+    "and anything worn on the body.\n"
+    "- YELLOW #FFFF00: the head, ONLY if it is a separate head on a neck; otherwise do not use yellow.\n",
+    "- RED #FF0000: the trunk: neck, chest, belly, hips, the clothes on them (dress, skirt, tunic, cape, scarf), and a tail or wings.\n"
+    "- YELLOW #FFFF00: the WHOLE head: face, ALL of the hair (including long hair hanging down behind the shoulders and back, and "
+    "every strand and bun), ears, horns, antennae, hat and hair ornaments, as one piece.\n",
+)
 TMPL = {k: v.get("tmpl") for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rig-monster.json"))).items()}
 BGS = {"white #FFFFFF": (255, 255, 255), "green #00FF00": (0, 255, 0), "magenta #FF00FF": (255, 0, 255), "blue #0000FF": (0, 0, 255)}
 
@@ -194,7 +206,7 @@ os.makedirs(os.path.join(MON, "ref"), exist_ok=True)
 os.makedirs(os.path.join(MON, "prompts"), exist_ok=True)
 rows = []
 for mid in IDS:
-    im = Image.open(os.path.join(ASSETS, "m", mid, "idle.webp")).convert("RGBA")
+    im = Image.open(os.path.join(MON, "idle", mid + ".png") if GIRL else os.path.join(ASSETS, "m", mid, "idle.webp")).convert("RGBA")
     # (the part map's key colours include green and magenta: its reference is on white)
     bg = "white #FFFFFF" if PHASE == "seg" else background(im)
     ref = os.path.join(MON, "ref", f"{mid}_{PHASE}.png")
@@ -204,7 +216,7 @@ for mid in IDS:
     prompt = os.path.join(MON, "prompts", f"{mid}_{PHASE}.txt")
     # a monster Codex keeps getting wrong: a note of its own (<raw>/rig/mon/hints.tsv: id, phase, note)
     note = "".join(f"Important for this monster: {t}\n" for i, ph, t in HINTS if i == mid and ph == PHASE)
-    open(prompt, "w").write(PROMPT.get((PHASE, TMPL.get(mid)), PROMPT[PHASE]).replace("{bg}", bg) + note)
+    open(prompt, "w").write((GIRL_SEG if GIRL and PHASE == "seg" and TMPL.get("girl_" + mid) is None else PROMPT.get((PHASE, TMPL.get("girl_" + mid if GIRL else mid)), PROMPT[PHASE])).replace("{bg}", bg) + note)
     rows.append(f"{mid}_{PHASE}\t{prompt}\t{ref}")
     print(mid, bg)
 open(os.path.join(MON, f"jobs-{PHASE}.tsv"), "w").write("\n".join(rows) + "\n")

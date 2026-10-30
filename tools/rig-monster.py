@@ -12,7 +12,8 @@ the picture). The trunk under the arms, the weapon and the legs is filled from a
 PIECE (the monster with them taken off, prompt trunk), its colours fitted to the original; an arm or weapon lying
 inside the piece's outline was drawn over the trunk, one outside it behind.
 
-usage: rig-monster.py <id> <part map png> <trunk png> <out dir>   [--tmpl biped] [--over JSON] [--check check.png]
+usage: rig-monster.py <id> <part map png> <trunk png> <out dir>   [--tmpl biped] [--over JSON] [--check check.png] [--src idle.png]
+  (a monster girl: id girl_<monster>, --src <raw>/rig/girl/idle/<monster>.png; her corrections under girl_<monster>)
   corrections for a monster the shapes mislead: tools/rig-monster.json {id: {...}} (or --over), e.g. '{"z":{"arm_o":1},"pivot":{"arm_m":[230,250]},"weapon":"arm_o"}' (idle px)
 """
 import argparse
@@ -30,13 +31,14 @@ ap.add_argument("out")
 ap.add_argument("--tmpl", default="biped")  # (or "tmpl" in tools/rig-monster.json)
 ap.add_argument("--over", default="{}")
 ap.add_argument("--check")
+ap.add_argument("--src")  # another idle frame than assets/m/<id>/idle.webp (a monster girl: <raw>/rig/girl/idle/<id>.png)
 ap.add_argument("--assets", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets"))
 A = ap.parse_args()
 # per-monster corrections: tools/rig-monster.json {id: {...}}, then --over on top
 OF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rig-monster.json")
 OVER = {**(json.load(open(OF)).get(A.id, {}) if os.path.exists(OF) else {}), **json.loads(A.over)}
 
-src = Image.open(os.path.join(A.assets, "m", A.id, "idle.webp")).convert("RGBA")
+src = Image.open(A.src or os.path.join(A.assets, "m", A.id, "idle.webp")).convert("RGBA")
 im = np.asarray(src).astype(np.int16)
 H, W = im.shape[:2]
 alpha = im[..., 3]
