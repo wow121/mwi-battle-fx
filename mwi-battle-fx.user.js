@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.76
+// @version      0.21.77
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "024e32b4ab"
+  const ASSET_REV = "803fa8e59c"
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -9468,8 +9468,9 @@ void main(){
         // the hit wobble: on the trunk, and on a monster's own head; a player's head is cut from its body
         // drawing (long hair stays on the body) and must move with it exactly or the head looks split
         if (q.name === "body" || q.name === "torso" || (q.name === "head" && !R.def.hands)) deg -= wob
-        // a flier's wing (rig.json wing = its phase) beats all the time, folded still once it has fallen
-        if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / 38 + q.p.wing) * 28
+        // a flier's wing (rig.json wing = its phase) beats all the time, folded still once it has fallen (a monster girl's
+        // at her own pace: wper ms a radian, wamp degrees)
+        if (q.p.wing != null && !a.dead && A?.name !== "dead") deg += Math.sin(t / (q.p.wper || 38) + q.p.wing) * (q.p.wamp ?? 28)
         // a limbless one's appendage (rig.json sway = its phase): sways slowly on its root, and all of them reach
         // together by the action's limbs (+ toward the foe); limp once it has fallen
         // (a fish's fins and tail beat faster and wider: it swims; an arthropod's kinds each follow a channel of their own,
