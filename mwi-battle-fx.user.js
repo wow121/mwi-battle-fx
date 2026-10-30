@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.72
+// @version      0.21.73
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2863,7 +2863,7 @@
       saveCfg()
       ensure()
       GuildLive.ensure()
-      menu()
+      menuSoon()
     }
     return { ensure, setEngine }
   })()
@@ -11814,8 +11814,65 @@ void main(){
   })()
   // #dev-end
 
+  // ---------- in-page dialogs for the menu ----------
+  // The menu's settings ask in a small panel on the page, not with prompt() / alert(): some mobile browsers' userscript
+  // menus (Reynard on iOS) hang on a second prompt() opened from a menu command.
+  function panel(title, build) {
+    document.querySelector(".bfx-dlg")?.remove()
+    const wrap = document.createElement("div")
+    wrap.className = "bfx-dlg"
+    Object.assign(wrap.style, { position: "fixed", inset: "0", zIndex: "2147483000", background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", font: "14px/1.5 sans-serif" })
+    const box = document.createElement("div")
+    Object.assign(box.style, { background: "#1d2440", color: "#e6ebff", border: "1px solid #4a5590", borderRadius: "10px", padding: "14px 16px", width: "min(320px, 86vw)", boxShadow: "0 6px 30px rgba(0,0,0,.6)" })
+    const h = document.createElement("div")
+    h.textContent = title
+    Object.assign(h.style, { fontWeight: "700", marginBottom: "10px" })
+    box.appendChild(h)
+    const close = () => wrap.remove()
+    wrap.addEventListener("click", e => e.target === wrap && close())
+    build(box, close)
+    wrap.appendChild(box)
+    document.body.appendChild(wrap)
+  }
+  const dlgButton = (text, onClick, main) => {
+    const b = document.createElement("button")
+    b.textContent = text
+    Object.assign(b.style, { padding: "6px 14px", borderRadius: "6px", border: "1px solid #4a5590", background: main ? "#3f5bd8" : "#2a3460", color: "#fff", font: "14px sans-serif", cursor: "pointer" })
+    b.addEventListener("click", onClick)
+    return b
+  }
+  function showInfo(title, text) {
+    panel(title, (box, close) => {
+      const t = document.createElement("div")
+      t.textContent = text
+      Object.assign(t.style, { whiteSpace: "pre-wrap", fontSize: "13px", marginBottom: "12px" })
+      const row = document.createElement("div")
+      Object.assign(row.style, { display: "flex", justifyContent: "flex-end" })
+      row.appendChild(dlgButton(L("关闭", "Close"), close, true))
+      box.append(t, row)
+    })
+  }
+  // a number by a slider (min … max by step), shown as it would be; onSet(value) when confirmed
+  function askNumber(title, value, min, max, step, fmtV, onSet) {
+    panel(title, (box, close) => {
+      const v = document.createElement("div")
+      Object.assign(v.style, { textAlign: "center", fontSize: "20px", fontWeight: "700", margin: "4px 0 8px" })
+      const r = document.createElement("input")
+      Object.assign(r, { type: "range", min, max, step, value })
+      Object.assign(r.style, { width: "100%" })
+      const show = () => (v.textContent = fmtV(+r.value))
+      r.addEventListener("input", show)
+      show()
+      const row = document.createElement("div")
+      Object.assign(row.style, { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" })
+      row.append(dlgButton(L("取消", "Cancel"), close), dlgButton(L("确定", "OK"), () => (close(), onSet(+r.value)), true))
+      box.append(v, r, row)
+    })
+  }
   // ---------- menu ----------
   let menuIds = []
+  // the menu rebuilt after the command that changed it has returned (rebuilt from inside it, some managers hang)
+  const menuSoon = () => setTimeout(menu, 50)
   function menu() {
     menuIds.forEach(id => GM_unregisterMenuCommand?.(id))
     const toggle = (key, label, after) =>
@@ -11823,7 +11880,7 @@ void main(){
         cfg[key] = !cfg[key]
         saveCfg()
         after?.()
-        menu()
+        menuSoon()
       })
     menuIds = [
       // #dev-start
@@ -11845,8 +11902,10 @@ void main(){
       // what the rigged stage draws at (for a report of a soft picture)
       GM_registerMenuCommand(L("战斗舞台清晰度信息", "Battle stage sharpness info"), () => {
         const i = Arena.info()
-        if (!i) return alert(L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
-        alert(
+        const title = L("战斗舞台清晰度信息", "Battle stage sharpness info")
+        if (!i) return showInfo(title, L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
+        showInfo(
+          title,
           L(
             `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.level ? `因为帧率低，画质已自动降到第 ${i.level} 级（共 4 级：1 最高 2 倍，2 减少粒子和光晕，3 最高 1.5 倍且关掉光晕，4 为 1 倍）` : "画质没有因为帧率降低"}`,
             `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.level ? `Quality lowered to step ${i.level} of 4 for a low frame rate` : "Quality not lowered for frame rate"}`,
@@ -11860,7 +11919,7 @@ void main(){
         cfg.lookMode = cfg.lookMode === "outfit" ? "equip" : "outfit"
         saveCfg()
         if (Stage.modeOf() === "live") Stage.reload()
-        menu()
+        menuSoon()
       }),
       GM_registerMenuCommand("导出待生成形象（复制到剪贴板）", () => {
         const n = Looks.exportMissing()
@@ -11875,27 +11934,26 @@ void main(){
       }),
       // #dev-end
       // how see-through the skill effects are, on both stages
-      GM_registerMenuCommand(L(`技能特效透明度：${Math.round(cfg.fxAlpha * 100)}%（点击调整）`, `Skill effect opacity: ${Math.round(cfg.fxAlpha * 100)}% (click to change)`), () => {
-        const v = parseFloat(prompt(L("技能特效的不透明度（0 ~ 100，100 = 原样，0 = 不显示）", "Skill effect opacity (0 – 100; 100 = as is, 0 = hidden)"), Math.round(cfg.fxAlpha * 100)))
-        if (!(v >= 0 && v <= 100)) return
-        cfg.fxAlpha = v / 100
-        saveCfg()
-        Arena.setFxAlpha()
-        document.querySelectorAll(".bfx-stage canvas").forEach(c => (c.style.opacity = cfg.fxAlpha))
-        menu()
-      }),
-      GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () => {
-        const v = parseFloat(prompt(L("动画大小倍率（0.5 ~ 2）", "Animation size (0.5 – 2)"), cfg.scale))
-        if (v >= 0.3 && v <= 3) {
-          cfg.scale = v
+      GM_registerMenuCommand(L(`技能特效透明度：${Math.round(cfg.fxAlpha * 100)}%（点击调整）`, `Skill effect opacity: ${Math.round(cfg.fxAlpha * 100)}% (click to change)`), () =>
+        askNumber(L("技能特效的不透明度（100% = 原样，0% = 不显示）", "Skill effect opacity (100% = as is, 0% = hidden)"), Math.round(cfg.fxAlpha * 100), 0, 100, 5, v => v + "%", v => {
+          cfg.fxAlpha = v / 100
+          saveCfg()
+          Arena.setFxAlpha()
+          document.querySelectorAll(".bfx-stage canvas").forEach(c => (c.style.opacity = cfg.fxAlpha))
+          menuSoon()
+        }),
+      ),
+      GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () =>
+        askNumber(L("动画大小倍率", "Animation size"), cfg.scale, 0.5, 2, 0.05, v => v.toFixed(2) + "×", v => {
+          cfg.scale = Math.round(v * 100) / 100
           saveCfg()
           Stage.layout()
-          menu()
-        }
-      }),
+          menuSoon()
+        }),
+      ),
       GM_registerMenuCommand(L("打开动画测试（自动战斗）", "Open the FX lab (auto battle)"), demo), // #dev
       GM_registerMenuCommand("生活动画测试（小窗）", () => Life.lab()), // #dev
-      GM_registerMenuCommand(Recorder.active() ? L("⏹ 停止录制并下载文件", "⏹ Stop recording and download") : L("⏺ 录制战斗消息（迷宫 / 公会战）", "⏺ Record battle messages (labyrinth / guild)"), () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menu())), // #dev
+      GM_registerMenuCommand(Recorder.active() ? L("⏹ 停止录制并下载文件", "⏹ Stop recording and download") : L("⏺ 录制战斗消息（迷宫 / 公会战）", "⏺ Record battle messages (labyrinth / guild)"), () => (Recorder.active() ? Recorder.stop() : Recorder.start(), menuSoon())), // #dev
       toggle("debug", L("调试：控制台打印战斗消息", "Debug: log battle messages")), // #dev
     ]
   }
