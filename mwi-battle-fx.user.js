@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.70
+// @version      0.21.71
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8589,6 +8589,7 @@ void main(){
       world.addChild(scene, textLayer)
       app.stage.addChild(world)
       setFxAlpha()
+      warmUp()
       app.ticker.add(frame)
       camera(app.canvas)
       // (the canvas follows its box whenever the box changes size: PixiJS's own resizeTo only listens for the window's
@@ -10130,12 +10131,13 @@ void main(){
       const c = sh => Math.round(lerp((a >> sh) & 255, (b >> sh) & 255, p)) << sh
       return c(16) | c(8) | c(0)
     }
-    const MAX_PARTS = 1600
+    // (at most this many sparks at once, fewer as the quality steps down: firestorm alone put up 1600)
+    const MAX_PARTS = 700
     // particles: n of them from (x, y); angle / spread in radians (0 = right, -PI/2 = up, none = all round); size /
     // size1 and color / color1 change over the life; drag slows them (share of speed kept per second); to() pulls them
     // toward a moving point; tex "streak" draws them as streaks along their flight, "smoke" as puffs that do not glow
     function emit(x, y, o = {}) {
-      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1) * perf.fx), MAX_PARTS - parts.length)
+      const n = Math.min(Math.ceil((o.n ?? 10) * (many ? 0.35 : 1) * perf.fx), Math.floor(MAX_PARTS * perf.fx) - parts.length)
       const tex = o.tex === "smoke" ? smokeTex : o.tex === "streak" ? streakTex : o.tex === "leaf" ? leafTex : dot
       // smoke and leaves are solid things: drawn over the bodies without glowing
       const layer = o.tex === "smoke" || o.tex === "leaf" ? smokeLayer : partLayer
@@ -10216,6 +10218,7 @@ void main(){
     }
     // the air shimmers over a hot area (a displacement filter on the scene, its map drifting) for dur ms
     function haze(x, y, w, h, dur, amp = 7) {
+      if (perf.level >= 2) return
       const map = new P.Sprite(hazeTex)
       map.anchor.set(0.5)
       map.position.set(x, y)
@@ -10239,8 +10242,10 @@ void main(){
       })
     }
     // a radial blur punched out from a point (a heavy blow)
+    // (the passes over the whole scene, a radial blur, a shockwave, heat haze, are left out from quality step 2: on a weak
+    // phone GPU they cost more than anything else drawn)
     function zoomBlur(x, y, dur, strength = 0.05) {
-      if (!F.ZoomBlurFilter) return
+      if (!F.ZoomBlurFilter || perf.level >= 2) return
       const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90 })
       worldFx.add(f)
       setWorldFx()
@@ -10368,7 +10373,7 @@ void main(){
       tween(dur, p => (a.uni.uFlash = p >= 1 ? 0 : 0.9 * (1 - p)))
     }
     function crit(a) {
-      if (many) return
+      if (many || perf.level >= 2) return
       shake = Math.max(shake, 1)
       punch = 1
       const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
@@ -11586,6 +11591,30 @@ void main(){
       // (a step that changes nothing here, 2x on a screen drawn at 2 or less, is passed over)
       if (perf.level === 0 && app.renderer.resolution <= 2) perf.level = 1
       stepDown()
+    }
+    // every filter's shader compiled once while the stage opens (a tiny hidden render through each): compiled on first use
+    // instead, the first heavy blow, crit or fire skill of a battle stalled the stage for up to a tenth of a second
+    function warmUp() {
+      try {
+        const rt = P.RenderTexture.create({ width: 8, height: 8 })
+        const c = new P.Container()
+        const s = new P.Sprite(dot)
+        s.width = s.height = 8
+        c.addChild(s)
+        const map = new P.Sprite(hazeTex)
+        const fs = [bloom, new P.DisplacementFilter({ sprite: map, scale: 1 }), F.ZoomBlurFilter && new F.ZoomBlurFilter({ strength: 0.01 }), new F.ShockwaveFilter({ center: { x: 4, y: 4 } }), P.Filter.from({ resolution: "inherit", gl: { vertex: F.vertex, fragment: FRAG, name: "bfx-body" }, resources: { u: { uFlash: { value: 0, type: "f32" }, uColor: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" }, uDis: { value: 0, type: "f32" }, uSeed: { value: 0, type: "f32" } } } })].filter(Boolean)
+        for (const f of fs) {
+          c.filters = [f]
+          app.renderer.render({ container: c, target: rt })
+        }
+        c.filters = null
+        for (const f of fs) if (f !== bloom) f.destroy()
+        c.destroy(GONE)
+        map.destroy()
+        rt.destroy(true)
+      } catch (e) {
+        console.warn("[战斗动画] warm up", e)
+      }
     }
     // how see-through the skill effects are (cfg.fxAlpha, 0–1): the glowing effects and sparks, missiles, lights,
     // smoke and ground marks; the numbers, skill names, aura rings and buff glows stay as they are
