@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.69
+// @version      0.21.70
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -2764,6 +2764,9 @@
     return { sheet, play, syncRoster, flashWeapon: (side, i, color) => flashWeapon(actors[side][i], color), newBattle, layout, open, start, ensureTab, injectCss, actors, setBackground, attach, detach, reload, refreshArt, isTestActive: () => active, modeOf: () => mode }
   })()
 
+  // a phone (a touch screen, or a narrow window): the battle area keeps the game's own height, which it shrinks when the
+  // chat opens below; held at the stage's height (cfg.liveH) it pushed the ability and consumable bar off the screen
+  const touchLayout = () => matchMedia("(pointer: coarse)").matches || innerWidth < 700
   // ---------- real battles: the stage laid over the game's unit cards ----------
   // Only BattlePanel_battleArea is covered, so consumables, ability cooldowns and the flee button below
   // stay visible. A button in the panel's corner switches between our view and the original cards.
@@ -2838,7 +2841,7 @@
       engineBtn.textContent = cfg.stageEngine === "classic" ? L("换新版舞台", "New stage") : L("换老版舞台", "Old stage")
       // (left of the other button: the old stage's location badge is in the left corner)
       engineBtn.style.right = btn.offsetWidth + 10 + "px"
-      area.style.minHeight = cfg.liveH + "px"
+      area.style.minHeight = touchLayout() ? "" : cfg.liveH + "px"
       if (Stage.isTestActive() || GuildLive.active()) return
       if (cfg.stageEngine === "classic") {
         if (arenaEl) Arena.close(arenaEl)
@@ -2917,7 +2920,7 @@
         area.appendChild(slot)
         arenaEl = null
       }
-      area.style.minHeight = cfg.guildH + "px"
+      area.style.minHeight = touchLayout() ? "" : cfg.guildH + "px"
       if (Stage.isTestActive()) return
       // the old stage or the new one, as for the own battle (cfg.stageEngine)
       if (cfg.stageEngine === "classic") {
