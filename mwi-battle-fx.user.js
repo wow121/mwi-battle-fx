@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.79
+// @version      0.21.80
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -33,7 +33,7 @@
   // "#dev" lines / blocks: the 动画测试 lab, debug logging and the developer menu items
   const DEV = true
   // ---------- settings ----------
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false, quality: 0 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
@@ -2772,11 +2772,13 @@
   // stay visible. A button in the panel's corner switches between our view and the original cards.
   // Two stages to choose from (cfg.stageEngine, a button in the other corner): "rig", the rigged PixiJS one (Arena,
   // every monster cut into parts and animated), or "classic", the old one (Stage: whole pose pictures, DOM and CSS).
+  const QUALITY_NAMES = [["高", "high"], ["中", "medium"], ["低", "low"], ["最低", "lowest"]]
   const Live = (() => {
     let area = null
     let slot = null
     let btn = null
     let engineBtn = null
+    let qualityBtn = null
     let arenaEl = null
     // the own battle as the rigged stage sees it
     const LIVE = { units, loc: () => stageLocation(), tier: () => where.tier || 0, live: true }
@@ -2785,8 +2787,9 @@
       slot?.remove()
       btn?.remove()
       engineBtn?.remove()
+      qualityBtn?.remove()
       if (area) area.style.minHeight = ""
-      slot = btn = engineBtn = arenaEl = null
+      slot = btn = engineBtn = qualityBtn = arenaEl = null
       if (Stage.modeOf() === "live") Stage.detach()
     }
     function ensure() {
@@ -2814,7 +2817,8 @@
         if (arenaEl) Arena.close(arenaEl)
         slot?.remove()
         engineBtn?.remove()
-        slot = engineBtn = arenaEl = null
+        qualityBtn?.remove()
+        slot = engineBtn = qualityBtn = arenaEl = null
         area.style.minHeight = ""
         if (Stage.modeOf() === "live") Stage.detach()
         return
@@ -2841,6 +2845,28 @@
       engineBtn.textContent = cfg.stageEngine === "classic" ? L("换新版舞台", "New stage") : L("换老版舞台", "Old stage")
       // (left of the other button: the old stage's location badge is in the left corner)
       engineBtn.style.right = btn.offsetWidth + 10 + "px"
+      // the new stage's quality (cfg.quality, Arena QUALITY), round and round; left of the engine button
+      if (cfg.stageEngine === "classic") {
+        qualityBtn?.remove()
+        qualityBtn = null
+      } else {
+        if (!qualityBtn?.isConnected) {
+          qualityBtn = document.createElement("button")
+          qualityBtn.className = "bfx-toggle"
+          qualityBtn.addEventListener("click", e => {
+            e.stopPropagation()
+            cfg.quality = ((cfg.quality || 0) + 1) % QUALITY_NAMES.length
+            saveCfg()
+            Arena.setQuality()
+            ensure()
+          })
+          panel.appendChild(qualityBtn)
+        }
+        const [zh, en] = QUALITY_NAMES[cfg.quality] || QUALITY_NAMES[0]
+        qualityBtn.textContent = L(`画质：${zh}`, `Quality: ${en}`)
+        qualityBtn.title = L("点击切换画质：高 = 屏幕原生清晰度；中 = 最多 2 倍；低 = 1.5 倍，粒子减半，无光晕；最低 = 1 倍，粒子最少，无光晕。卡顿时调低", "Click to switch: high = the screen's own density; medium = 2x at most; low = 1.5x, half the particles, no glow; lowest = 1x, fewest particles, no glow. Lower it if the stage stutters")
+        qualityBtn.style.right = btn.offsetWidth + engineBtn.offsetWidth + 16 + "px"
+      }
       area.style.minHeight = touchLayout() ? "" : cfg.liveH + "px"
       if (Stage.isTestActive() || GuildLive.active()) return
       if (cfg.stageEngine === "classic") {
@@ -8582,7 +8608,7 @@ void main(){
       glowLayer = new P.Container()
       glowLayer.addChild(fxLayer, partLayer)
       glowLayer.blendMode = "add"
-      glowLayer.filters = [bloom]
+      glowLayer.filters = perf.glow ? [bloom] : null
       // ground marks (scorches, cracks, spent arrows) under everyone; smoke over the bodies, not glowing
       decalLayer = new P.Container()
       smokeLayer = new P.Container()
@@ -8730,7 +8756,6 @@ void main(){
     }
     async function sync() {
       if (!app || !source) return
-      settle()
       const run = ++syncing
       // (put in here, not on opening: the first opening's "载入 PixiJS…" text replaces what the view holds)
       if (source.guild) zoomButtons(host)
@@ -11580,25 +11605,21 @@ void main(){
     }
     // (crowd(), kept for the frame: asked by every effect)
     let many = false
-    // a phone drawn at its full pixel density (3) that cannot keep up drops to 2: under 45 frames a second for two
-    // 3-second spells in a row (the picture a little softer, smooth again)
-    // (real time between frames: the ticker's deltaMS is capped at 100 ms, a slow frame would count for too little; not
-    // judged in the first 8 s after the stage opens, is set up again or comes back on screen: loading the parts, making
-    // their mipmaps and compiling the shaders is slow on any phone, and used to drop it to 2 for good at once)
-    // quality steps down, one step for each two 3-second spells under 45 frames a second: 1 at most 2x, 2 half the
-    // particles and a lighter glow, 3 at most 1.5x, a third of the particles and no glow pass, 4 at 1x
-    const perf = { t: 0, n: 0, low: 0, last: 0, cap: 3, grace: 0, dropped: false, check: 0, level: 0, fx: 1 }
-    function stepDown() {
-      perf.level++
-      perf.dropped = true
-      if (perf.level === 1) perf.cap = 2
-      if (perf.level === 2) (perf.fx = 0.5), (bloom.quality = 3), (bloom.blur = 6)
-      if (perf.level === 3) (perf.cap = 1.5), (perf.fx = 0.33), (glowLayer.filters = null)
-      if (perf.level === 4) perf.cap = 1
-      settle()
+    // the quality the player picked in the menu (cfg.quality; never changed by the frame rate: a stage that stepped down
+    // by itself looked soft for no reason the player could see): the most pixels per CSS pixel it draws at, the share
+    // of particles, the glow pass over the effects, and level (from 2 up the haze, zoom blur and such are left out)
+    const QUALITY = [
+      { cap: 3, fx: 1, glow: true, level: 0 },
+      { cap: 2, fx: 1, glow: true, level: 1 },
+      { cap: 1.5, fx: 0.5, glow: false, level: 3 },
+      { cap: 1, fx: 0.33, glow: false, level: 4 },
+    ]
+    const perf = { check: 0, ...(QUALITY[cfg.quality] || QUALITY[0]) }
+    function setQuality() {
+      Object.assign(perf, QUALITY[cfg.quality] || QUALITY[0])
+      if (glowLayer) glowLayer.filters = perf.glow ? [bloom] : null
       sharp()
     }
-    const settle = () => ((perf.grace = performance.now() + 8000), (perf.t = perf.n = perf.low = 0))
     // the density to draw at: the screen's pixels per CSS pixel times the scale the page shows the stage at (a zoomed
     // page or panel: drawn for its own size and shown bigger it would be soft), at most perf.cap
     function wantRes() {
@@ -11613,24 +11634,10 @@ void main(){
       app.renderer.resize(host.clientWidth, host.clientHeight)
       layout()
     }
+    // (the density looked at again every 2 s: the page zoomed, the phone turned)
     function keepUp() {
       const at = performance.now()
-      const gap = at - perf.last
-      perf.last = at
-      // (the density looked at again every 2 s: the page zoomed, the phone turned)
       if (at - perf.check > 2000) (perf.check = at), sharp()
-      if (perf.level >= 4 || gap > 1000 || !onScreen() || at < perf.grace) return
-      perf.t += gap
-      perf.n++
-      if (perf.t < 3000) return
-      const fps = (perf.n * 1000) / perf.t
-      perf.t = perf.n = 0
-      perf.low = fps < 45 ? perf.low + 1 : 0
-      if (perf.low < 2) return
-      perf.low = 0
-      // (a step that changes nothing here, 2x on a screen drawn at 2 or less, is passed over)
-      if (perf.level === 0 && app.renderer.resolution <= 2) perf.level = 1
-      stepDown()
     }
     // every filter's shader compiled once while the stage opens (a tiny hidden render through each): compiled on first use
     // instead, the first heavy blow, crit or fire skill of a battle stalled the stage for up to a tenth of a second
@@ -11662,11 +11669,11 @@ void main(){
       if (!app) return
       for (const l of [glowLayer, shotLayer, lights, smokeLayer, decalLayer]) l.alpha = cfg.fxAlpha
     }
-    // what the stage draws at, for the menu: the screen's density, the page's scale, the density drawn at, and why
+    // what the stage draws at, for the test drivers: the screen's density, the page's scale, the density drawn at, and why
     function info() {
       if (!app || !host) return null
       const r = host.getBoundingClientRect()
-      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, dropped: perf.dropped, level: perf.level, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
+      return { dpr: devicePixelRatio || 1, scale: host.clientWidth ? r.width / host.clientWidth : 1, res: app.renderer.resolution, cap: perf.cap, level: perf.level, canvas: [app.canvas.width, app.canvas.height], shown: [Math.round(r.width), Math.round(r.height)] }
     }
     function frameBody() {
       keepUp()
@@ -11775,7 +11782,7 @@ void main(){
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     // (what is on the stage right now: for checking that effects go away and nothing piles up)
     const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.filter(Boolean).length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
-    return { setFxAlpha, info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
+    return { setFxAlpha, setQuality, info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 
   // #dev-start
@@ -11937,19 +11944,6 @@ void main(){
       GM_registerMenuCommand(L(`战斗舞台：${cfg.stageEngine === "classic" ? "老版（整张立绘）" : "新版（骨骼动画）"}（点击切换）`, `Battle stage: ${cfg.stageEngine === "classic" ? "old (pose pictures)" : "new (rigged)"} (click to switch)`), () =>
         Live.setEngine(cfg.stageEngine === "classic" ? "rig" : "classic"),
       ),
-      // what the rigged stage draws at (for a report of a soft picture)
-      GM_registerMenuCommand(L("战斗舞台清晰度信息", "Battle stage sharpness info"), () => {
-        const i = Arena.info()
-        const title = L("战斗舞台清晰度信息", "Battle stage sharpness info")
-        if (!i) return showInfo(title, L("新版舞台还没打开：进入战斗页面、看到舞台后再点", "The new stage is not open yet: open the battle page first"))
-        showInfo(
-          title,
-          L(
-            `屏幕像素密度 ${i.dpr}\n页面缩放 ${i.scale.toFixed(2)}\n舞台绘制倍率 ${i.res.toFixed(2)}（上限 ${i.cap}）\n画布 ${i.canvas.join("×")} 像素，显示 ${i.shown.join("×")}\n${i.level ? `因为帧率低，画质已自动降到第 ${i.level} 级（共 4 级：1 最高 2 倍，2 减少粒子和光晕，3 最高 1.5 倍且关掉光晕，4 为 1 倍）` : "画质没有因为帧率降低"}`,
-            `Screen density ${i.dpr}\nPage scale ${i.scale.toFixed(2)}\nStage drawn at ${i.res.toFixed(2)}x (cap ${i.cap})\nCanvas ${i.canvas.join("x")} px, shown ${i.shown.join("x")}\n${i.level ? `Quality lowered to step ${i.level} of 4 for a low frame rate` : "Quality not lowered for frame rate"}`,
-          ),
-        )
-      }),
       toggle("life", L("生活技能动画（小窗）", "Skilling animation window"), () => Life.ensure()),
       toggle("lifeTown", L("小窗：空闲 / 战斗时显示小镇", "Window: show the town when idle / fighting"), () => Life.ensure()),
       // #dev-start
