@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.77
+// @version      0.21.78
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6627,9 +6627,10 @@
     // read on every page load as an @require). Greasy Fork allows code from its recognised CDNs, and these are jsDelivr
     // npm references at a fixed version; each file is also checked against its hash (subresource integrity), so what
     // runs is exactly the published library. cdn.jsdelivr.net first, then the other jsDelivr hosts Greasy Fork lists
-    // for networks where the first one is blocked.
+    // for networks where the first one is blocked. pixi.js 8.15 at least: 8.14 leaked a batcher (GPU buffers and a VAO)
+    // each time a big Graphics (400+ vertices) was redrawn, ~5 MB of heap a minute on the stage.
     const LIBS = [
-      ["npm/pixi.js@8.14.0/dist/pixi.min.js", "sha384-bWuiWufOk9p58s6Ew+wuR8zsJWaXZtIdPoxS1Mi7yvN/eCGWJuj1uV2m1JGROLgV"],
+      ["npm/pixi.js@8.15.0/dist/pixi.min.js", "sha384-XsQM0TmvTn7Xeu+3OrF/JihVw9wIw5ShifnHENTbcxlmhPtBsmGFl48bcjdVk+O0"],
       ["npm/pixi-filters@6.1.5/dist/pixi-filters.js", "sha384-wOxcZA+vaqcNDmX7OgdhG7HetEjyw12tVVIUix+CShtNNE3TJRSlg40M2bfkYpEg"],
     ]
     const LIB_HOSTS = ["https://cdn.jsdelivr.net/", "https://fastly.jsdelivr.net/", "https://gcore.jsdelivr.net/"]
@@ -8355,7 +8356,10 @@ void main(){
     // Graphics' context, its geometry and its GPU buffers only when destroy gets no options or context: true;
     // { children: true } alone left them all behind, a few MB more with every set-up until the GPU gave out and the
     // whole page went white for a moment). Shared textures are kept.
-    const GONE = { children: true, context: true }
+    // (and a text's style: Pixi's text measurement cache keeps every style it measured, whose update listener holds on to
+    // its text: every damage number, skill name and unit label ever shown stayed in memory with all it was hung on,
+    // about 5 MB a minute in a busy fight, until a phone's page fell over)
+    const GONE = { children: true, context: true, style: true }
     // a body part or a held piece is drawn big and shown small (a 280 px weapon at 40 px on a phone): with mipmaps (the
     // GPU's own smaller copies) it stays clean instead of breaking up into a few picked pixels; not for the effects'
     // own textures and buffers, which are drawn near their size or redrawn every frame
@@ -8718,6 +8722,7 @@ void main(){
       setWorldFx()
       hazeFx.clear()
       setHazeFx()
+      shock?.f.destroy()
       shock = null
       focus = null
       slowUntil = 0
@@ -10229,7 +10234,7 @@ void main(){
       map.height = h
       map.alpha = 0
       fxLayer.addChild(map)
-      const f = new P.DisplacementFilter({ sprite: map, scale: 0 })
+      const f = new P.DisplacementFilter({ sprite: map, scale: 0, resolution: "inherit" })
       hazeFx.add(f)
       setHazeFx()
       tween(dur, p => {
@@ -10240,7 +10245,8 @@ void main(){
         if (p >= 1) {
           hazeFx.delete(f)
           setHazeFx()
-          map.destroy()
+          f.destroy()
+          if (!map.destroyed) map.destroy()
         }
       })
     }
@@ -10249,7 +10255,7 @@ void main(){
     // phone GPU they cost more than anything else drawn)
     function zoomBlur(x, y, dur, strength = 0.05) {
       if (!F.ZoomBlurFilter || perf.level >= 2) return
-      const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90 })
+      const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90, resolution: "inherit" })
       worldFx.add(f)
       setWorldFx()
       tween(dur, p => {
@@ -10257,6 +10263,7 @@ void main(){
         if (p >= 1) {
           worldFx.delete(f)
           setWorldFx()
+          f.destroy()
         }
       })
     }
@@ -10306,7 +10313,7 @@ void main(){
       ;(kind === "vines" ? smokeLayer : decalLayer).addChild(g)
       tween(dur, p => {
         g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
-        if (p >= 1) g.destroy(GONE)
+        if (p >= 1 && !g.destroyed) g.destroy(GONE)
       })
     }
     // a crescent of light (a blade's wave) thrown forward through the foes
@@ -10371,7 +10378,7 @@ void main(){
         tx.position.y = y - 46 * k * ease(p)
         tx.scale.set(p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1)
         tx.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
-        if (p >= 1) tx.destroy()
+        if (p >= 1) tx.destroy(GONE)
       })
     }
     function flash(a, color, dur = 220) {
@@ -10383,8 +10390,8 @@ void main(){
       if (many || perf.level >= 2) return
       shake = Math.max(shake, 1)
       punch = 1
-      const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
-      if (shock) worldFx.delete(shock.f)
+      const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4, resolution: "inherit" })
+      if (shock) worldFx.delete(shock.f), shock.f.destroy()
       shock = { f, t0: now() }
       worldFx.add(f)
       setWorldFx()
@@ -10504,7 +10511,7 @@ void main(){
         tx.scale.set(p < 0.12 ? lerp(1.8, 1, p / 0.12) : 1)
         tx.position.y = y - 14 * k * p
         tx.alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25
-        if (p >= 1) tx.destroy()
+        if (p >= 1) tx.destroy(GONE)
       })
     }
     // a shock ring along the ground where the unit lands
@@ -11731,6 +11738,7 @@ void main(){
         if (age > 0.9) {
           worldFx.delete(shock.f)
           setWorldFx()
+          shock.f.destroy()
           shock = null
         }
       }
