@@ -12,7 +12,9 @@ the picture). The trunk under the arms, the weapon and the legs is filled from a
 PIECE (the monster with them taken off, prompt trunk), its colours fitted to the original; an arm or weapon lying
 inside the piece's outline was drawn over the trunk, one outside it behind.
 
-usage: rig-monster.py <id> <part map png> <trunk png> <out dir>   [--tmpl biped] [--over JSON] [--check check.png] [--src idle.png]
+usage: rig-monster.py <id> <part map png> <trunk png> <out dir>   [--tmpl biped] [--over JSON] [--check check.png] [--src idle.png] [--hi idle.png]
+  (--hi: the same frame at a multiple of --src's size; the rig is cut on --src as ever, the part images are taken from this
+  one at its size, and rig.json's res tells the engine their pixels per rig pixel)
   (a monster girl: id girl_<monster>, --src <raw>/rig/girl/idle/<monster>.png; her corrections under girl_<monster>)
   corrections for a monster the shapes mislead: tools/rig-monster.json {id: {...}} (or --over), e.g. '{"z":{"arm_o":1},"pivot":{"arm_m":[230,250]},"weapon":"arm_o"}' (idle px)
 """
@@ -32,6 +34,8 @@ ap.add_argument("--tmpl", default="biped")  # (or "tmpl" in tools/rig-monster.js
 ap.add_argument("--over", default="{}")
 ap.add_argument("--check")
 ap.add_argument("--src")  # another idle frame than assets/m/<id>/idle.webp (a monster girl: <raw>/rig/girl/idle/<id>.png)
+ap.add_argument("--hi")
+ap.add_argument("--quality", type=int, default=90)  # the part images' WebP colour quality
 ap.add_argument("--assets", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets"))
 A = ap.parse_args()
 # per-monster corrections: tools/rig-monster.json {id: {...}}, then --over on top
@@ -301,10 +305,12 @@ sil = shrink(grow(sil, 1), 1)
 # a per-channel linear fit of the piece's colours to the original where both show the trunk (inside, off the edges)
 both = shrink(trunk, 3) & shrink(sil, 3) & (alpha > 250)
 fit = tq.copy()
+coef = []
 if both.sum() > 200:
     for c in range(3):
         a_, b_ = np.polyfit(tq[both, c], im[both, c].astype(np.float32), 1)
         fit[..., c] = np.clip(tq[..., c] * a_ + b_, 0, 255)
+        coef.append((a_, b_))
 # (a correction, reclaim: the map painted part of the held thing as body (a bow's dark lower limb along a centaur's
 # hip); trunk pixels next to it that look nothing like the clean trunk piece there go to it)
 if OVER.get("reclaim") and mask["weapon"].any():
@@ -563,16 +569,32 @@ for w in ("weapon", "weapon2"):
 # one weapon in each fist: the main one is whichever points more at the foe (it leads the attacks)
 if mask["weapon2"].any() and abs(aims["weapon2"] - 90) < abs(aims["weapon"] - 90):
     role.update({hold: "arm_o", other: "arm_m", "weapon": "weapon_o", "weapon2": "weapon"})
+# (--hi: the frame and the trunk layer again at K times the size, the trunk piece's fill fitted with the same colours)
+K = 1
+if A.hi:
+    imH = np.asarray(Image.open(A.hi).convert("RGBA")).astype(np.int16)
+    K = imH.shape[1] // W
+    assert imH.shape[:2] == (H * K, W * K), "--hi must be a whole multiple of --src"
+    up = lambda m: np.asarray(Image.fromarray(m.astype(np.uint8) * 255).resize((W * K, H * K), Image.BILINEAR)) > 127
+    fitH = np.asarray(Image.open(A.trunk).convert("RGB").resize((W * K, H * K), Image.LANCZOS)).astype(np.float32)
+    for c, (a_, b_) in enumerate(coef):
+        fitH[..., c] = np.clip(fitH[..., c] * a_ + b_, 0, 255)
+    trH, fillH = imH.copy(), up(f | up_fill)
+    trH[fillH, :3] = fitH[fillH].astype(np.int16)
+    trH[fillH, 3] = 255
+    rig["res"] = K
 for n, (m, src_im) in pix.items():
     ys, xs = np.where(m)
     x0, y0, x1, y1 = max(0, xs.min() - 2), max(0, ys.min() - 2), min(W, xs.max() + 3), min(H, ys.max() + 3)
-    layer = np.zeros_like(src_im)
     # soft edges: the original alpha, a pixel of overlap into neighbouring parts so no seam shows
     mm = m if n == "trunk" else grow(m, 1) & fg
+    if K > 1:
+        src_im, mm = (trH if src_im is tr else imH), up(mm) & (True if n == "trunk" else imH[..., 3] > 8)
+    layer = np.zeros_like(src_im)
     layer[mm] = src_im[mm]
     nm = role[n]
     # (lossy colour, exact alpha: flat art looks the same at a third of the size; jsDelivr serves a repo of 50 MB at most)
-    Image.fromarray(layer[y0:y1, x0:x1].astype(np.uint8)).save(f"{A.out}/{nm}.webp", quality=90, alpha_quality=100, method=6)
+    Image.fromarray(layer[y0 * K : y1 * K, x0 * K : x1 * K].astype(np.uint8)).save(f"{A.out}/{nm}.webp", quality=A.quality, alpha_quality=100, method=6)
     piv = pivots[n]
     q = {"img": nm + ".webp", "pivot": [int(piv[0] - x0), int(piv[1] - y0)], "at": [int(piv[0]), int(piv[1])], "z": z[n]}
     if parent.get(n):

@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.77
+// @version      0.21.79
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -5596,7 +5596,7 @@
 
   const Arena = (() => {
     const LIBS = [
-      ["npm/pixi.js@8.14.0/dist/pixi.min.js", "sha384-bWuiWufOk9p58s6Ew+wuR8zsJWaXZtIdPoxS1Mi7yvN/eCGWJuj1uV2m1JGROLgV"],
+      ["npm/pixi.js@8.15.0/dist/pixi.min.js", "sha384-XsQM0TmvTn7Xeu+3OrF/JihVw9wIw5ShifnHENTbcxlmhPtBsmGFl48bcjdVk+O0"],
       ["npm/pixi-filters@6.1.5/dist/pixi-filters.js", "sha384-wOxcZA+vaqcNDmX7OgdhG7HetEjyw12tVVIUix+CShtNNE3TJRSlg40M2bfkYpEg"],
     ]
     const LIB_HOSTS = ["https://cdn.jsdelivr.net/", "https://fastly.jsdelivr.net/", "https://gcore.jsdelivr.net/"]
@@ -7098,8 +7098,8 @@ void main(){
     }
 
     let P, F, app, host, world, scene, back, bg, decalLayer, lights, unitsLayer, smokeLayer, shotLayer, fxLayer, partLayer, textLayer, bloom, glowLayer
-    const GONE = { children: true, context: true }
-    const loadMip = url => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true } })
+    const GONE = { children: true, context: true, style: true }
+    const loadMip = (url, res = 1) => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true, resolution: res } })
     const mipTex = c => new P.Texture({ source: new P.CanvasSource({ resource: c, autoGenerateMipmaps: true }) })
     let source = null
     let resizer = null
@@ -7425,6 +7425,7 @@ void main(){
       setWorldFx()
       hazeFx.clear()
       setHazeFx()
+      shock?.f.destroy()
       shock = null
       focus = null
       slowUntil = 0
@@ -7665,20 +7666,38 @@ void main(){
     }
 
     const rigs = {} // monster id -> Promise<{ def, tex }>
+    const RIG_KEEP = 16
+    const rigUrls = {} // monster id -> its loaded part images, once all are in
+    let rigOrder = [] // ids, the one used last at the end
     function loadRig(id) {
       if (!Assets.has("rig", id)) return Promise.resolve(null)
+      rigOrder = [...rigOrder.filter(k => k !== id), id]
       if (!rigs[id])
         rigs[id] = (async () => {
           const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
-          for (const [n, q] of Object.entries(def.parts)) tex[n] = await loadMip(Assets.url(`rig/${id}/${q.img}`))
+          const urls = Object.values(def.parts).map(q => Assets.url(`rig/${id}/${q.img}`))
+          for (const [k, n] of Object.keys(def.parts).entries()) tex[n] = await loadMip(urls[k], def.res)
+          rigUrls[id] = urls
+          trimRigs()
           return { def, tex }
         })().catch(e => {
           delete rigs[id]
+          rigOrder = rigOrder.filter(k => k !== id)
           throw e
         })
       return rigs[id]
+    }
+    function trimRigs() {
+      const on = new Set(units.m.map(a => a.kind))
+      for (const id of rigOrder.slice(0, -RIG_KEEP)) {
+        if (on.has(id) || !rigUrls[id]) continue
+        P.Assets.unload(rigUrls[id]).catch(() => {})
+        delete rigUrls[id]
+        delete rigs[id]
+        rigOrder = rigOrder.filter(k => k !== id)
+      }
     }
     const iconTex = {}
     let itemsSvg = null
@@ -8763,7 +8782,7 @@ void main(){
       map.height = h
       map.alpha = 0
       fxLayer.addChild(map)
-      const f = new P.DisplacementFilter({ sprite: map, scale: 0 })
+      const f = new P.DisplacementFilter({ sprite: map, scale: 0, resolution: "inherit" })
       hazeFx.add(f)
       setHazeFx()
       tween(dur, p => {
@@ -8774,13 +8793,14 @@ void main(){
         if (p >= 1) {
           hazeFx.delete(f)
           setHazeFx()
-          map.destroy()
+          f.destroy()
+          if (!map.destroyed) map.destroy()
         }
       })
     }
     function zoomBlur(x, y, dur, strength = 0.05) {
       if (!F.ZoomBlurFilter || perf.level >= 2) return
-      const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90 })
+      const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90, resolution: "inherit" })
       worldFx.add(f)
       setWorldFx()
       tween(dur, p => {
@@ -8788,6 +8808,7 @@ void main(){
         if (p >= 1) {
           worldFx.delete(f)
           setWorldFx()
+          f.destroy()
         }
       })
     }
@@ -8832,7 +8853,7 @@ void main(){
       ;(kind === "vines" ? smokeLayer : decalLayer).addChild(g)
       tween(dur, p => {
         g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
-        if (p >= 1) g.destroy(GONE)
+        if (p >= 1 && !g.destroyed) g.destroy(GONE)
       })
     }
     function crescent(from, dir, color, h, dist, dur) {
@@ -8893,7 +8914,7 @@ void main(){
         tx.position.y = y - 46 * k * ease(p)
         tx.scale.set(p < 0.15 ? lerp(big ? 2.2 : 1.5, 1, p / 0.15) : 1)
         tx.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
-        if (p >= 1) tx.destroy()
+        if (p >= 1) tx.destroy(GONE)
       })
     }
     function flash(a, color, dur = 220) {
@@ -8905,8 +8926,8 @@ void main(){
       if (many || perf.level >= 2) return
       shake = Math.max(shake, 1)
       punch = 1
-      const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4 })
-      if (shock) worldFx.delete(shock.f)
+      const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4, resolution: "inherit" })
+      if (shock) worldFx.delete(shock.f), shock.f.destroy()
       shock = { f, t0: now() }
       worldFx.add(f)
       setWorldFx()
@@ -9014,7 +9035,7 @@ void main(){
         tx.scale.set(p < 0.12 ? lerp(1.8, 1, p / 0.12) : 1)
         tx.position.y = y - 14 * k * p
         tx.alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25
-        if (p >= 1) tx.destroy()
+        if (p >= 1) tx.destroy(GONE)
       })
     }
     function ring(a, color) {
@@ -9136,7 +9157,10 @@ void main(){
         rigCrumble(a)
         tween(1500, p => a.life === life && (a.uni.uDis = ease(p)), 900)
         for (let k = 0; k < 6; k++) later(900 + k * 180, () => a.life === life && sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
-      } else play1(a, "dead")
+      } else {
+        play1(a, "dead")
+        if (a.side === "m") tween(1500, p => a.life === life && (a.uni.uDis = ease(p)), 1400)
+      }
     }
     function revive(a, tg) {
       a.dead = false
@@ -10097,6 +10121,7 @@ void main(){
         if (age > 0.9) {
           worldFx.delete(shock.f)
           setWorldFx()
+          shock.f.destroy()
           shock = null
         }
       }
@@ -10106,7 +10131,7 @@ void main(){
     }
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
-    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
+    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.filter(Boolean).length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
     return { setFxAlpha, info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 

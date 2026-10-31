@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.78
+// @version      0.21.79
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8363,7 +8363,7 @@ void main(){
     // a body part or a held piece is drawn big and shown small (a 280 px weapon at 40 px on a phone): with mipmaps (the
     // GPU's own smaller copies) it stays clean instead of breaking up into a few picked pixels; not for the effects'
     // own textures and buffers, which are drawn near their size or redrawn every frame
-    const loadMip = url => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true } })
+    const loadMip = (url, res = 1) => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true, resolution: res } })
     const mipTex = c => new P.Texture({ source: new P.CanvasSource({ resource: c, autoGenerateMipmaps: true }) })
     // what it shows: { units, loc(), tier(), live } (the lab's sandbox, or the real battle laid over the game's cards)
     let source = null
@@ -8985,22 +8985,43 @@ void main(){
 
     // ----- rigs (assets/rig/<id>/rig.json): parts on joints -----
     // rig.json: foot = the ground point under the body, h = body height, face = "right" for player art (monsters face
-    // left), parts { img, pivot (in the part image), at (where that pivot sits in the assembled body), z, parent, rot?, scale? }
+    // left), res = the part images' pixels per rig pixel (a monster girl's are drawn at 2), parts { img, pivot (in the part
+    // image, rig pixels), at (where that pivot sits in the assembled body), z, parent, rot?, scale? }
     const rigs = {} // monster id -> Promise<{ def, tex }>
+    // (the textures of the RIG_KEEP rigs used last stay loaded, older ones not on the stage are let go: a long session
+    // through many zones would otherwise hold every monster seen, hundreds of MB of GPU memory with the girls on)
+    const RIG_KEEP = 16
+    const rigUrls = {} // monster id -> its loaded part images, once all are in
+    let rigOrder = [] // ids, the one used last at the end
     function loadRig(id) {
       if (!Assets.has("rig", id)) return Promise.resolve(null)
+      rigOrder = [...rigOrder.filter(k => k !== id), id]
       if (!rigs[id])
         rigs[id] = (async () => {
           const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
-          for (const [n, q] of Object.entries(def.parts)) tex[n] = await loadMip(Assets.url(`rig/${id}/${q.img}`))
+          const urls = Object.values(def.parts).map(q => Assets.url(`rig/${id}/${q.img}`))
+          for (const [k, n] of Object.keys(def.parts).entries()) tex[n] = await loadMip(urls[k], def.res)
+          rigUrls[id] = urls
+          trimRigs()
           return { def, tex }
         })().catch(e => {
           delete rigs[id]
+          rigOrder = rigOrder.filter(k => k !== id)
           throw e
         })
       return rigs[id]
+    }
+    function trimRigs() {
+      const on = new Set(units.m.map(a => a.kind))
+      for (const id of rigOrder.slice(0, -RIG_KEEP)) {
+        if (on.has(id) || !rigUrls[id]) continue
+        P.Assets.unload(rigUrls[id]).catch(() => {})
+        delete rigUrls[id]
+        delete rigs[id]
+        rigOrder = rigOrder.filter(k => k !== id)
+      }
     }
     // a pole weapon (staff, trident, spear) is the game's own item icon: a straight pole drawn on the diagonal, the same
     // from any side (the paper-doll ones were drawn with breaks and kinks). Rendered from the items sprite sheet at
@@ -10644,7 +10665,11 @@ void main(){
         rigCrumble(a)
         tween(1500, p => a.life === life && (a.uni.uDis = ease(p)), 900)
         for (let k = 0; k < 6; k++) later(900 + k * 180, () => a.life === life && sparks(a.x0 + (Math.random() - 0.5) * a.h * 0.4, a.y0 - Math.random() * a.h * 0.6, 0xff8a3a, 10, { speed: 50, up: 90, gravity: -60, life: 1200, size: 0.35 }))
-      } else play1(a, "dead")
+      } else {
+        play1(a, "dead")
+        // (a monster that falls instead, a beast or a monster girl, burns away once down, like a flat one)
+        if (a.side === "m") tween(1500, p => a.life === life && (a.uni.uDis = ease(p)), 1400)
+      }
     }
     function revive(a, tg) {
       a.dead = false
@@ -11749,7 +11774,7 @@ void main(){
 
     const still = (side, i, name, ms) => units[side]?.[i] && (units[side][i].still = name ? [name, ms] : null)
     // (what is on the stage right now: for checking that effects go away and nothing piles up)
-    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
+    const stats = () => app && { fx: fxLayer.children.length, shots: shotLayer.children.length, parts: parts.length, text: textLayer.children.length, tweens: tweens.length, lost: !!app.renderer.gl?.isContextLost?.(), running: app.ticker.started, textures: app.renderer.texture?.managedTextures?.filter(Boolean).length, heapMB: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), units: units.p.length + units.m.length, unitLayer: unitsLayer.children.length }
     return { setFxAlpha, info, open, close, sync, play, playLive, newBattle, liveOn, background, units: () => units, still, setArms, armsOn: () => armsOn, stats, view: () => ({ ...view }) }
   })()
 

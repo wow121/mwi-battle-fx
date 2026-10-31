@@ -3,6 +3,8 @@
 monsters' own idle frames (400 px square, same framing as the reference), ready for make-rig-monster-jobs.py --girl and
 rig-monster.py --src.
 usage: rig-girl-idle.py <raw_dir> <id> ...   (<raw>/rig/girl/sheets/<id>_idle.png -> <raw>/rig/girl/idle/<id>.png)
+SIZE=800 in the environment: the same frame at 800 px into <raw>/rig/girl/idle800/ (rig-monster.py --hi: her parts drawn
+at twice the detail, cut along the 400 px rig)
 """
 import os
 import sys
@@ -12,7 +14,9 @@ from PIL import Image
 
 RAW, IDS = sys.argv[1], sys.argv[2:]
 GIRL = os.path.join(RAW, "rig", "girl")
-os.makedirs(os.path.join(GIRL, "idle"), exist_ok=True)
+SIZE = int(os.environ.get("SIZE", 400))
+OUT = os.path.join(GIRL, "idle" if SIZE == 400 else f"idle{SIZE}")
+os.makedirs(OUT, exist_ok=True)
 for mid in IDS:
     im = np.asarray(Image.open(os.path.join(GIRL, "sheets", f"{mid}_idle.png")).convert("RGB")).astype(np.float32)
     h, w, _ = im.shape
@@ -38,7 +42,7 @@ for mid in IDS:
         for c in hi:
             rgb[..., c] = np.where(both > cap, np.minimum(rgb[..., c], cap), rgb[..., c])
     out = np.dstack([rgb, a * 255]).astype(np.uint8)
-    img = Image.fromarray(out, "RGBA").resize((400, 400), Image.LANCZOS)
-    img.save(os.path.join(GIRL, "idle", f"{mid}.png"))
+    img = Image.fromarray(out, "RGBA").resize((SIZE, SIZE), Image.LANCZOS)
+    img.save(os.path.join(OUT, f"{mid}.png"))
     bb = img.getchannel("A").point(lambda v: 255 if v > 128 else 0).getbbox()
     print(mid, "bbox", bb)
