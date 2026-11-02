@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.84
+// @version      0.21.85
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -6673,6 +6673,10 @@
     ]
     const LIB_HOSTS = ["https://cdn.jsdelivr.net/", "https://fastly.jsdelivr.net/", "https://gcore.jsdelivr.net/"]
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
+    // nature spells that are not green (缠绕 and 回春 stay green): poison, a fungus, a drain; their circle, blade light,
+    // gathered motes, name and sparks take this colour instead of their element's
+    const SKILL_COL = { toxic_pollen: 0xa45cff, natures_veil: 0xc77dff, life_drain: 0xc8306e }
+    const TOXIC = [0x8a3fd8, 0xa45cff, 0x6a2aa8, 0x9be15d]
     // per-body shader: uFlash mixes in a solid colour, uDis burns the body away along value noise (orange edge)
     const FRAG = `in vec2 vTextureCoord;
 out vec4 finalColor;
@@ -10012,8 +10016,8 @@ void main(){
       const L = S.cx - S.w * 0.6
       const R = S.cx + S.w * 0.6
       const threads = Array.from({ length: 14 }, () => ({ u: Math.random(), ph: Math.random() * 6, len: 0.6 + Math.random() * 0.4 }))
-      const shrooms = feet.flatMap(a => Array.from({ length: 4 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.06), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xc8f06a : 0x8fe0a0 })))
-      light(S.cx, S.ground - S.h * 0.8, 0x7fe86a, S.w * 0.6, dur, 0.9)
+      const shrooms = feet.flatMap(a => Array.from({ length: 5 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.07), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xb46cff : 0xff6fc8 })))
+      light(S.cx, S.ground - S.h * 0.8, 0xb46cff, S.w * 0.6, dur, 0.9)
       tween(dur, p => {
         g.clear()
         caps.clear()
@@ -10028,23 +10032,24 @@ void main(){
           const x = R - (R - L) * (i / 16)
           pts.push(x, bottom - S.h * 0.08 * (1 + Math.sin(i * 1.3 + t * 0.006)))
         }
-        g.poly(pts).fill({ color: 0x4fc84a, alpha: 0.2 * al })
+        g.poly(pts).fill({ color: 0x7a3ac8, alpha: 0.22 * al })
         for (const th of threads) {
           const x = L + (R - L) * th.u
           const sway = Math.sin(t * 0.004 + th.ph) * S.h * 0.06
-          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xc8ff9a, width: 2, alpha: 0.55 * al })
+          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xe6c2ff, width: 2, alpha: 0.55 * al })
         }
         // mushrooms: a stem and a round cap with pale spots, popping up and shrinking away at the end
         for (const m of shrooms) {
           const k = Math.min(1, Math.max(0, (p - m.t) / 0.1)) * (p > 0.85 ? (1 - p) / 0.15 : 1)
           if (k <= 0) continue
           const sz = m.s * k
-          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xf0f0d8)
+          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xeadcf5)
           caps.ellipse(m.x, m.y - sz * 1.1, sz * 0.75, sz * 0.5).fill(m.c)
+          caps.ellipse(m.x, m.y - sz * 1.1, sz * 1.1, sz * 0.8).fill({ color: m.c, alpha: 0.18 })
           caps.circle(m.x - sz * 0.25, m.y - sz * 1.25, sz * 0.12).fill(0xffffff)
           caps.circle(m.x + sz * 0.2, m.y - sz * 1.15, sz * 0.09).fill(0xffffff)
         }
-        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xd8ff9a, 0xa8f07a, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
+        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
         if (p >= 1) {
           g.destroy()
           caps.destroy()
@@ -10126,7 +10131,7 @@ void main(){
     const claws = (x, y, r, dir, color) => [-1, 0, 1].forEach(k => slashArc(x + dir * k * r * 0.12, y + k * r * 0.22, r, dir, color, { tilt: 0.5, width: 0.6, dur: 280 }))
     // a magic circle turning flat on the ground under a caster: rings, ticks, a six-pointed star, in its element's colour
     function circle(a, element, dur) {
-      const color = ELEM_COL[element] ?? 0xffe680
+      const color = typeof element === "number" ? element : (ELEM_COL[element] ?? 0xffe680)
       const R = a.h * 0.75
       const c = new P.Container()
       c.position.set(a.x0 + (a.dash || 0), a.y0)
@@ -10651,7 +10656,7 @@ void main(){
     function hit(a, tg, src, e, isSkill, shown) {
       if (!a) return
       const el = e.element || "physical"
-      const color = COLOR[el] || COLOR.physical
+      const color = SKILL_COL[e.ab?.key] ?? (COLOR[el] || COLOR.physical)
       const m = mid(a)
       a.hp = tg.hp
       if (tg.dHP === 0) return number(a, "Miss", "#cfd6ff", false)
@@ -11211,6 +11216,41 @@ void main(){
       shake = Math.max(shake, 0.9)
     }
 
+    // poison: bubbles welling up out of a puddle w wide at (x, y) for dur ms, each popping in a puff of spores
+    function toxicBubbles(x, y, w, h, dur) {
+      tween(dur, p => {
+        if (p >= 1 || Math.random() > 0.35) return
+        const bx = x + (Math.random() - 0.5) * w
+        const rise = h * (0.15 + Math.random() * 0.35)
+        const life = 500 + Math.random() * 300
+        emit(bx, y, { n: 1, color: [0xb46cff, 0x9be15d], alpha: 0.7, size: 0.28 * K(h), size1: 0.5 * K(h), speed: 1, up: (rise * 1000) / life, life, jitter: 0 })
+        later(life * 0.85, () => emit(bx, y - rise, { n: 5, color: TOXIC, size: 0.22, size1: 0.05, speed: h * 0.9, drag: 0.2, life: 380 }))
+      })
+    }
+    // a poison puddle on the ground: dark violet with a sickly green rim, fading
+    function toxicPuddle(x, y, r, dur = 2600) {
+      const g = new P.Graphics()
+      g.position.set(x, y)
+      for (let k = 0; k < 3; k++) g.ellipse((Math.random() - 0.5) * r * 0.3, 0, r * (1 - k * 0.25), r * 0.22 * (1 - k * 0.25)).fill({ color: k ? 0x6a2aa8 : 0x2a0e44, alpha: 0.35 })
+      const rim = new P.Graphics()
+      rim.ellipse(0, 0, r * 0.9, r * 0.2).stroke({ color: 0x9be15d, width: r * 0.05, alpha: 0.7 })
+      rim.blendMode = "add"
+      g.addChild(rim)
+      decalLayer.addChild(g)
+      tween(dur, p => {
+        g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
+        rim.alpha = 0.6 + 0.4 * Math.sin(p * dur * 0.008)
+        if (p >= 1 && !g.destroyed) g.destroy(GONE)
+      })
+    }
+    // a drain: the foe's colour leached out (a dark flash), dark red and violet wisps pulled up off it
+    function drainWisps(a) {
+      flash(a, 0x3a0828, 900)
+      const m = mid(a)
+      emit(m.x, m.y, { n: 18, color: [0xc8306e, 0x8a2ad0, 0xff6a9a], color1: 0x2a0418, size: 0.4, size1: 0.08, speed: 50, up: a.h * 0.7, gravity: -a.h * 0.3, drag: 0.4, life: 1100, jitter: a.h * 0.5 })
+      emit(m.x, m.y, { n: 6, tex: "smoke", color: [0x3a0a2a, 0x4a1040], alpha: 0.5, size: 0.5, size1: 1.4, speed: 30, up: 50, drag: 0.5, life: 1200, jitter: a.h * 0.3 })
+    }
+
     const SKILL_FX = {
       // 火球: swells at the staff's head, hurled trailing flames like a comet; it bursts in flame, scorching the
       // ground and heating the air
@@ -11283,21 +11323,29 @@ void main(){
         }),
       },
       // 生命吸取: green motes and leaves torn off the foe (the stream back is the action's drain)
-      life_drain: { hit: each(a => leaves(a, false)) },
+      life_drain: { hit: each(a => drainWisps(a)) },
       // 剧毒粉尘: a green-yellow cloud of spores hangs over the row, poison bubbles rising
       toxic_pollen: {
         hit: ({ tgs }) => {
           if (!tgs.length) return
           const S = spanOf(tgs)
-          cloud(S.cx, S.ground - S.h * 0.2, S.w, S.h * 0.8, 1800, [0x8fd14a, 0xb6e05a, 0x6fae3a], 0.75)
-          tgs.forEach(([a]) => emit(a.x0, a.y0 - a.h * 0.3, { n: 16, color: [0xb6ff5a, 0x6fd13a], size: 0.35, size1: 0.1, speed: 40, up: 90, gravity: -30, life: 1400, jitter: a.h * 0.6 }))
+          // a violet poison fog rolling low over the row, sickly green motes drifting in it
+          cloud(S.cx, S.ground - S.h * 0.15, S.w, S.h * 0.6, 1800, [0x4a1a78, 0x6a2aa8, 0x5a2a6a], 0.7)
+          tween(1600, p => p < 1 && Math.random() < 0.6 && emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.6, { n: 1, color: TOXIC, size: 0.3, size1: 0.06, speed: 15, up: 40, gravity: -20, life: 1200, fadeIn: 0.3 }))
+          light(S.cx, S.ground - S.h * 0.4, 0x8a3fd8, S.w * 0.5, 1600, 0.9)
+          tgs.forEach(([a]) => {
+            flash(a, 0xa45cff, 800)
+            toxicPuddle(a.x0, a.y0, a.h * 0.8)
+            toxicBubbles(a.x0, a.y0, a.h * 0.8, a.h, 1500)
+            emit(a.x0, a.y0 - a.h * 0.3, { n: 16, color: TOXIC, size: 0.35, size1: 0.1, speed: 40, up: 90, gravity: -30, life: 1400, jitter: a.h * 0.6 })
+          })
         },
       },
       // 自然菌幕: each foe dimmed green under the veil, a puff of spores off it
       natures_veil: {
         hit: each(a => {
-          flash(a, 0x7fe86a, 700)
-          emit(mid(a).x, mid(a).y, { n: 14, color: [0xd8ff9a, 0xa8f07a], size: 0.3, size1: 0.08, speed: 90, gravity: -20, drag: 0.4, life: 1200, jitter: a.h * 0.4 })
+          flash(a, 0xc77dff, 700)
+          emit(mid(a).x, mid(a).y, { n: 14, color: [0xe6c2ff, 0xff9ad8, 0xb46cff], size: 0.3, size1: 0.08, speed: 90, gravity: -20, drag: 0.4, life: 1200, jitter: a.h * 0.4 })
         }),
       },
       // ----- arrows -----
@@ -11495,8 +11543,8 @@ void main(){
       frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
       entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.75, a.h * 1.0, 1900)),
       natures_veil: () => {},
-      toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: [0xb6ff5a, 0x8fd14a, 0xe0ff8a], size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
-      life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0x62d65a)),
+      toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: TOXIC, size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
+      life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0xc8306e)),
       cleave: onEach((a, src, color) => slashArc(mid(a).x, mid(a).y, a.h * 0.75, src.dir, color, { width: 1.3, tilt: 0.3 })),
       // two red cuts crossing
       maim: onEach((a, src) => {
@@ -11533,7 +11581,7 @@ void main(){
         const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
         const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a)
         const isSkill = !!e.ab
-        const color = COLOR[e.element] || COLOR.physical
+        const color = SKILL_COL[e.ab?.key] ?? (COLOR[e.element] || COLOR.physical)
         if (e.effect === "heal" || e.effect === "regen") {
           if (src) {
             play1(src, "cast")
@@ -11580,7 +11628,7 @@ void main(){
         const act = play1(src, name)
         const recipe = isSkill ? SKILL_FX[e.ab.key] : null
         // a spell: a magic circle turns under the caster while it gathers
-        if (e.style === "magic") circle(src, e.element, (act?.hit ?? 300) + 300)
+        if (e.style === "magic") circle(src, SKILL_COL[e.ab?.key] ?? e.element, (act?.hit ?? 300) + 300)
         // a relic in the off hand flares as the blow lands
         if (src.off === "relic") later(act?.hit ?? 300, () => relicGlow(src))
         const at = act?.hit ?? 300
