@@ -17,8 +17,13 @@ one() {
   for r in "${list[@]}"; do args+=(-i "$r"); done
   for try in 1 2; do
     timeout 900 codex exec --skip-git-repo-check "${args[@]}" - <"$prompt" >"$log" 2>&1
-    local path
+    local path sid
     path=$(grep -oE '/[^ ]*/generated_images/[^ ]*\.png' "$log" | tail -1)
+    # newer Codex no longer prints the image's path: take the newest image in its session's folder
+    if [ -z "$path" ]; then
+      sid=$(grep -oiE 'session id: [0-9a-f-]+' "$log" | head -1 | awk '{print $3}')
+      [ -n "$sid" ] && path=$(ls -t "$HOME/.codex/generated_images/$sid/"*.png 2>/dev/null | head -1)
+    fi
     if [ -n "$path" ] && [ -s "$path" ]; then
       cp "$path" "$out"
       echo "ok   $name"
