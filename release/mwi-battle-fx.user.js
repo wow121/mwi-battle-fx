@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.82
+// @version      0.21.83
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -6314,6 +6314,17 @@ void main(){
             { t: 1200, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
           ],
         },
+        "skill:fireball": {
+          dur: 1300, shot: 860, hit: 1180, missile: "orb",
+          keys: [
+            { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+            { t: 260, e: "out", a: { body: -7, hm: [0.14, 0.46, 24], ho: [0.05, 0.16, 0] }, y: 0.03 },
+            { t: 740, a: { body: -9, hm: [0.12, 0.48, 32], ho: [0.05, 0.17, 0] }, y: 0.03, x: -0.02 },
+            { t: 860, e: "in", a: { body: 15, hm: [0.42, 0.22, -100], ho: [-0.04, 0, 0] }, x: 0.05 },
+            { t: 1080, a: { body: 13, hm: [0.41, 0.21, -101], ho: [-0.04, 0, 0] }, x: 0.05 },
+            { t: 1300, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+          ],
+        },
         "skill:ice_spear": {
           dur: 1000, shot: 560, hit: 760, missile: "shard",
           keys: [
@@ -9571,6 +9582,68 @@ void main(){
       if (key === "rejuvenate") emit(a.x0, a.y0 - a.h * 0.9, { n: 10, tex: "leaf", color: [0xffb0d0, 0xfff0f6, 0x9fe88a], size: 0.4, speed: 60, gravity: 90, drag: 0.6, life: 1600, jitter: a.h * 0.8 })
     }
 
+    function fireOrb(h) {
+      const c = new P.Container()
+      for (const [tint, k] of [[0xff5a1a, 0.95], [0xffa040, 0.55], [0xfff0c0, 0.26]]) {
+        const s = new P.Sprite(glow)
+        s.anchor.set(0.5)
+        s.tint = tint
+        s.width = s.height = h * k
+        c.addChild(s)
+      }
+      partLayer.addChild(c)
+      return c
+    }
+    function fireCharge(at, h, ms) {
+      const o = fireOrb(h)
+      o.scale.set(0.1)
+      tween(ms, p => {
+        const T = at()
+        if (o.destroyed) return
+        if (T) o.position.set(T.x, T.y)
+        o.scale.set((0.1 + 0.9 * ease(p)) * (1 + 0.1 * Math.sin(p * ms * 0.05)))
+        if (T && p < 1) {
+          const an = Math.random() * Math.PI * 2
+          const r = h * (0.4 + Math.random() * 0.3)
+          emit(T.x + Math.cos(an) * r, T.y + Math.sin(an) * r, { n: 1, color: FIRE, color1: 0xffe0a0, alpha: 0.6, size: 0.4 * K(h), size1: 0.1, speed: 1, life: 300, to: at, pull: 40, drag: 0.02, fadeIn: 0.3 })
+          if (Math.random() < 0.5) emit(T.x, T.y, { n: 1, color: FIRE, color1: 0x5a0800, alpha: 0.45, size: 0.5 * K(h) * ease(p), size1: 0.1, speed: 20, up: h * 0.6, gravity: -h * 0.6, life: 380 })
+        }
+      })
+      return o
+    }
+    function fireFlight(o, A, B, dur, h, onLand) {
+      const dist = Math.hypot(B.x - A.x, B.y - A.y)
+      const at = p => ({ x: lerp(A.x, B.x, p), y: lerp(A.y, B.y, p) - 0.08 * dist * 4 * p * (1 - p) })
+      tween(dur, p => {
+        const q = at(p)
+        const n = at(Math.min(1, p + 0.03))
+        const back = Math.atan2(q.y - n.y, q.x - n.x)
+        o.position.set(q.x, q.y)
+        o.scale.set(1.05 + 0.12 * Math.sin(p * dur * 0.06))
+        emit(q.x, q.y, { n: 3, color: FIRE, color1: 0x5a0800, alpha: 0.55, size: 0.95 * K(h), size1: 0.12, speed: h * 1.6, angle: back, spread: 0.5, drag: 0.1, life: 260, jitter: h * 0.12 })
+        if (Math.random() < 0.6) emit(q.x, q.y, { n: 1, tex: "smoke", color: 0x2e2420, alpha: 0.4, size: 0.35, size1: 1, speed: 20, up: 25, life: 650 })
+        if (Math.random() < 0.7) emit(q.x, q.y, { n: 1, color: [0xffd27a, 0xff7a2a], color1: 0x601000, size: 0.3, size1: 0.05, speed: 70, gravity: -40, life: 500, jitter: h * 0.15 })
+        if (p >= 1) {
+          if (!o.destroyed) o.destroy(GONE)
+          onLand?.()
+        }
+      })
+      light(A.x, A.y, 0xff8a3a, h * 0.8, dur, 1)
+    }
+    function fireballBlast(a, dir) {
+      const m = mid(a)
+      light(m.x, m.y, 0xfff0c0, a.h * 1.6, 240, 1.6)
+      fireExplosion(m.x, m.y, a.h * 0.8)
+      later(70, () => fireExplosion(m.x + dir * a.h * 0.3, m.y - a.h * 0.12, a.h * 0.5))
+      shockRing(m.x, m.y, a.h * 1.4, 0xffb04a)
+      ripple(a.x0, a.y0, a.h * 1.5, 0xff8a3a, { n: 2, dur: 650, gap: 90 })
+      flameColumn(a.x0, a.y0, a.h * 0.9, a.h * 1.1, 1000, { rate: 3 })
+      emit(m.x, m.y - a.h * 0.2, { n: 10, tex: "smoke", color: [0x3a2e2a, 0x4a3a32], alpha: 0.5, size: 0.7, size1: 2.2, speed: 60, up: a.h * 0.9, angle: -Math.PI / 2, spread: 1.2, drag: 0.5, life: 1700, jitter: a.h * 0.3 })
+      emit(m.x, m.y, { n: 18, color: [0xffd27a, 0xff7a2a], color1: 0x601000, size: 0.3, size1: 0.06, speed: a.h * 3, angle: -Math.PI / 2, spread: 2.6, gravity: a.h * 5, life: 900 })
+      zoomBlur(m.x, m.y, 220, 0.05)
+      shake = Math.max(shake, 0.9)
+    }
+
     const SKILL_FX = {
       fireball: {
         fly: (q, src) => {
@@ -9796,7 +9869,7 @@ void main(){
 
     const onEach = f => ({ all, src, color }) => all.forEach(a => f(a, src, color))
     const MAIN = {
-      fireball: onEach(a => fireExplosion(mid(a).x, mid(a).y, a.h * 0.55)),
+      fireball: onEach((a, src) => fireballBlast(a, src.dir)),
       smoke_burst: onEach(a => fireExplosion(mid(a).x, mid(a).y, a.h * 0.4)),
       flame_blast: onEach(a => {
         flameColumn(a.x0, a.y0, a.h * 0.8, a.h * 1.7, 950, { rate: 4 })
@@ -9825,6 +9898,16 @@ void main(){
     }
     for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
     SKILL_FX.natures_veil.pre = [450, ({ all }) => all.length && veil(span(all), all)]
+    SKILL_FX.fireball.charge = ({ src, from, until }) => (src.fireOrb = fireCharge(from, src.h, until))
+    SKILL_FX.fireball.release = ({ src, all, flight, from }) => {
+      const o = src.fireOrb || fireOrb(src.h)
+      src.fireOrb = null
+      const A = from()
+      light(A.x, A.y, 0xffb04a, src.h * 0.6, 260, 1.4)
+      emit(A.x, A.y, { n: 12, color: FIRE, color1: 0x5a0800, alpha: 0.6, size: 0.5 * K(src.h), size1: 0.1, speed: src.h * 2, angle: src.dir > 0 ? 0 : Math.PI, spread: 1.6, drag: 0.1, life: 300 })
+      all.forEach((a, k) => fireFlight(k ? fireOrb(src.h) : o, A, mid(a), flight, src.h))
+      if (!all.length && !o.destroyed) o.destroy(GONE)
+    }
     SKILL_FX.water_strike.release = ({ src, all, flight }) => {
       const from = (tipOf(src) || mid(src)).x
       all.forEach(a => waveCrash(a, src.dir, { from, travel: flight }))
@@ -9903,9 +9986,11 @@ void main(){
         }
         if (act?.ring != null) later(act.ring, () => ring(src, tcol))
         if (recipe?.pre) later(Math.max(0, at - recipe.pre[0]), () => recipe.pre[1]({ src, all: tgs.map(([a]) => a) }))
+        const shotFrom = () => (act.from === "ho" ? handOf(src, "ho") : act.from === "head" ? mouthOf(src) : tipOf(src)) || mid(src)
+        if (act?.shot != null && recipe?.charge) recipe.charge({ src, from: shotFrom, until: act.shot })
         if (act?.shot != null && recipe?.release) {
           const flight = Math.max(80, at - act.shot)
-          later(act.shot, () => recipe.release({ src, all: tgs.map(([a]) => a), flight }))
+          later(act.shot, () => recipe.release({ src, all: tgs.map(([a]) => a), flight, from: shotFrom }))
         } else if (act?.shot != null) {
           const flight = Math.max(80, at - act.shot)
           const kind = act.missile || "arrow"
