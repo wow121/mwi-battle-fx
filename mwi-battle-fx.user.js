@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.90
+// @version      0.21.91
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -11489,9 +11489,12 @@ void main(){
     // ----- AoE skills: ONE big painted effect over the whole row it hits (assets/fx/area_<skill>.webp: 8 frames, 2 across x
     // 4 down, each wider than tall, the ground line ~85 % down a frame), drawn additively outside the bloom layer and timed
     // so its climax lands with the blow; the per-unit flash, numbers and marks stay -----
-    const AREA = new Set(["natures_veil", "toxic_pollen", "firestorm", "flame_blast", "frost_surge", "mana_spring", "rain_of_arrows", "cleave", "crippling_slash", "sweep", "fracturing_impact"])
-    // (drawn the way they face: the art is painted for a hero striking to the right)
-    const AREA_TURN = new Set(["rain_of_arrows", "cleave", "crippling_slash", "sweep"])
+    // (分裂斩 keeps its own drawn crescent: the painted sheet, assets/fx/area_cleave, looked plainer)
+    const AREA = new Set(["natures_veil", "toxic_pollen", "firestorm", "flame_blast", "frost_surge", "mana_spring", "rain_of_arrows", "crippling_slash", "sweep", "fracturing_impact"])
+    // (drawn the way they face: the art is painted for a hero striking to the right, 箭雨's arrows falling to the left:
+    // mirrored for a hero, its arrows then falling the way the drawn volley's do)
+    const AREA_TURN = new Set(["rain_of_arrows", "crippling_slash", "sweep"])
+    const AREA_LEFT = new Set(["rain_of_arrows"])
     const AREA_DUR = 1500
     const AREA_LEAD = 560
     const areaLoad = {}
@@ -11519,7 +11522,8 @@ void main(){
       s.anchor.set(0.5, 0.85)
       s.position.set(S.cx, S.ground + S.h * 0.04)
       const k = w / fr[0].width
-      s.scale.set(AREA_TURN.has(key) && dir < 0 ? -k : k, k)
+      const flip = AREA_TURN.has(key) && (AREA_LEFT.has(key) ? dir > 0 : dir < 0)
+      s.scale.set(flip ? -k : k, k)
       s.blendMode = "add"
       s.alpha = 0.95
       smokeLayer.addChild(s)
@@ -12031,8 +12035,10 @@ void main(){
               // a long, dense volley: arrows keep landing from a little before the blow to a little after it
               for (let n = 0; n < 14; n++)
                 later(Math.max(0, flight - 140 - n * 35), () => {
-                  // every other arrow into the ground round the foe's feet, where it stays standing
+                  // every other arrow into the ground round the foe's feet, where it stays standing (with the painted
+                  // area volley playing, only those: the rest of the rain is in the painting)
                   const ground = n % 2 === 0
+                  if (areaOn && !ground) return
                   const x = a.x0 + (Math.random() - 0.5) * a.h * (ground ? 1.3 : 0.6)
                   const y = ground ? a.y0 + (Math.random() - 0.3) * a.h * 0.12 : a.y0 - a.h * (0.15 + Math.random() * 0.45)
                   shoot(kind, { x: x - src.dir * a.h * 0.5, y: y - a.h * 2.4 }, { x, y }, 260, {
