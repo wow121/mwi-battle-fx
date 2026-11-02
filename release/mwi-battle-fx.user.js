@@ -30,7 +30,7 @@
   const DEV = false
   const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false, quality: 0, shakeK: 1, camZoom: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
-  const ASSET_REV = "411bf7c2ab"
+  const ASSET_REV = "af2f95939e"
   const SPIKES_LEFT = /spiked_bulwark/
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [

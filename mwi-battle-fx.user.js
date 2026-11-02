@@ -38,7 +38,7 @@
   // jsDelivr's @main can lag for hours; the manifest (which pins the art commit) comes from GitHub first
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
-  const ASSET_REV = "411bf7c2ab"
+  const ASSET_REV = "af2f95939e"
   // the spiked bulwark's icon and drawn piece point their spikes left, back at the holder (heroes face right): both
   // stages mirror it
   const SPIKES_LEFT = /spiked_bulwark/
