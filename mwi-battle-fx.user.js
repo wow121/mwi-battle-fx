@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.86
+// @version      0.21.87
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -10028,57 +10028,6 @@ void main(){
         }
       })
     }
-    // a veil: a sheet of green light let down over a row (S: its span), glowing threads swaying in it, spores drifting
-    // down through it, little mushrooms springing up at the foes' feet; then it lifts and fades, the spores lingering
-    function veil(S, feet, dur = 1700) {
-      const g = new P.Graphics()
-      fxLayer.addChild(g)
-      const caps = new P.Graphics()
-      smokeLayer.addChild(caps)
-      const top = S.ground - S.h * 2
-      const L = S.cx - S.w * 0.6
-      const R = S.cx + S.w * 0.6
-      const threads = Array.from({ length: 14 }, () => ({ u: Math.random(), ph: Math.random() * 6, len: 0.6 + Math.random() * 0.4 }))
-      const shrooms = feet.flatMap(a => Array.from({ length: 5 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.07), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xb46cff : 0xff6fc8 })))
-      light(S.cx, S.ground - S.h * 0.8, 0xb46cff, S.w * 0.6, dur, 0.9)
-      tween(dur, p => {
-        g.clear()
-        caps.clear()
-        const t = p * dur
-        // let down over 450 ms, hangs, lifts away over the last 30 %
-        const down = 1 - Math.pow(1 - Math.min(1, t / 450), 3)
-        const lift = p > 0.7 ? (p - 0.7) / 0.3 : 0
-        const bottom = top + (S.ground - S.h * 0.05 - top) * down - lift * S.h * 0.6
-        const al = 1 - lift
-        const pts = [L, top, R, top]
-        for (let i = 0; i <= 16; i++) {
-          const x = R - (R - L) * (i / 16)
-          pts.push(x, bottom - S.h * 0.08 * (1 + Math.sin(i * 1.3 + t * 0.006)))
-        }
-        g.poly(pts).fill({ color: 0x7a3ac8, alpha: 0.22 * al })
-        for (const th of threads) {
-          const x = L + (R - L) * th.u
-          const sway = Math.sin(t * 0.004 + th.ph) * S.h * 0.06
-          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xe6c2ff, width: 2, alpha: 0.55 * al })
-        }
-        // mushrooms: a stem and a round cap with pale spots, popping up and shrinking away at the end
-        for (const m of shrooms) {
-          const k = Math.min(1, Math.max(0, (p - m.t) / 0.1)) * (p > 0.85 ? (1 - p) / 0.15 : 1)
-          if (k <= 0) continue
-          const sz = m.s * k
-          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xeadcf5)
-          caps.ellipse(m.x, m.y - sz * 1.1, sz * 0.75, sz * 0.5).fill(m.c)
-          caps.ellipse(m.x, m.y - sz * 1.1, sz * 1.1, sz * 0.8).fill({ color: m.c, alpha: 0.18 })
-          caps.circle(m.x - sz * 0.25, m.y - sz * 1.25, sz * 0.12).fill(0xffffff)
-          caps.circle(m.x + sz * 0.2, m.y - sz * 1.15, sz * 0.09).fill(0xffffff)
-        }
-        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
-        if (p >= 1) {
-          g.destroy()
-          caps.destroy()
-        }
-      })
-    }
     // a soft column of light standing on the ground (heals, buffs, revivals, under a geyser)
     function pillar(x, y, w, h, color, dur, peak = 1) {
       const s = new P.Sprite(pillarTex)
@@ -11274,6 +11223,157 @@ void main(){
       emit(m.x, m.y, { n: 6, tex: "smoke", color: [0x3a0a2a, 0x4a1040], alpha: 0.5, size: 0.5, size1: 1.4, speed: 30, up: 50, drag: 0.5, life: 1200, jitter: a.h * 0.3 })
     }
 
+    // 剧毒粉尘: a stream of spores blown off the staff's head across to the row (travel ms)
+    function sporeStream(from, S, travel) {
+      const A = from()
+      if (!A) return
+      const B = { x: S.cx, y: S.ground - S.h * 0.45 }
+      tween(travel, p => {
+        if (p >= 1) return
+        const x = lerp(A.x, B.x, p)
+        const y = lerp(A.y, B.y, p) - Math.sin(p * Math.PI) * S.h * 0.25
+        const w = S.h * (0.1 + 0.5 * p)
+        emit(x, y, { n: 3, color: TOXIC, alpha: 0.85, size: 0.35, size1: 0.12, speed: 40, life: 650, jitter: w })
+        if (Math.random() < 0.5) emit(x, y, { n: 1, tex: "smoke", color: [0x5a2a8a, 0x6a2aa8], alpha: 0.45, size: 0.3, size1: 0.9, speed: 20, life: 700, jitter: w })
+      })
+    }
+    // 剧毒粉尘's cloud: a mass of soft violet puffs (smoke sprites) swelling up over the row, rolling and rising, glowing
+    // sickly green motes in it, thinning away (over the bodies, see-through)
+    function poisonCloud(S, dur) {
+      const n = Math.max(7, Math.round(S.w / (S.h * 0.28)))
+      const puffs = []
+      for (let k = 0; k < n * 2; k++) {
+        const s = new P.Sprite(smokeTex)
+        s.anchor.set(0.5)
+        s.tint = k % 2 ? 0x4a1a78 : 0x7a36c0
+        s.rotation = Math.random() * 6.3
+        s.alpha = 0
+        smokeLayer.addChild(s)
+        puffs.push({ s, u: Math.random() - 0.5, v: Math.random(), r: S.h * (0.55 + Math.random() * 0.4), t: Math.random() * 0.2, ph: Math.random() * 6, spin: (Math.random() - 0.5) * 0.6, a: k % 2 ? 0.5 : 0.42 })
+      }
+      tween(dur, p => {
+        const t = p * dur
+        const out = p > 0.6 ? (p - 0.6) / 0.4 : 0
+        for (const q of puffs) {
+          if (q.s.destroyed) continue
+          const e = Math.min(1, Math.max(0, (p - q.t) / 0.25))
+          const grow = 1 - Math.pow(1 - e, 3)
+          q.s.position.set(S.cx + q.u * S.w * 0.9 + Math.sin(t * 0.002 + q.ph) * S.h * 0.1, S.ground - S.h * (0.2 + q.v * 0.6) - out * S.h * 0.5 - grow * S.h * 0.12)
+          q.s.scale.set(((q.r * (0.3 + 0.7 * grow) * (1 + 0.3 * out)) / 96) * 2)
+          q.s.rotation += q.spin * 0.016
+          q.s.alpha = q.a * grow * (1 - out)
+          if (p >= 1) q.s.destroy()
+        }
+        if (p < 0.8 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w * 0.9, S.ground - Math.random() * S.h * 0.9, { n: 2, color: [0xb6ff5a, 0x9be15d, 0xd8a8ff], size: 0.4, size1: 0.05, speed: 10, up: 30, life: 900, fadeIn: 0.3 })
+      })
+    }
+    // 自然菌幕: a great glowing mushroom bursting up out of the ground behind the foe, its cap puffing a cloud of spores
+    // at puff ms that rains down on it, glowing threads of fungus spread over the ground round its foot
+    function bigMushroom(a, side, puff, dur = 1900) {
+      const back = new P.Graphics()
+      const glowG = new P.Graphics()
+      decalLayer.addChild(back)
+      fxLayer.addChild(glowG)
+      const x = a.x0 + side * a.h * 0.28
+      const y = a.y0 - a.h * 0.02
+      const H = a.h * (1.05 + Math.random() * 0.15)
+      const W = a.h * 0.62
+      const col = Math.random() < 0.5 ? 0x9a4ae0 : 0xc84aa8
+      const spots = Array.from({ length: 6 }, () => ({ u: (Math.random() - 0.5) * 1.4, v: 0.2 + Math.random() * 0.5, r: 0.06 + Math.random() * 0.06 }))
+      const threads = Array.from({ length: 9 }, (_, k) => ({ an: (k / 9) * Math.PI * 2 + Math.random() * 0.4, len: a.h * (0.4 + Math.random() * 0.5), bend: (Math.random() - 0.5) * 0.6 }))
+      let puffed = false
+      tween(dur, p => {
+        back.clear()
+        glowG.clear()
+        const t = p * dur
+        // shoots up with an overshoot, a squash when it puffs, sinks back into the ground at the end
+        const up = Math.min(1, t / (puff * 0.7))
+        let k = up < 1 ? 1 + 2.7 * Math.pow(up - 1, 3) + 1.7 * Math.pow(up - 1, 2) : 1
+        const sq = t > puff && t < puff + 260 ? Math.sin(((t - puff) / 260) * Math.PI) * 0.12 : 0
+        if (p > 0.8) k *= 1 - (p - 0.8) / 0.2
+        if (k <= 0.01) return p >= 1 && (back.destroy(), glowG.destroy())
+        const h = H * k * (1 - sq)
+        const w = W * Math.min(1, k * 1.2) * (1 + sq)
+        // glowing fungus threads on the ground
+        const spread = Math.min(1, t / (puff * 1.2))
+        for (const th of threads) {
+          const ex = Math.cos(th.an) * th.len * spread
+          const ey = Math.sin(th.an) * th.len * spread * 0.22
+          glowG.moveTo(x, y).quadraticCurveTo(x + ex * 0.5 + th.bend * ey * 4, y + ey * 0.5, x + ex, y + ey).stroke({ color: 0xc77dff, width: a.h * 0.018, alpha: 0.7 * (p > 0.8 ? (1 - p) / 0.2 : 1) })
+        }
+        // stem: tapering, pale lilac with a darker side
+        const sw = w * 0.22
+        back.moveTo(x - sw, y).bezierCurveTo(x - sw * 0.7, y - h * 0.4, x - sw * 0.9, y - h * 0.7, x - sw * 0.6, y - h * 0.82).lineTo(x + sw * 0.6, y - h * 0.82).bezierCurveTo(x + sw * 0.9, y - h * 0.7, x + sw * 0.7, y - h * 0.4, x + sw, y).closePath().fill(0xe8daf5)
+        back.moveTo(x + sw * 0.2, y).bezierCurveTo(x + sw * 0.4, y - h * 0.4, x + sw * 0.5, y - h * 0.7, x + sw * 0.4, y - h * 0.82).lineTo(x + sw * 0.6, y - h * 0.82).bezierCurveTo(x + sw * 0.9, y - h * 0.7, x + sw * 0.7, y - h * 0.4, x + sw, y).closePath().fill({ color: 0x9a80b8, alpha: 0.6 })
+        // cap: a dome, gills under it, pale glowing spots
+        const cy = y - h * 0.8
+        back.ellipse(x, cy + w * 0.04, w * 0.95, w * 0.16).fill(0x5a2a78)
+        back.moveTo(x - w, cy).bezierCurveTo(x - w, cy - w * 0.95, x + w, cy - w * 0.95, x + w, cy).bezierCurveTo(x + w * 0.5, cy + w * 0.12, x - w * 0.5, cy + w * 0.12, x - w, cy).closePath().fill(col)
+        back.moveTo(x - w * 0.8, cy - w * 0.2).bezierCurveTo(x - w * 0.7, cy - w * 0.75, x + w * 0.1, cy - w * 0.8, x + w * 0.3, cy - w * 0.7).stroke({ color: 0xffffff, width: w * 0.06, alpha: 0.35, cap: "round" })
+        for (const sp of spots) {
+          const sx = x + sp.u * w * 0.7
+          const sy = cy - w * sp.v * (1 - Math.abs(sp.u) * 0.4)
+          back.circle(sx, sy, w * sp.r).fill(0xf6e8ff)
+          glowG.circle(sx, sy, w * sp.r * 2.2).fill({ color: 0xd8a8ff, alpha: 0.35 })
+        }
+        glowG.ellipse(x, cy - w * 0.35, w * 1.2, w * 0.7).fill({ color: col, alpha: 0.12 })
+        if (!puffed && t >= puff) {
+          puffed = true
+          light(x, cy - w * 0.4, 0xc77dff, a.h * 1.4, 700, 1.3)
+          emit(x, cy - w * 0.5, { n: 40, color: [0xe6c2ff, 0xff9ad8, 0xb46cff, 0xffffff], size: 0.38, size1: 0.1, speed: a.h * 2.6, angle: -Math.PI / 2, spread: 2.6, drag: 0.25, gravity: a.h * 1.2, life: 1500 })
+          emit(x, cy - w * 0.5, { n: 10, tex: "smoke", color: [0x8a4ac0, 0xb070d8], alpha: 0.45, size: 0.6, size1: 1.8, speed: a.h * 1.2, angle: -Math.PI / 2, spread: 2.4, drag: 0.4, life: 1400 })
+        }
+        if (p >= 1) {
+          back.destroy()
+          glowG.destroy()
+        }
+      })
+    }
+    // 生命吸取: a crimson tether whipping out of the foe into the caster, swelling as it pulls, blood-red beads running
+    // along it to the caster, who glows as they arrive
+    function drainTether(a, src, dur = 900) {
+      const g = new P.Graphics()
+      fxLayer.addChild(g)
+      const beads = Array.from({ length: 6 }, (_, k) => ({ t0: 0.15 + k * 0.09 }))
+      const ph = Math.random() * 6
+      tween(dur, p => {
+        g.clear()
+        if (p >= 1) return g.destroy()
+        const A = mid(a)
+        const B = mid(src)
+        const t = p * dur
+        const reach = Math.min(1, p / 0.18)
+        const fade = p > 0.8 ? (1 - p) / 0.2 : 1
+        const dx = B.x - A.x
+        const pt = u => ({ x: A.x + dx * u, y: A.y + (B.y - A.y) * u - Math.sin(u * Math.PI) * a.h * 0.35 + Math.sin(u * 9 + t * 0.02 + ph) * a.h * 0.05 * Math.sin(u * Math.PI) })
+        const N = 24
+        const end = Math.max(1, Math.round(N * reach))
+        const wd = a.h * (0.05 + 0.03 * Math.sin(t * 0.03))
+        for (const [color, w, al] of [[0x5a0420, 4, 0.45], [0xc8306e, 2, 0.85], [0xffc0d8, 0.6, 0.95]]) {
+          const q0 = pt(0)
+          g.moveTo(q0.x, q0.y)
+          for (let i = 1; i <= end; i++) {
+            const q = pt(i / N)
+            g.lineTo(q.x, q.y)
+          }
+          g.stroke({ color, width: wd * w, alpha: al * fade, cap: "round", join: "round" })
+        }
+        for (const b of beads) {
+          const u = (p - b.t0) / 0.45
+          if (u <= 0 || u >= 1) continue
+          const q = pt(u)
+          g.circle(q.x, q.y, a.h * 0.07).fill({ color: 0xff4a7a, alpha: fade })
+          g.circle(q.x, q.y, a.h * 0.02).fill({ color: 0xffffff, alpha: fade })
+          if (u > 0.92) {
+            light(B.x, B.y, 0xff3a6a, src.h * 0.6, 300, 1.1)
+            emit(B.x, B.y, { n: 4, color: [0xff4a7a, 0xffc0d8], size: 0.3, size1: 0.05, speed: 90, life: 380 })
+          }
+        }
+      })
+      // a crimson seal turning flat under the foe while it is drained
+      ripple(a.x0, a.y0, a.h * 1.1, 0xc8306e, { n: 3, dur: 700, gap: 200 })
+    }
+
     const SKILL_FX = {
       // 火球: swells at the staff's head, hurled trailing flames like a comet; it bursts in flame, scorching the
       // ground and heating the air
@@ -11346,14 +11446,15 @@ void main(){
         }),
       },
       // 生命吸取: green motes and leaves torn off the foe (the stream back is the action's drain)
-      life_drain: { hit: each(a => drainWisps(a)) },
+      life_drain: { hit: each((a, src) => (drainWisps(a), drainTether(a, src, 1000))) },
       // 剧毒粉尘: a green-yellow cloud of spores hangs over the row, poison bubbles rising
       toxic_pollen: {
         hit: ({ tgs }) => {
           if (!tgs.length) return
           const S = spanOf(tgs)
-          // a violet poison fog rolling low over the row, sickly green motes drifting in it
-          cloud(S.cx, S.ground - S.h * 0.15, S.w, S.h * 0.6, 1800, [0x4a1a78, 0x6a2aa8, 0x5a2a6a], 0.7)
+          // a billowing violet poison cloud swelling over the row, sickly green motes drifting in it
+          poisonCloud(S, 2000)
+          zoomBlur(S.cx, S.ground - S.h * 0.5, 220, 0.04)
           tween(1600, p => p < 1 && Math.random() < 0.6 && emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.6, { n: 1, color: TOXIC, size: 0.3, size1: 0.06, speed: 15, up: 40, gravity: -20, life: 1200, fadeIn: 0.3 }))
           light(S.cx, S.ground - S.h * 0.4, 0x8a3fd8, S.w * 0.5, 1600, 0.9)
           tgs.forEach(([a]) => {
@@ -11364,7 +11465,7 @@ void main(){
           })
         },
       },
-      // 自然菌幕: each foe dimmed green under the veil, a puff of spores off it
+      // 自然菌幕: each foe flushed violet under the spores, a puff off it
       natures_veil: {
         hit: each(a => {
           flash(a, 0xc77dff, 700)
@@ -11580,7 +11681,10 @@ void main(){
     }
     for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
     // skills whose body comes first (pre: [ms before the blow, draw]): 自然菌幕's veil is let down as the blow lands
-    SKILL_FX.natures_veil.pre = [450, ({ all }) => all.length && veil(span(all), all)]
+    // 自然菌幕: the mushrooms come up under the foes before the blow and puff their spores on it
+    SKILL_FX.natures_veil.pre = [450, ({ src, all }) => all.forEach(a => bigMushroom(a, src.dir, 450))]
+    // 剧毒粉尘: the spores blown across from the staff land with the blow
+    SKILL_FX.toxic_pollen.pre = [380, ({ src, all }) => all.length && sporeStream(() => tipOf(src) || mid(src), span(all), 380)]
     // skills whose body travels to the foe itself (release: at the shot, flight = ms to the blow): no missile
     // 火球: the ball swells at the staff's head until the throw (charge: from the action's start), then flies itself
     SKILL_FX.fireball.charge = ({ src, from, until }) => (src.fireOrb = fireCharge(from, src.h, until))
