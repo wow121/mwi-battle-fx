@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.89
+// @version      0.21.90
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8819,6 +8819,8 @@ void main(){
       }
       for (const side of ["p", "m"]) source.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
       layout()
+      // the AoE art comes in the background once the stage is up (1.5 MB)
+      later(1500, () => AREA.forEach(loadArea))
       // every unit loads at once, each put up as soon as its art is in (one after another, a full fight's first showing
       // was some 90 round trips to the CDN in a row)
       await Promise.all(
@@ -11484,6 +11486,50 @@ void main(){
       ripple(a.x0, a.y0, a.h * 1.1, 0xc8306e, { n: 3, dur: 700, gap: 200 })
     }
 
+    // ----- AoE skills: ONE big painted effect over the whole row it hits (assets/fx/area_<skill>.webp: 8 frames, 2 across x
+    // 4 down, each wider than tall, the ground line ~85 % down a frame), drawn additively outside the bloom layer and timed
+    // so its climax lands with the blow; the per-unit flash, numbers and marks stay -----
+    const AREA = new Set(["natures_veil", "toxic_pollen", "firestorm", "flame_blast", "frost_surge", "mana_spring", "rain_of_arrows", "cleave", "crippling_slash", "sweep", "fracturing_impact"])
+    // (drawn the way they face: the art is painted for a hero striking to the right)
+    const AREA_TURN = new Set(["rain_of_arrows", "cleave", "crippling_slash", "sweep"])
+    const AREA_DUR = 1500
+    const AREA_LEAD = 560
+    const areaLoad = {}
+    const areaFrames = {}
+    function loadArea(key) {
+      const n = "area_" + key
+      if (!AREA.has(key) || !Assets.has("fx", n)) return
+      areaLoad[key] ||= loadMip(Assets.url(`fx/${n}.webp`))
+        .then(t => {
+          const fw = t.width / 2
+          const fh = t.height / 4
+          areaFrames[key] = Array.from({ length: 8 }, (_, k) => new P.Texture({ source: t.source, frame: new P.Rectangle((k % 2) * fw, Math.floor(k / 2) * fh, fw, fh) }))
+        })
+        .catch(e => {
+          delete areaLoad[key]
+          console.warn("[战斗动画] area", key, e)
+        })
+    }
+    function areaFx(key, list, dir) {
+      const fr = areaFrames[key]
+      if (!fr || !list.length) return
+      const S = span(list)
+      const w = S.w * 1.05
+      const s = new P.Sprite(fr[0])
+      s.anchor.set(0.5, 0.85)
+      s.position.set(S.cx, S.ground + S.h * 0.04)
+      const k = w / fr[0].width
+      s.scale.set(AREA_TURN.has(key) && dir < 0 ? -k : k, k)
+      s.blendMode = "add"
+      s.alpha = 0.95
+      smokeLayer.addChild(s)
+      tween(AREA_DUR, p => {
+        if (s.destroyed) return
+        s.texture = fr[Math.min(7, Math.floor(p * 8))]
+        if (p >= 1) s.destroy()
+      })
+    }
+
     const SKILL_FX = {
       // 火球: swells at the staff's head, hurled trailing flames like a comet; it bursts in flame, scorching the
       // ground and heating the air
@@ -11502,12 +11548,12 @@ void main(){
       firestorm: { hit: blaze },
       // 分裂斩: a crescent of light flung through the whole line; time slows on the blow, the camera leans in
       cleave: {
-        hit: ({ src, tgs, color }) => {
+        hit: ({ src, tgs, color, area }) => {
           if (!tgs.length) return
           const list = tgs.map(([a]) => a)
           const far = list.reduce((b, a) => (Math.abs(a.x0 - src.x0) > Math.abs(b.x0 - src.x0) ? a : b))
           const from = mid(src)
-          crescent(from, src.dir, color, src.h * 1.3, Math.abs(far.x0 - from.x) + far.h * 0.8, 380)
+          if (!area) crescent(from, src.dir, color, src.h * 1.3, Math.abs(far.x0 - from.x) + far.h * 0.8, 380)
           const m = mid(list[0])
           slow(240, 0.22)
           focusOn(m.x, m.y, 0.1, 700)
@@ -11559,11 +11605,11 @@ void main(){
       life_drain: { hit: each((a, src) => (drainWisps(a), drainTether(a, src, 1000))) },
       // 剧毒粉尘: a green-yellow cloud of spores hangs over the row, poison bubbles rising
       toxic_pollen: {
-        hit: ({ tgs }) => {
+        hit: ({ tgs, area }) => {
           if (!tgs.length) return
           const S = spanOf(tgs)
-          // a billowing violet poison cloud swelling over the row, sickly green motes drifting in it
-          poisonCloud(S, 2000)
+          // a billowing violet poison cloud swelling over the row (unless its painted area art plays), sickly green motes
+          if (!area) poisonCloud(S, 2000)
           zoomBlur(S.cx, S.ground - S.h * 0.5, 220, 0.04)
           tween(1600, p => p < 1 && Math.random() < 0.6 && emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.6, { n: 1, color: TOXIC, size: 0.3, size1: 0.06, speed: 15, up: 40, gravity: -20, life: 1200, fadeIn: 0.3 }))
           light(S.cx, S.ground - S.h * 0.4, 0x8a3fd8, S.w * 0.5, 1600, 0.9)
@@ -11798,9 +11844,8 @@ void main(){
     // skills whose body comes first (pre: [ms before the blow, draw]): 自然菌幕's veil is let down as the blow lands
     // 自然菌幕: the aurora is let down over the foes before the blow
     // (the sheet asked for as the cast starts, in time for the blow)
-    SKILL_FX.natures_veil.pre = [5000, () => loadVeilSheet()]
+    SKILL_FX.natures_veil.pre = [5000, () => Assets.has("fx", "area_natures_veil") || loadVeilSheet()]
     SKILL_FX.natures_veil.charge = ({ src, from, until }) => {
-      loadVeilSheet()
       const o = (src.pod = sporePod(src.h))
       tween(until, p => {
         const T = from()
@@ -11911,6 +11956,10 @@ void main(){
         // a relic in the off hand flares as the blow lands
         if (src.off === "relic") later(act?.hit ?? 300, () => relicGlow(src))
         const at = act?.hit ?? 300
+        // an AoE skill with its painted area art loaded: one big effect over the row (its own drawn body is left out)
+        if (isSkill) loadArea(e.ab.key)
+        const areaOn = isSkill && !!areaFrames[e.ab.key] && tgs.length > 0
+        if (areaOn) later(Math.max(0, at - AREA_LEAD), () => areaFx(e.ab.key, tgs.map(([a]) => a), src.dir))
         // earlier blows of a multi-blow action (hits: [ms, …]): a slash and a flinch, the damage lands at hit
         for (const t of act?.hits || [])
           if (t < at)
@@ -12014,8 +12063,8 @@ void main(){
         }
         later(at, () => {
           // the skill's own body, drawn on every foe it was cast at (then the hits leave out their plain bursts)
-          const shown = !!recipe?.main
-          if (shown) recipe.main({ src, all: tgs.map(([a]) => a), color: tcol })
+          const shown = !!recipe?.main || areaOn
+          if (recipe?.main && !areaOn) recipe.main({ src, all: tgs.map(([a]) => a), color: tcol })
           tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
           if (isSpear(src) && act?.shot == null) spearBlow(src, tgs.filter(([, tg]) => tg.dHP), isSkill ? tcol : SPEAR_COL, isSkill, name)
           // a skill's blow: light rays and white-hot sparks out of each foe it lands on, dust and a crack under a smash
@@ -12030,7 +12079,7 @@ void main(){
                 decal("crack", a.x0, a.y0, a.h * 0.7)
               }
             })
-          recipe?.hit?.({ src, tgs: tgs.filter(([, tg]) => tg.dHP), color: tcol })
+          recipe?.hit?.({ src, tgs: tgs.filter(([, tg]) => tg.dHP), color: tcol, area: areaOn })
           // a skill's blow freezes both sides for a moment and punches the camera in
           if (isSkill && !many) {
             for (const u of [src, ...tgs.map(([a]) => a)]) if (u.act) u.act.t0 += 90
