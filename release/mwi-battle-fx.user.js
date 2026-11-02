@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.83
+// @version      0.21.84
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -28,7 +28,7 @@
   const W = typeof unsafeWindow !== "undefined" ? unsafeWindow : window
 
   const DEV = false
-  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false, quality: 0 }
+  const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false, quality: 0, shakeK: 1, camZoom: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   const ASSET_REV = "b03844432a"
   const SPIKES_LEFT = /spiked_bulwark/
@@ -1934,6 +1934,8 @@
       )
     }
     function shake(amp = 5, dur = 260) {
+      amp *= cfg.shakeK
+      if (!amp) return
       worldEl.animate(
         [0, 1, 2, 3, 4, 5].map(k => ({ transform: k === 5 ? "none" : `translate(${(Math.random() - 0.5) * amp * 2}px,${(Math.random() - 0.5) * amp}px) scale(1.03)` })),
         { duration: dur },
@@ -5453,6 +5455,8 @@
       return b
     }
     function shake(px, ms) {
+      px *= cfg.shakeK
+      if (!px) return
       el.querySelector(".bfxl-view").animate(
         [0, 1, 2, 3, 4, 5].map(i => ({ transform: i === 5 ? "none" : `translate(${(i % 2 ? -1 : 1) * px * (1 - i / 5)}px,${(i % 3 - 1) * px * 0.6}px)` })),
         { duration: ms },
@@ -7380,6 +7384,7 @@ void main(){
     function close(view) {
       if (view && host !== view) return
       host = null
+      clearTimeout(resumeAt)
       if (!app) return
       app.ticker.stop()
       app.canvas.remove()
@@ -8819,7 +8824,7 @@ void main(){
       slowK = k
     }
     function focusOn(x, y, amt, ms) {
-      if (many) return
+      if (many || !cfg.camZoom) return
       focus = { x, y, amt, t0: now(), until: now() + ms }
     }
     function haze(x, y, w, h, dur, amp = 7) {
@@ -8848,7 +8853,7 @@ void main(){
       })
     }
     function zoomBlur(x, y, dur, strength = 0.05) {
-      if (!F.ZoomBlurFilter || perf.level >= 2) return
+      if (!F.ZoomBlurFilter || perf.level >= 2 || !cfg.camZoom) return
       const f = new F.ZoomBlurFilter({ strength, center: { x, y }, innerRadius: 90, resolution: "inherit" })
       worldFx.add(f)
       setWorldFx()
@@ -8974,6 +8979,7 @@ void main(){
     function crit(a) {
       if (many || perf.level >= 2) return
       shake = Math.max(shake, 1)
+      if (!cfg.camZoom) return
       punch = 1
       const f = new F.ShockwaveFilter({ center: { x: a.x0, y: a.y0 - a.h * 0.4 }, amplitude: 14, wavelength: 110, speed: 560, brightness: 1.05, radius: a.h * 2.4, resolution: "inherit" })
       if (shock) worldFx.delete(shock.f), shock.f.destroy()
@@ -10074,7 +10080,20 @@ void main(){
       }
     }
 
+    let resumeAt = 0
+    function waitShown() {
+      clearTimeout(resumeAt)
+      resumeAt = setTimeout(() => {
+        if (!app || !host?.isConnected) return
+        if (onScreen()) app.ticker.start()
+        else waitShown()
+      }, 400)
+    }
     function frame() {
+      if (!onScreen()) {
+        app.ticker.stop()
+        return waitShown()
+      }
       try {
         frameBody()
       } catch (e) {
@@ -10220,11 +10239,11 @@ void main(){
       const W2 = app.screen.width
       const H = app.screen.height
       const fz = focus && t < focus.until ? focus.amt * Math.sin(Math.PI * Math.min(1, (t - focus.t0) / (focus.until - focus.t0))) : 0
-      const z = 1 + 0.05 * punch + fz
+      const z = cfg.camZoom ? 1 + 0.05 * punch + fz : 1
       const fx = fz ? focus.x : W2 / 2
       const fy = fz ? focus.y : H / 2
       world.scale.set(z)
-      world.position.set(fx - fx * z + (Math.random() - 0.5) * 14 * shake, fy - fy * z + (Math.random() - 0.5) * 10 * shake)
+      world.position.set(fx - fx * z + (Math.random() - 0.5) * 14 * shake * cfg.shakeK, fy - fy * z + (Math.random() - 0.5) * 10 * shake * cfg.shakeK)
       if (shock) {
         const age = (t - shock.t0) / 1000
         shock.f.time = age
@@ -10327,6 +10346,14 @@ void main(){
           menuSoon()
         }),
       ),
+      GM_registerMenuCommand(L(`屏幕震动：${Math.round(cfg.shakeK * 100)}%（点击调整）`, `Screen shake: ${Math.round(cfg.shakeK * 100)}% (click to change)`), () =>
+        askNumber(L("屏幕震动强度（100% = 原样，0% = 关闭）", "Screen shake (100% = as is, 0% = off)"), Math.round(cfg.shakeK * 100), 0, 200, 10, v => v + "%", v => {
+          cfg.shakeK = v / 100
+          saveCfg()
+          menuSoon()
+        }),
+      ),
+      toggle("camZoom", L("镜头拉近（技能聚焦 / 重击冲击 / 径向模糊）", "Camera zoom (skill focus / heavy-hit punch / radial blur)")),
       GM_registerMenuCommand(L(`动画大小：${cfg.scale}`, `Animation size: ${cfg.scale}`), () =>
         askNumber(L("动画大小倍率", "Animation size"), cfg.scale, 0.5, 2, 0.05, v => v.toFixed(2) + "×", v => {
           cfg.scale = Math.round(v * 100) / 100
