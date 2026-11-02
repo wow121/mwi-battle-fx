@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.87
+// @version      0.21.88
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -302,6 +302,9 @@
         // time it began is kept; an update for the unit without the flag, or its death, ends it.
         if (e.isStunned && !c.died) u.stunned ||= Date.now()
         else u.stunned = 0
+        // blinded (自然菌幕's chance): flagged the same way
+        if (e.isBlinded && !c.died) u.blinded ||= Date.now()
+        else u.blinded = 0
         // abilityHrid / isAutoAtk describe the NEXT action
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
         if (TANK_ABILITIES.has(shortId(e.abilityHrid))) u.tank = true
@@ -6386,6 +6389,7 @@
   const MONSTER_SKILLS = {"abyssal_imp":["quick_aid","firestorm","fireball"],"acrobat":["speed_aura","elusiveness","precision","smack","stunning_blow"],"alligator":["scratch"],"anchor_shark":["invincible","toughness","berserk","stunning_blow","shield_bash"],"aquahorse":["aqua_arrow"],"black_bear":["frenzy"],"brine_marksman":["critical_aura","rain_of_arrows","aqua_arrow","penetrating_shot","quick_shot"],"butterjerry":["fierce_aura","frenzy","poke","impale"],"captain_fishhook":["fierce_aura","frenzy","cleave","maim","fracturing_impact"],"centaur_archer":["elusiveness","rain_of_arrows","quick_shot"],"chronofrost_sorcerer":["mystic_aura","heal","elemental_affinity","frost_surge","ice_spear"],"crab":["smack"],"crystal_colossus":["invincible","toughness","spike_shell","puncture","impale"],"cyclops":["guardian_aura","toughness","sweep","stunning_blow","fracturing_impact"],"demonic_overlord":["mystic_aura","toughness","firestorm","flame_blast","fireball"],"deranged_jester":["insanity","vampirism","smoke_burst","sweep","stunning_blow"],"dodocamel":["invincible","toughness","berserk","sweep","shield_bash"],"dryad":["guardian_aura","toxic_pollen","natures_veil","life_drain","entangle"],"dusk_revenant":["critical_aura","vampirism","steady_shot","silencing_shot","rain_of_arrows"],"elementalist":["revive","elemental_affinity","ice_spear","flame_blast"],"enchanted_bishop":["revive","retribution","rejuvenate","heal","natures_veil"],"enchanted_king":["invincible","toughness","elusiveness","crippling_slash","cleave"],"enchanted_knight":["fierce_aura","toughness","frenzy","crippling_slash","maim"],"enchanted_pawn":["promote","elusiveness","precision","stunning_blow"],"enchanted_queen":["speed_aura","toxic_pollen","mana_spring","flame_blast","water_strike"],"enchanted_rook":["critical_aura","precision","rain_of_arrows","silencing_shot","penetrating_shot"],"eye":["precision"],"eyes":["precision"],"flame_sorcerer":["flame_blast","fireball"],"frog":["smack"],"frost_sniper":["critical_aura","silencing_shot","rain_of_arrows","aqua_arrow","quick_shot"],"giant_mantis":["fierce_aura","precision","cleave","maim","crippling_slash"],"giant_scorpion":["fierce_aura","berserk","impale","puncture","penetrating_strike"],"giant_shoebill":["speed_aura","elusiveness","sweep","smack"],"gobo_boomy":["revive","fireball"],"gobo_chieftain":["fierce_aura","berserk","puncture","impale","poke"],"gobo_shooty":["flame_arrow"],"gobo_slashy":["cleave"],"gobo_smashy":["berserk"],"gobo_stabby":["impale"],"granite_golem":["invincible","provoke","stunning_blow","sweep"],"griffin":["fierce_aura","berserk","frenzy","rain_of_arrows","crippling_slash"],"grizzly_bear":["frenzy"],"gummy_bear":["frenzy"],"ice_sorcerer":["ice_spear","water_strike"],"infernal_warlock":["mystic_aura","firestorm","flame_blast"],"jackalope":["guardian_aura","heal","natures_veil","entangle"],"juggler":["critical_aura","precision","frenzy","pestilent_shot","steady_shot"],"jungle_sprite":["rejuvenate","heal","entangle"],"luna_empress":["guardian_aura","rejuvenate","elusiveness","natures_veil","toxic_pollen"],"magician":["mystic_aura","elemental_affinity","rejuvenate","firestorm","fireball"],"magnetic_golem":["stunning_blow"],"manticore":["critical_aura","precision","pestilent_shot","steady_shot","rain_of_arrows"],"marine_huntress":["mystic_aura","silencing_shot","aqua_arrow","rain_of_arrows"],"mimic":["speed_aura","frenzy","elusiveness","impale","penetrating_strike"],"myconid":["toxic_pollen"],"nom_nom":["impale"],"novice_sorcerer":["quick_aid","water_strike"],"panda":["toughness"],"polar_bear":["fierce_aura","frenzy"],"porcupine":["quick_shot"],"pyre_hunter":["critical_aura","precision","steady_shot","rain_of_arrows","flame_arrow"],"rabid_rabbit":["insanity","berserk","frenzy","scratch"],"rat":["poke"],"red_panda":["insanity","berserk","frenzy","maim","cleave"],"salamander":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"sea_snail":["toughness"],"shadow_archer":["critical_aura","elusiveness","rain_of_arrows","penetrating_shot","steady_shot"],"siren":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"skunk":["scratch"],"slimy":["minor_heal","water_strike"],"snake":["poke"],"soul_hunter":["critical_aura","silencing_shot","flame_arrow"],"squawker":["guardian_aura","life_drain","natures_veil","entangle"],"stalactite_golem":["guardian_aura","spike_shell","toughness"],"swampy":["sweep"],"the_kraken":["critical_aura","frenzy","aqua_arrow","penetrating_shot","fracturing_impact"],"the_watcher":["speed_aura","precision","steady_shot","aqua_arrow","flame_arrow"],"tidal_conjuror":["mystic_aura","elemental_affinity","frost_surge","ice_spear","water_strike"],"treant":["guardian_aura","toxic_pollen","entangle"],"trial_badger":["fierce_aura","berserk","maim","cleave","scratch"],"trial_beetle":["invincible","toughness","fracturing_impact","stunning_blow","sweep"],"trial_chameleon":["critical_aura","precision","penetrating_shot","rain_of_arrows","steady_shot"],"trial_dragonfly":["critical_aura","precision","steady_shot","rain_of_arrows","pestilent_shot"],"trial_firefly":["mystic_aura","elemental_affinity","firestorm","smoke_burst","fireball"],"trial_hedgehog":["guardian_aura","toughness","spike_shell","natures_veil","fracturing_impact"],"trial_jellyfish":["mystic_aura","elemental_affinity","frost_surge","mana_spring","water_strike"],"trial_wasp":["fierce_aura","frenzy","penetrating_strike","puncture","impale"],"turtle":["taunt","toughness"],"vampire":["fierce_aura","vampirism","puncture"],"veyes":["precision"],"werewolf":["insanity","berserk","maim"],"zombie":["toughness","maim","natures_veil"],"zombie_bear":["fierce_aura","berserk","puncture","penetrating_strike"]} // #dev
   // abilities that can stun: [chance, duration ms] (game data: abilityEffects stunChance / stunDuration)
   const STUNS = {"entangle":[0.1,2000],"stunning_blow":[0.7,3000]} // #dev
+  const BLINDS = { natures_veil: [0.5, 5000] } // #dev
   // each held weapon piece's long axis [butt x, y, head x, y, break?] in piece pixels (tools/rig-weapon-geom.py); break =
   // where the art is broken along the shaft (0 butt … 1 head), when it is
   const WEAPON_AXIS = {"arcane_bow":[16,257,52,2],"arcane_crossbow":[5,88,128,88],"arcane_fire_staff":[13,379,58,8],"arcane_nature_staff":[26,270,26,2],"arcane_water_staff":[12,349,71,7],"azure_bulwark":[75,210,75,8],"azure_mace":[7,189,147,24],"azure_spear":[20,399,19,9],"azure_sword":[9,235,183,5,0.118],"birch_bow":[13,304,58,1,0.463],"birch_crossbow":[58,172,58,7],"birch_fire_staff":[17,397,30,8,0.765],"birch_nature_staff":[11,266,27,2],"birch_water_staff":[10,332,59,9],"blazing_trident":[10,402,46,12,0.295],"blooming_trident":[27,437,63,12],"burble_bulwark":[58,164,61,6],"burble_mace":[7,186,152,22],"burble_spear":[20,400,25,9],"burble_sword":[7,200,148,3,0.161],"cedar_bow":[10,269,60,1,0.418],"cedar_crossbow":[10,176,54,9,0.184],"cedar_fire_staff":[8,309,67,7],"cedar_nature_staff":[7,260,48,0],"cedar_water_staff":[7,336,67,4],"chaotic_flail":[-11,160,164,37],"cheese_bulwark":[65,178,65,7],"cheese_mace":[6,203,161,23],"cheese_spear":[24,378,25,9],"cheese_sword":[12,213,153,4,0.14],"crimson_bulwark":[65,180,65,7],"crimson_mace":[6,190,153,22],"crimson_spear":[18,371,19,9],"crimson_sword":[12,261,175,5,0.128],"cursed_bow":[24,337,65,10],"frost_staff":[12,360,64,3],"furious_spear":[42,436,40,12],"ginkgo_bow":[6,307,44,2,0.442],"ginkgo_crossbow":[46,203,46,8],"ginkgo_fire_staff":[10,295,63,7],"ginkgo_nature_staff":[13,353,43,3],"ginkgo_water_staff":[13,358,58,10],"gobo_boomstick":[6,279,81,13,0.661],"gobo_defender":[144,240,6,8,0.172],"gobo_shooter":[33,105,112,33],"gobo_slasher":[6,203,159,-6],"gobo_smasher":[1,214,163,4],"gobo_stabber":[6,184,139,3,0.172],"granite_bludgeon":[6,192,161,7],"griffin_bulwark":[75,211,75,11],"holy_bulwark":[73,196,75,8],"holy_mace":[7,208,156,21],"holy_spear":[23,390,25,10],"holy_sword":[8,222,176,6,0.117],"infernal_battlestaff":[-2,387,96,-1],"jackalope_staff":[10,353,60,0],"purpleheart_bow":[21,311,54,3,0.452],"purpleheart_crossbow":[10,99,126,99],"purpleheart_fire_staff":[15,406,37,8],"purpleheart_nature_staff":[27,271,25,2],"purpleheart_water_staff":[11,305,61,8],"rainbow_bulwark":[32,230,32,8],"rainbow_mace":[21,288,74,12],"rainbow_spear":[7,372,23,9],"rainbow_sword":[35,299,38,6,0.117],"redwood_bow":[13,309,100,1,0.424],"redwood_crossbow":[-1,169,72,13],"redwood_fire_staff":[11,288,30,8],"redwood_nature_staff":[12,304,48,2],"redwood_water_staff":[10,341,64,6],"regal_sword":[6,241,177,6,0.1],"rippling_trident":[14,375,63,10,0.324],"snake_fang_dirk":[4,14,184,62,0.214],"soul_hunter_crossbow":[21,168,56,5],"spiked_bulwark":[69,223,87,9],"stalactite_spear":[7,378,22,9],"sundering_crossbow":[44,237,44,8],"vampire_fang_dirk":[2,6,171,34,0.201],"vampiric_bow":[28,386,42,4],"verdant_bulwark":[70,195,72,8],"verdant_mace":[6,194,155,23],"verdant_spear":[6,374,25,8,0.723],"verdant_sword":[7,247,178,5,0.105],"werewolf_slasher":[15,273,205,35],"wooden_bow":[15,297,39,3,0.459],"wooden_crossbow":[23,186,71,8,0.202],"wooden_fire_staff":[8,319,62,7],"wooden_nature_staff":[27,251,28,2,0.602],"wooden_water_staff":[9,330,59,4],"rig:arcane_crossbow":[0,63,200,63],"rig:birch_crossbow":[0,57,200,57],"rig:cedar_crossbow":[0,46,200,46],"rig:ginkgo_crossbow":[0,43,200,43],"rig:purpleheart_crossbow":[0,39,200,39],"rig:redwood_crossbow":[0,47,200,47],"rig:soul_hunter_crossbow":[0,52,200,52],"rig:sundering_crossbow":[0,61,200,61],"rig:wooden_crossbow":[0,53,200,53]}
@@ -6508,6 +6512,8 @@
         // a stunning ability stuns a target it hits with its chance (STUNS), for its duration
         const stun = ab && STUNS[ab.key]
         if (stun) for (const tg of targets) if (tg.dHP < 0 && !tg.died && Math.random() < stun[0]) tg.stunned = stun[1]
+        const blind = ab && BLINDS[ab.key]
+        if (blind) for (const tg of targets) if (tg.dHP < 0 && !tg.died && Math.random() < blind[0]) tg.blinded = blind[1]
       } else if (ab.kind === "heal" || ab.kind === "revive") {
         effect = "heal"
         targets = [change(side, i, Math.round(u.maxHp * 0.15))]
@@ -10650,6 +10656,8 @@ void main(){
       // (the test page's own stun lasts its set time; a real one shows from the blow that brought it)
       if (tg.stunned && !tg.died) a.stunUntil = now() + tg.stunned
       if (a.u.stunned) a.stunSeen = a.u.stunned
+      if (tg.blinded && !tg.died) a.blindUntil = now() + tg.blinded
+      if (a.u.blinded) a.blindSeen = a.u.blinded
       if (isSkill && !tg.died) afflict(a, e.ab)
       drawHp(a)
       if (tg.died) die(a)
@@ -10691,6 +10699,43 @@ void main(){
         s.position.set(Math.cos(an) * a.h * 0.28, -a.h * 1.02 + Math.sin(an) * a.h * 0.07)
         s.scale.set(Math.sin(an) > 0 ? 1 : 0.75)
       })
+    }
+    // blinded: a violet mist swirling round the head while it lasts (from the blow, as a stun; never longer than the
+    // game's blind, 5 s)
+    const BLIND_MAX = 5300
+    function isBlind(a, t) {
+      if (a.dead) return false
+      if (a.blindUntil > t) return true
+      const s = a.u.blinded
+      if (!s) return false
+      const age = Date.now() - s
+      return age < BLIND_MAX && (a.blindSeen === s || age > 1000)
+    }
+    function blindFrame(a, t) {
+      const on = isBlind(a, t)
+      if (!on && !a.mist?.visible) return
+      if (!a.mist) {
+        a.mist = new P.Container()
+        for (let k = 0; k < 6; k++) {
+          const s = new P.Sprite(smokeTex)
+          s.anchor.set(0.5)
+          s.tint = [0x7a36c0, 0xc77dff, 0x5a2a8a][k % 3]
+          s.rotation = k
+          a.mist.addChild(s)
+        }
+        a.cont.addChild(a.mist)
+        a.mist.alpha = 0
+      }
+      a.mist.visible = true
+      a.mist.alpha = Math.max(0, Math.min(0.85, a.mist.alpha + (on ? dt : -dt) * 3))
+      if (!on && a.mist.alpha <= 0) return void (a.mist.visible = false)
+      a.mist.children.forEach((s, k) => {
+        const an = (t * Math.PI) / 1400 + (k * Math.PI * 2) / 6
+        s.position.set(Math.cos(an) * a.h * 0.26, -a.h * 0.88 + Math.sin(an) * a.h * 0.07)
+        s.scale.set((a.h * 0.45) / 96)
+        s.rotation += 0.01
+      })
+      if (Math.random() < 0.15) emit(a.x0 + (a.dash || 0) + (Math.random() - 0.5) * a.h * 0.5, a.y0 - a.h * 0.9, { n: 1, color: [0xe6c2ff, 0xb46cff], size: 0.25, size1: 0.05, speed: 10, up: 20, life: 700 })
     }
     function die(a) {
       a.dead = true
@@ -11267,67 +11312,38 @@ void main(){
         if (p < 0.8 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w * 0.9, S.ground - Math.random() * S.h * 0.9, { n: 2, color: [0xb6ff5a, 0x9be15d, 0xd8a8ff], size: 0.4, size1: 0.05, speed: 10, up: 30, life: 900, fadeIn: 0.3 })
       })
     }
-    // 自然菌幕: a great glowing mushroom bursting up out of the ground behind the foe, its cap puffing a cloud of spores
-    // at puff ms that rains down on it, glowing threads of fungus spread over the ground round its foot
-    function bigMushroom(a, side, puff, dur = 1900) {
-      const back = new P.Graphics()
-      const glowG = new P.Graphics()
-      decalLayer.addChild(back)
-      fxLayer.addChild(glowG)
-      const x = a.x0 + side * a.h * 0.28
-      const y = a.y0 - a.h * 0.02
-      const H = a.h * (1.05 + Math.random() * 0.15)
-      const W = a.h * 0.62
-      const col = Math.random() < 0.5 ? 0x9a4ae0 : 0xc84aa8
-      const spots = Array.from({ length: 6 }, () => ({ u: (Math.random() - 0.5) * 1.4, v: 0.2 + Math.random() * 0.5, r: 0.06 + Math.random() * 0.06 }))
-      const threads = Array.from({ length: 9 }, (_, k) => ({ an: (k / 9) * Math.PI * 2 + Math.random() * 0.4, len: a.h * (0.4 + Math.random() * 0.5), bend: (Math.random() - 0.5) * 0.6 }))
-      let puffed = false
-      tween(dur, p => {
-        back.clear()
-        glowG.clear()
-        const t = p * dur
-        // shoots up with an overshoot, a squash when it puffs, sinks back into the ground at the end
-        const up = Math.min(1, t / (puff * 0.7))
-        let k = up < 1 ? 1 + 2.7 * Math.pow(up - 1, 3) + 1.7 * Math.pow(up - 1, 2) : 1
-        const sq = t > puff && t < puff + 260 ? Math.sin(((t - puff) / 260) * Math.PI) * 0.12 : 0
-        if (p > 0.8) k *= 1 - (p - 0.8) / 0.2
-        if (k <= 0.01) return p >= 1 && (back.destroy(), glowG.destroy())
-        const h = H * k * (1 - sq)
-        const w = W * Math.min(1, k * 1.2) * (1 + sq)
-        // glowing fungus threads on the ground
-        const spread = Math.min(1, t / (puff * 1.2))
-        for (const th of threads) {
-          const ex = Math.cos(th.an) * th.len * spread
-          const ey = Math.sin(th.an) * th.len * spread * 0.22
-          glowG.moveTo(x, y).quadraticCurveTo(x + ex * 0.5 + th.bend * ey * 4, y + ey * 0.5, x + ex, y + ey).stroke({ color: 0xc77dff, width: a.h * 0.018, alpha: 0.7 * (p > 0.8 ? (1 - p) / 0.2 : 1) })
-        }
-        // stem: tapering, pale lilac with a darker side
-        const sw = w * 0.22
-        back.moveTo(x - sw, y).bezierCurveTo(x - sw * 0.7, y - h * 0.4, x - sw * 0.9, y - h * 0.7, x - sw * 0.6, y - h * 0.82).lineTo(x + sw * 0.6, y - h * 0.82).bezierCurveTo(x + sw * 0.9, y - h * 0.7, x + sw * 0.7, y - h * 0.4, x + sw, y).closePath().fill(0xe8daf5)
-        back.moveTo(x + sw * 0.2, y).bezierCurveTo(x + sw * 0.4, y - h * 0.4, x + sw * 0.5, y - h * 0.7, x + sw * 0.4, y - h * 0.82).lineTo(x + sw * 0.6, y - h * 0.82).bezierCurveTo(x + sw * 0.9, y - h * 0.7, x + sw * 0.7, y - h * 0.4, x + sw, y).closePath().fill({ color: 0x9a80b8, alpha: 0.6 })
-        // cap: a dome, gills under it, pale glowing spots
-        const cy = y - h * 0.8
-        back.ellipse(x, cy + w * 0.04, w * 0.95, w * 0.16).fill(0x5a2a78)
-        back.moveTo(x - w, cy).bezierCurveTo(x - w, cy - w * 0.95, x + w, cy - w * 0.95, x + w, cy).bezierCurveTo(x + w * 0.5, cy + w * 0.12, x - w * 0.5, cy + w * 0.12, x - w, cy).closePath().fill(col)
-        back.moveTo(x - w * 0.8, cy - w * 0.2).bezierCurveTo(x - w * 0.7, cy - w * 0.75, x + w * 0.1, cy - w * 0.8, x + w * 0.3, cy - w * 0.7).stroke({ color: 0xffffff, width: w * 0.06, alpha: 0.35, cap: "round" })
-        for (const sp of spots) {
-          const sx = x + sp.u * w * 0.7
-          const sy = cy - w * sp.v * (1 - Math.abs(sp.u) * 0.4)
-          back.circle(sx, sy, w * sp.r).fill(0xf6e8ff)
-          glowG.circle(sx, sy, w * sp.r * 2.2).fill({ color: 0xd8a8ff, alpha: 0.35 })
-        }
-        glowG.ellipse(x, cy - w * 0.35, w * 1.2, w * 0.7).fill({ color: col, alpha: 0.12 })
-        if (!puffed && t >= puff) {
-          puffed = true
-          light(x, cy - w * 0.4, 0xc77dff, a.h * 1.4, 700, 1.3)
-          emit(x, cy - w * 0.5, { n: 40, color: [0xe6c2ff, 0xff9ad8, 0xb46cff, 0xffffff], size: 0.38, size1: 0.1, speed: a.h * 2.6, angle: -Math.PI / 2, spread: 2.6, drag: 0.25, gravity: a.h * 1.2, life: 1500 })
-          emit(x, cy - w * 0.5, { n: 10, tex: "smoke", color: [0x8a4ac0, 0xb070d8], alpha: 0.45, size: 0.6, size1: 1.8, speed: a.h * 1.2, angle: -Math.PI / 2, spread: 2.4, drag: 0.4, life: 1400 })
-        }
-        if (p >= 1) {
-          back.destroy()
-          glowG.destroy()
-        }
+    // 自然菌幕: a curtain of violet / pink light like an aurora let down over the row (S) as the blow lands: soft rays
+    // rising from a bright waving hem that comes down to the foes' heads, folding and flickering, glowing spores
+    // drifting down through it, the ground lit under it; lifts away at the end
+    function auroraVeil(S, dur = 1900) {
+      const n = Math.max(10, Math.round(S.w / (S.h * 0.11)))
+      const cols = [0xb46cff, 0xff6fc8, 0x8a5cff, 0xe6a8ff]
+      const rays = Array.from({ length: n }, (_, k) => {
+        const s = new P.Sprite(pillarTex)
+        s.anchor.set(0.5, 1)
+        s.tint = cols[k % cols.length]
+        s.alpha = 0
+        fxLayer.addChild(s)
+        return { s, u: (k + 0.5) / n - 0.5, ph: Math.random() * 6, len: 0.8 + Math.random() * 0.5 }
       })
+      light(S.cx, S.ground - S.h * 0.6, 0xb46cff, S.w * 0.6, dur, 0.9)
+      tween(dur, p => {
+        const t = p * dur
+        const down = 1 - Math.pow(1 - Math.min(1, t / 450), 3)
+        const lift = p > 0.72 ? (p - 0.72) / 0.28 : 0
+        for (const r of rays) {
+          if (r.s.destroyed) continue
+          const x = S.cx + r.u * S.w * 1.05 + Math.sin(t * 0.0025 + r.u * 7) * S.h * 0.1
+          // the hem: high above at first, let down to the heads, waving along its length; lifted away at the end
+          const hem = S.ground - S.h * (2.6 - 1.75 * down + 1.2 * lift) + Math.sin(r.u * 9 + t * 0.004) * S.h * 0.12
+          r.s.position.set(x, hem)
+          r.s.scale.set((S.h * 0.32) / 64, (S.h * 1.7 * r.len * (0.85 + 0.15 * Math.sin(t * 0.006 + r.ph))) / 256)
+          r.s.alpha = 0.6 * down * (1 - lift) * (0.7 + 0.3 * Math.sin(t * 0.01 + r.ph))
+          if (p >= 1) r.s.destroy()
+        }
+        if (p < 0.85 && Math.random() < 0.9) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - S.h * (0.9 + Math.random() * 0.6), { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.32, size1: 0.08, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 30, life: 1500, fadeIn: 0.2 })
+      })
+      ripple(S.cx, S.ground, S.w * 0.55, 0xc77dff, { n: 2, dur: 1000, gap: 250 })
     }
     // 生命吸取: a crimson tether whipping out of the foe into the caster, swelling as it pulls, blood-red beads running
     // along it to the caster, who glows as they arrive
@@ -11681,8 +11697,8 @@ void main(){
     }
     for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
     // skills whose body comes first (pre: [ms before the blow, draw]): 自然菌幕's veil is let down as the blow lands
-    // 自然菌幕: the mushrooms come up under the foes before the blow and puff their spores on it
-    SKILL_FX.natures_veil.pre = [450, ({ src, all }) => all.forEach(a => bigMushroom(a, src.dir, 450))]
+    // 自然菌幕: the aurora is let down over the foes before the blow
+    SKILL_FX.natures_veil.pre = [450, ({ all }) => all.length && auroraVeil(span(all), 1900)]
     // 剧毒粉尘: the spores blown across from the staff land with the blow
     SKILL_FX.toxic_pollen.pre = [380, ({ src, all }) => all.length && sporeStream(() => tipOf(src) || mid(src), span(all), 380)]
     // skills whose body travels to the foe itself (release: at the shot, flight = ms to the blow): no missile
@@ -12060,6 +12076,7 @@ void main(){
           } else if (a.flat) flatFrame(a, t)
           statusFrame(a, t)
           stunFrame(a, t)
+          blindFrame(a, t)
         }
       trails(t)
       // camera: shake and a short zoom punch toward the middle
