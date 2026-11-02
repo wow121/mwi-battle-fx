@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.80
+// @version      0.21.81
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -31,6 +31,7 @@
   const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false, quality: 0 }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
   const ASSET_REV = "a8dfc72b6e"
+  const SPIKES_LEFT = /spiked_bulwark/
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
     "https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/assets/manifest.json",
@@ -1270,6 +1271,11 @@
             lay.setAttribute("transform", `translate(${hx + h * 0.17 - cx} ${hy - 1 - cy}) rotate(${pc.dir - 90} ${cx} ${cy})`)
             lay.appendChild(box)
             g.appendChild(lay)
+          } else if (SPIKES_LEFT.test(id)) {
+            const flip = document.createElementNS(SVGNS, "g")
+            flip.setAttribute("transform", `translate(${2 * x + w} 0) scale(-1 1)`)
+            flip.appendChild(box)
+            g.appendChild(flip)
           } else g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
@@ -7822,16 +7828,22 @@ void main(){
       const h = y1 - y0 + 2
       const fw = Math.round(w * 0.6)
       const t = Math.round(w * 0.09)
+      const face = document.createElement("canvas")
+      face.width = w
+      face.height = h
+      const fg = face.getContext("2d")
+      if (SPIKES_LEFT.test(id)) fg.setTransform(-1, 0, 0, 1, w, 0)
+      fg.drawImage(src, x0, y0, w, h, 0, 0, w, h)
       const c = document.createElement("canvas")
       c.width = fw + t
       c.height = h
       const g = c.getContext("2d")
       g.filter = "brightness(0.55)"
-      g.drawImage(src, x0, y0, w, h, 0, 0, fw, h)
+      g.drawImage(face, 0, 0, fw, h)
       g.filter = "brightness(0.7)"
-      g.drawImage(src, x0, y0, w, h, t * 0.5, 0, fw, h)
+      g.drawImage(face, t * 0.5, 0, fw, h)
       g.filter = "none"
-      g.drawImage(src, x0, y0, w, h, t, 0, fw, h)
+      g.drawImage(face, t, 0, fw, h)
       const cx = t + fw / 2
       return (shieldTex[id] = { tex: mipTex(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
     }
