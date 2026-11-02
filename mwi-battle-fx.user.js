@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.88
+// @version      0.21.89
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -7686,7 +7686,19 @@ void main(){
         },
       },
     }
-    ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
+    // 自然菌幕: the staff drawn back over the shoulder while a spore pod swells at its head, then flung overhand to lob it
+    // over the foes
+    ACTIONS["player:staff"]["skill:natures_veil"] = {
+      dur: 1150, shot: 600, hit: 950, missile: "orb",
+      keys: [
+        { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+        { t: 220, e: "out", a: { body: -6, hm: [0.12, 0.4, 40], ho: [0.05, 0.14, 0] }, y: 0.03 },
+        { t: 520, a: { body: -7, hm: [0.1, 0.42, 48], ho: [0.05, 0.15, 0] }, y: 0.03, x: -0.02 },
+        { t: 600, e: "in", a: { body: 13, hm: [0.4, 0.22, -95], ho: [-0.04, 0, 0] }, x: 0.04 },
+        { t: 820, a: { body: 12, hm: [0.39, 0.21, -96], ho: [-0.04, 0, 0] }, x: 0.04 },
+        { t: 1150, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+      ],
+    }
     // ----- monster templates (rig.json tmpl, cut by tools/rig-monster.py): one set per body shape, the attacks by the
     // monster's style (MONSTERS); a monster's own ACTIONS[id] entries win. Parts: torso (pivot at the hips), arm_m (the
     // arm with the weapon), arm_o, weapon / weapon_o (in their fists), leg_f, leg_b (on the torso).
@@ -11312,38 +11324,120 @@ void main(){
         if (p < 0.8 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w * 0.9, S.ground - Math.random() * S.h * 0.9, { n: 2, color: [0xb6ff5a, 0x9be15d, 0xd8a8ff], size: 0.4, size1: 0.05, speed: 10, up: 30, life: 900, fadeIn: 0.3 })
       })
     }
-    // 自然菌幕: a curtain of violet / pink light like an aurora let down over the row (S) as the blow lands: soft rays
-    // rising from a bright waving hem that comes down to the foes' heads, folding and flickering, glowing spores
-    // drifting down through it, the ground lit under it; lifts away at the end
-    function auroraVeil(S, dur = 1900) {
-      const n = Math.max(10, Math.round(S.w / (S.h * 0.11)))
-      const cols = [0xb46cff, 0xff6fc8, 0x8a5cff, 0xe6a8ff]
-      const rays = Array.from({ length: n }, (_, k) => {
-        const s = new P.Sprite(pillarTex)
-        s.anchor.set(0.5, 1)
-        s.tint = cols[k % cols.length]
+    // ----- 自然菌幕 (after Darkest Dungeon's blinding gas and Dota's smoke screen): a spore pod lobbed over the row
+    // bursts above it, a heavy violet spore fog pressing down and spreading over the foes, and a clump of glowing
+    // mushrooms (the painted sheet fx/natures_veil, turned from green to violet as it loads) springs up at each foe's feet -----
+    let veilFrames = null
+    let veilLoading = null
+    function loadVeilSheet() {
+      if (veilFrames || veilLoading || !Assets.has("fx", "natures_veil")) return
+      veilLoading = fetch(Assets.url("fx/natures_veil.webp"))
+        .then(r => r.blob())
+        .then(b => createImageBitmap(b))
+        .then(bm => {
+          const c = document.createElement("canvas")
+          c.width = bm.width
+          c.height = bm.height
+          const x = c.getContext("2d")
+          x.drawImage(bm, 0, 0)
+          bm.close?.()
+          // hue turned 165 degrees (green to violet), a little more saturated
+          const im = x.getImageData(0, 0, c.width, c.height)
+          const d = im.data
+          const th = (165 * Math.PI) / 180
+          const co = Math.cos(th)
+          const si = Math.sin(th)
+          const M = [0.213 + co * 0.787 - si * 0.213, 0.715 - co * 0.715 - si * 0.715, 0.072 - co * 0.072 + si * 0.928, 0.213 - co * 0.213 + si * 0.143, 0.715 + co * 0.285 + si * 0.14, 0.072 - co * 0.072 - si * 0.283, 0.213 - co * 0.213 - si * 0.787, 0.715 - co * 0.715 + si * 0.715, 0.072 + co * 0.928 + si * 0.072]
+          for (let o = 0; o < d.length; o += 4) {
+            const r = d[o]
+            const g = d[o + 1]
+            const b = d[o + 2]
+            d[o] = M[0] * r + M[1] * g + M[2] * b
+            d[o + 1] = M[3] * r + M[4] * g + M[5] * b
+            d[o + 2] = M[6] * r + M[7] * g + M[8] * b
+          }
+          x.putImageData(im, 0, 0)
+          const base = P.Texture.from(c)
+          const fw = Math.floor(c.width / 4)
+          const fh = Math.floor(c.height / 2)
+          veilFrames = Array.from({ length: 8 }, (_, k) => new P.Texture({ source: base.source, frame: new P.Rectangle((k % 4) * fw, Math.floor(k / 4) * fh, fw, fh) }))
+        })
+        .catch(e => {
+          veilLoading = null
+          console.warn("[战斗动画] natures_veil sheet", e)
+        })
+    }
+    // the pod: a violet seed case with pale spots in a soft glow
+    function sporePod(h) {
+      const c = new P.Container()
+      const halo = new P.Sprite(glow)
+      halo.anchor.set(0.5)
+      halo.tint = 0xb46cff
+      halo.width = halo.height = h * 0.7
+      halo.blendMode = "add"
+      const g = new P.Graphics()
+      const w = h * 0.12
+      g.ellipse(0, 0, w, w * 1.25).fill(0x6a2aa8)
+      g.ellipse(-w * 0.25, -w * 0.35, w * 0.55, w * 0.7).fill({ color: 0xb46cff, alpha: 0.8 })
+      for (const [u, v, r] of [[0.3, -0.3, 0.16], [-0.35, 0.3, 0.13], [0.25, 0.45, 0.11], [-0.1, -0.7, 0.1]]) g.circle(u * w, v * w, r * w).fill(0xf0d8ff)
+      g.moveTo(0, -w * 1.25).lineTo(0, -w * 1.6).stroke({ color: 0x4a1a78, width: w * 0.18, cap: "round" })
+      c.addChild(halo, g)
+      shotLayer.addChild(c)
+      return c
+    }
+    // the burst: a flash, spores thrown out, and the fog: soft puffs flung out of the burst point down and along over the
+    // row, hanging there swirling, then thinning; glowing spores falling through it
+    function sporeFog(S, at, dur = 2300) {
+      light(at.x, at.y, 0xd8a8ff, S.h * 2, 320, 1.5)
+      shockRing(at.x, at.y, S.h * 1.6, 0xd8a8ff)
+      emit(at.x, at.y, { n: 40, color: [0xe6c2ff, 0xff9ad8, 0xb46cff, 0xffffff], size: 0.4, size1: 0.1, speed: S.h * 3, drag: 0.12, gravity: S.h * 0.8, life: 1300 })
+      zoomBlur(at.x, at.y, 220, 0.04)
+      const n = Math.max(10, Math.round(S.w / (S.h * 0.2)))
+      const puffs = []
+      for (let k = 0; k < n; k++) {
+        const lit = k % 4 === 3
+        const s = new P.Sprite(lit ? glow : smokeTex)
+        s.anchor.set(0.5)
+        s.tint = lit ? 0xb46cff : [0x5a2490, 0x7a36c0, 0x8a3fa8][k % 3]
+        if (lit) s.blendMode = "add"
         s.alpha = 0
-        fxLayer.addChild(s)
-        return { s, u: (k + 0.5) / n - 0.5, ph: Math.random() * 6, len: 0.8 + Math.random() * 0.5 }
-      })
-      light(S.cx, S.ground - S.h * 0.6, 0xb46cff, S.w * 0.6, dur, 0.9)
+        s.rotation = Math.random() * 6.3
+        ;(lit ? fxLayer : smokeLayer).addChild(s)
+        puffs.push({ s, lit, tx: S.cx + ((k + 0.5) / n - 0.5) * S.w * 0.95 + (Math.random() - 0.5) * S.h * 0.2, ty: S.ground - S.h * (0.15 + Math.random() * 1.05), r: S.h * (0.5 + Math.random() * 0.35), ph: Math.random() * 6, spin: (Math.random() - 0.5) * 0.8, t: Math.random() * 0.06 })
+      }
       tween(dur, p => {
         const t = p * dur
-        const down = 1 - Math.pow(1 - Math.min(1, t / 450), 3)
-        const lift = p > 0.72 ? (p - 0.72) / 0.28 : 0
-        for (const r of rays) {
-          if (r.s.destroyed) continue
-          const x = S.cx + r.u * S.w * 1.05 + Math.sin(t * 0.0025 + r.u * 7) * S.h * 0.1
-          // the hem: high above at first, let down to the heads, waving along its length; lifted away at the end
-          const hem = S.ground - S.h * (2.6 - 1.75 * down + 1.2 * lift) + Math.sin(r.u * 9 + t * 0.004) * S.h * 0.12
-          r.s.position.set(x, hem)
-          r.s.scale.set((S.h * 0.32) / 64, (S.h * 1.7 * r.len * (0.85 + 0.15 * Math.sin(t * 0.006 + r.ph))) / 256)
-          r.s.alpha = 0.6 * down * (1 - lift) * (0.7 + 0.3 * Math.sin(t * 0.01 + r.ph))
-          if (p >= 1) r.s.destroy()
+        const out = p > 0.6 ? (p - 0.6) / 0.4 : 0
+        for (const q of puffs) {
+          if (q.s.destroyed) continue
+          const e = Math.min(1, Math.max(0, (t / dur - q.t) / 0.2))
+          const k = 1 - Math.pow(1 - e, 3)
+          q.s.position.set(lerp(at.x, q.tx, k) + Math.sin(t * 0.002 + q.ph) * S.h * 0.08, lerp(at.y, q.ty, k) - out * S.h * 0.3)
+          q.s.scale.set(((q.r * (0.25 + 0.75 * k) * (1 + 0.25 * out)) / (q.lit ? 256 : 96)) * (q.lit ? 2.6 : 2))
+          q.s.rotation += q.spin * 0.016
+          q.s.alpha = (q.lit ? 0.14 : 0.5) * k * (1 - out)
+          if (p >= 1) q.s.destroy()
         }
-        if (p < 0.85 && Math.random() < 0.9) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - S.h * (0.9 + Math.random() * 0.6), { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.32, size1: 0.08, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 30, life: 1500, fadeIn: 0.2 })
+        if (p > 0.1 && p < 0.85 && Math.random() < 0.8) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - S.h * (0.3 + Math.random() * 1.1), { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.3, size1: 0.06, speed: 12, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1400, fadeIn: 0.2 })
       })
-      ripple(S.cx, S.ground, S.w * 0.55, 0xc77dff, { n: 2, dur: 1000, gap: 250 })
+    }
+    // the painted mushroom clump at a foe's feet, its spore smoke rising round it (8 frames over dur ms)
+    function mushroomClump(a, dur = 1500) {
+      if (!veilFrames) return
+      const s = new P.Sprite(veilFrames[0])
+      s.anchor.set(0.5, 0.9)
+      const h = a.h * 1.55
+      s.scale.set(h / veilFrames[0].height)
+      s.position.set(a.x0 + (Math.random() - 0.5) * a.h * 0.15, a.y0 + a.h * 0.04)
+      // (added over the bodies but outside the glowing layer: its bloom burnt the painting white)
+      s.blendMode = "add"
+      s.alpha = 0.9
+      smokeLayer.addChild(s)
+      tween(dur, p => {
+        if (s.destroyed) return
+        s.texture = veilFrames[Math.min(7, Math.floor(p * 8))]
+        if (p >= 1) s.destroy()
+      })
     }
     // 生命吸取: a crimson tether whipping out of the foe into the caster, swelling as it pulls, blood-red beads running
     // along it to the caster, who glows as they arrive
@@ -11682,7 +11776,12 @@ void main(){
       ice_spear: onEach(a => iceSpikes(a.x0, a.y0, a.h * 0.5, a.h * 0.6, { n: 4, dur: 900 })),
       frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
       entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.75, a.h * 1.0, 1900)),
-      natures_veil: () => {},
+      natures_veil: ({ all }) => {
+        if (!all.length) return
+        const S = span(all)
+        sporeFog(S, podAt(S))
+        all.forEach((a, k) => later(80 + k * 70, () => mushroomClump(a)))
+      },
       toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: TOXIC, size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
       life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0xc8306e)),
       cleave: onEach((a, src, color) => slashArc(mid(a).x, mid(a).y, a.h * 0.75, src.dir, color, { width: 1.3, tilt: 0.3 })),
@@ -11698,7 +11797,44 @@ void main(){
     for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
     // skills whose body comes first (pre: [ms before the blow, draw]): 自然菌幕's veil is let down as the blow lands
     // 自然菌幕: the aurora is let down over the foes before the blow
-    SKILL_FX.natures_veil.pre = [450, ({ all }) => all.length && auroraVeil(span(all), 1900)]
+    // (the sheet asked for as the cast starts, in time for the blow)
+    SKILL_FX.natures_veil.pre = [5000, () => loadVeilSheet()]
+    SKILL_FX.natures_veil.charge = ({ src, from, until }) => {
+      loadVeilSheet()
+      const o = (src.pod = sporePod(src.h))
+      tween(until, p => {
+        const T = from()
+        if (o.destroyed) return
+        if (T) o.position.set(T.x, T.y)
+        o.scale.set(0.15 + 0.85 * ease(p))
+        o.rotation = Math.sin(p * 12) * 0.2
+        if (T && p < 1 && Math.random() < 0.6) {
+          const an = Math.random() * Math.PI * 2
+          const r = src.h * (0.35 + Math.random() * 0.25)
+          emit(T.x + Math.cos(an) * r, T.y + Math.sin(an) * r, { n: 1, color: [0xe6c2ff, 0xb46cff], size: 0.3, speed: 1, life: 300, to: from, pull: 40, drag: 0.02, fadeIn: 0.3 })
+        }
+      })
+    }
+    // the pod lobbed high over the row, spinning, spores trailing; it lands as the blow does, where the fog bursts (main)
+    const podAt = S => ({ x: S.cx, y: S.ground - S.h * 1.35 })
+    SKILL_FX.natures_veil.release = ({ src, all, flight, from }) => {
+      const o = src.pod || sporePod(src.h)
+      src.pod = null
+      if (!all.length) return o.destroyed || o.destroy(GONE)
+      const A = from()
+      const B = podAt(span(all))
+      const top = Math.min(A.y, B.y) - src.h * 1.1
+      tween(flight, p => {
+        if (o.destroyed) return
+        const x = lerp(A.x, B.x, p)
+        const y = (1 - p) * (1 - p) * A.y + 2 * (1 - p) * p * top + p * p * B.y
+        o.position.set(x, y)
+        o.rotation += 0.25
+        o.scale.set(1)
+        if (Math.random() < 0.8) emit(x, y, { n: 1, color: [0xe6c2ff, 0xb46cff, 0xff9ad8], size: 0.3, size1: 0.05, speed: 30, life: 500 })
+        if (p >= 1) o.destroy(GONE)
+      })
+    }
     // 剧毒粉尘: the spores blown across from the staff land with the blow
     SKILL_FX.toxic_pollen.pre = [380, ({ src, all }) => all.length && sporeStream(() => tipOf(src) || mid(src), span(all), 380)]
     // skills whose body travels to the foe itself (release: at the shot, flight = ms to the blow): no missile
