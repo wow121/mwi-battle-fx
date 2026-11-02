@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.80
+// @version      0.21.81
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -39,6 +39,9 @@
   // the art commit this script was released with (publish.sh keeps it current): when raw.githubusercontent.com can't be
   // reached, its manifest on jsDelivr (never stale, unlike @main, whose commit jsDelivr resolves hours late) comes next
   const ASSET_REV = "a8dfc72b6e"
+  // the spiked bulwark's icon and drawn piece point their spikes left, back at the holder (heroes face right): both
+  // stages mirror it
+  const SPIKES_LEFT = /spiked_bulwark/
   // jsDelivr is DNS-polluted on some networks in China: there the same commit's files come from GitHub via gh-proxy
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -1450,6 +1453,11 @@
             lay.setAttribute("transform", `translate(${hx + h * 0.17 - cx} ${hy - 1 - cy}) rotate(${pc.dir - 90} ${cx} ${cy})`)
             lay.appendChild(box)
             g.appendChild(lay)
+          } else if (SPIKES_LEFT.test(id)) {
+            const flip = document.createElementNS(SVGNS, "g")
+            flip.setAttribute("transform", `translate(${2 * x + w} 0) scale(-1 1)`)
+            flip.appendChild(box)
+            g.appendChild(flip)
           } else g.appendChild(box)
           g.style.transformOrigin = `${hx}px ${hy}px`
           if (pc.mid) g.dataset.mid = 1
@@ -9162,17 +9170,24 @@ void main(){
       const h = y1 - y0 + 2
       const fw = Math.round(w * 0.6)
       const t = Math.round(w * 0.09)
+      // the face; mirrored for a shield whose icon points its spikes left, back at the holder (heroes face right)
+      const face = document.createElement("canvas")
+      face.width = w
+      face.height = h
+      const fg = face.getContext("2d")
+      if (SPIKES_LEFT.test(id)) fg.setTransform(-1, 0, 0, 1, w, 0)
+      fg.drawImage(src, x0, y0, w, h, 0, 0, w, h)
       const c = document.createElement("canvas")
       c.width = fw + t
       c.height = h
       const g = c.getContext("2d")
       // the rim: the face's shape, darkened, one thickness nearer
       g.filter = "brightness(0.55)"
-      g.drawImage(src, x0, y0, w, h, 0, 0, fw, h)
+      g.drawImage(face, 0, 0, fw, h)
       g.filter = "brightness(0.7)"
-      g.drawImage(src, x0, y0, w, h, t * 0.5, 0, fw, h)
+      g.drawImage(face, t * 0.5, 0, fw, h)
       g.filter = "none"
-      g.drawImage(src, x0, y0, w, h, t, 0, fw, h)
+      g.drawImage(face, t, 0, fw, h)
       const cx = t + fw / 2
       return (shieldTex[id] = { tex: mipTex(c), grip: [cx, h / 2], axis: [cx, h, cx, 0], k: ic.k })
     }
