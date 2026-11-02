@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.81
+// @version      0.21.82
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8067,6 +8067,7 @@ void main(){
     // the wrist turns the weapon to its own; a two-handed weapon (rig.json two) keeps its grip, the arms turn it to its
     // direction together. Parts on the torso turn with it, and the torso's forward lean is the other way round from
     // theirs: its lean is added back so a direction stays one on the ground (the legs stay planted, except in a fall).
+    const STILL_BOW = new Set(["girl_pyre_hunter", "girl_shadow_archer", "girl_centaur_archer", "girl_brine_marksman", "girl_frost_sniper", "girl_gobo_shooty"])
     function monsterActions(id, def) {
       const tmpl = def.tmpl
       if (!MT[tmpl] || ACTIONS[id]?.__tmpl) return
@@ -8094,6 +8095,9 @@ void main(){
             }
             if (a.arm_o != null) a.arm_o += t - rest("arm_o")
           }
+          // (a monster girl's bow or slingshot was cut out of one picture: string, arrow and the bit behind the fist are on
+          // the trunk, the arm or missing, so the bow arm never leaves her body's rest, only the drawing hand moves)
+          if (STILL_BOW.has(id)) (a.arm_m = 0), delete a.weapon
           if (def.two) a.arm_o = a.arm_m
           const lean = tmpl === "centaur" ? a.horse || 0 : t
           if (!act.fall && lean) for (const n of Object.keys(P)) if (n.startsWith("leg")) a[n] = (a[n] || 0) + lean
