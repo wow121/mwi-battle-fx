@@ -5,9 +5,12 @@ import path from "node:path"
 import { spawn } from "node:child_process"
 const dir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"))
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml" }
+// LAT=<ms>: every art file (/assets/) answered that much later, like a round trip to the CDN
+const LAT = +(process.env.LAT || 0)
 const srv = http.createServer((q, r) => {
   const f = path.join(dir, decodeURIComponent(q.url.split("?")[0]))
-  fs.readFile(f, (e, b) => (e ? (r.writeHead(404), r.end()) : (r.writeHead(200, { "content-type": types[path.extname(f)] || "application/octet-stream" }), r.end(b))))
+  const answer = () => fs.readFile(f, (e, b) => (e ? (r.writeHead(404), r.end()) : (r.writeHead(200, { "content-type": types[path.extname(f)] || "application/octet-stream" }), r.end(b))))
+  LAT && q.url.startsWith("/assets/") ? setTimeout(answer, LAT) : answer()
 }).listen(8799)
 const frames = path.join(dir, "frames")
 fs.rmSync(frames, { recursive: true, force: true })

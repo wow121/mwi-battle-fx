@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.85
+// @version      0.21.86
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8801,17 +8801,22 @@ void main(){
       }
       for (const side of ["p", "m"]) source.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
       layout()
-      for (const side of ["p", "m"])
-        for (const a of units[side]) {
-          const r = await (side === "p" ? loadPlayerRig(a.u) : loadRig(a.kind)).catch(e => console.warn("[动画测试] rig", a.kind, e))
-          if (run !== syncing) return
-          if (r) buildRig(a, r)
-          else if (side === "m") {
-            const f = await loadFlat(a.kind.replace(/^girl_/, ""))
-            if (run !== syncing) return
-            buildFlat(a, f)
-          }
-        }
+      // every unit loads at once, each put up as soon as its art is in (one after another, a full fight's first showing
+      // was some 90 round trips to the CDN in a row)
+      await Promise.all(
+        ["p", "m"].flatMap(side =>
+          units[side].map(async a => {
+            const r = await (side === "p" ? loadPlayerRig(a.u) : loadRig(a.kind)).catch(e => console.warn("[动画测试] rig", a.kind, e))
+            if (run !== syncing || !units[side].includes(a)) return
+            if (r) buildRig(a, r)
+            else if (side === "m") {
+              const f = await loadFlat(a.kind.replace(/^girl_/, "")).catch(() => null)
+              if (run !== syncing || !units[side].includes(a)) return
+              buildFlat(a, f)
+            }
+          }),
+        ),
+      )
     }
     const DUNGEON_ZONES = new Set(["chimerical_den", "enchanted_fortress", "pirate_cove", "sinister_circus"])
     function tierOfU(u) {
@@ -9061,7 +9066,9 @@ void main(){
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
           const urls = Object.values(def.parts).map(q => Assets.url(`rig/${id}/${q.img}`))
-          for (const [k, n] of Object.keys(def.parts).entries()) tex[n] = await loadMip(urls[k], def.res)
+          // (all parts asked for at once: one after another, each a round trip to the CDN, a monster took seconds)
+          const list = await Promise.all(urls.map(u => loadMip(u, def.res)))
+          Object.keys(def.parts).forEach((n, k) => (tex[n] = list[k]))
           rigUrls[id] = urls
           trimRigs()
           return { def, tex }
@@ -9087,6 +9094,7 @@ void main(){
     // 2x into a canvas; its axis runs from the lowest-left pixel (butt) to the highest-right one (head).
     const iconTex = {}
     let itemsSvg = null
+    let itemsSvgP = null
     // game icons drawn the other way round, or holding two weapons (cut apart: keep = [line, half width] of the one
     // kept, drop = [line, half width] of the other, core = the kept one's own half width where they cross; axis = butt → head)
     const ICON_FLIP = new Set(["gobo_boomstick"])
@@ -9099,7 +9107,12 @@ void main(){
       const url = Stage.sheet("items")
       if (!url) return null
       try {
-        itemsSvg = itemsSvg || new DOMParser().parseFromString(await (await fetch(url)).text(), "image/svg+xml")
+        // (one fetch of the sheet when several players ask for their icons at once)
+        itemsSvgP ||= fetch(url)
+          .then(r => r.text())
+          .then(t => (itemsSvg = new DOMParser().parseFromString(t, "image/svg+xml")))
+          .catch(e => ((itemsSvgP = null), Promise.reject(e)))
+        await itemsSvgP
         const sym = itemsSvg.getElementById(id)
         if (!sym) return (iconTex[key] = null)
         const N = 560
@@ -9236,6 +9249,13 @@ void main(){
       // (an outfit that covers the whole figure, the ghost sheet, is drawn alone: no hair, skin or limbs of the avatar
       // under it to show through)
       const whole = FULL_OUTFITS.has(outfit)
+      // every part image asked for at once (the awaits below take them as they come in): one after another, a player
+      // was some 18 round trips to the CDN
+      const names = []
+      const both = n => (!whole && names.push(`a_${avatar}_${n}`), outfit && names.push(`o_${outfit}_${n}`))
+      for (const part of Object.keys(base.parts)) both(part)
+      for (const arm of Object.keys(base.arms || {})) for (const seg of ["up", "lo"]) both(`${arm}_${seg}`)
+      for (const n of names) L(n).catch(() => null)
       for (const part of Object.keys(base.parts)) tex[part] = [!whole && (await L(`a_${avatar}_${part}`)), outfit && (await L(`o_${outfit}_${part}`))]
       // the weapon pieces come with the paper-doll index
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
@@ -9273,6 +9293,9 @@ void main(){
       const angle = ax => (Math.atan2(ax[2] - ax[0], ax[3] - ax[1]) * 180) / Math.PI
       const items = u.items?.main_hand || u.items?.two_hand ? u.items : { main_hand: "holy_sword" }
       const G = GRIPS[gripOf(items)]
+      // (the off hand's piece loads alongside the main weapon's)
+      const offP = piece(u.items?.off_hand || (G === GRIPS.sai && items.two_hand))
+      offP.catch(() => null)
       const w = await piece(items.main_hand || items.two_hand)
       if (w) {
         tex.weapon = w.tex
@@ -9304,7 +9327,7 @@ void main(){
         def.armColor = sleeve || { fill: "#c8c8c8", line: "#6e6e6e" }
       }
       // (the second sai of the goblin pair in the front hand)
-      const off = await piece(u.items?.off_hand || (G === GRIPS.sai && items.two_hand))
+      const off = await offP
       if (off) {
         tex.off = off.tex
         // the off-hand in the front hand (over the fist with floating hands; else upright on the forearm); a dagger by
