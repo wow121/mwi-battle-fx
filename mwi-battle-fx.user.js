@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.91
+// @version      0.21.92
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -10486,6 +10486,9 @@ void main(){
       if (!q?.tip || a.rig.fallen || q.s.destroyed) return null
       const sp = q.s.children[0]
       if (!sp) return null
+      // (a monster girl's bow or slingshot shoots from its middle, where the arrow sits: its farthest corner from the grip,
+      // the tip, is up at the bow's top end)
+      if (STILL_BOW.has(a.kind) && q.name === "weapon") return world.toLocal(sp.toGlobal(new P.Point(q.w / 2, q.h / 2)))
       const g = sp.toGlobal(new P.Point(q.p.pivot[0] + (q.tip[0] - q.p.pivot[0]) * inner, q.p.pivot[1] + (q.tip[1] - q.p.pivot[1]) * inner))
       return world.toLocal(g)
     }
