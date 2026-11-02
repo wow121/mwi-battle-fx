@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.84
+// @version      0.21.86
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -5636,6 +5636,8 @@
     ]
     const LIB_HOSTS = ["https://cdn.jsdelivr.net/", "https://fastly.jsdelivr.net/", "https://gcore.jsdelivr.net/"]
     const COLOR = { fire: 0xff6a2b, water: 0x3fb4ff, nature: 0x62d65a, physical: 0xffe3a3, heal: 0x6cff9a, buff: 0xffd84a }
+    const SKILL_COL = { toxic_pollen: 0xa45cff, natures_veil: 0xc77dff, life_drain: 0xc8306e }
+    const TOXIC = [0x8a3fd8, 0xa45cff, 0x6a2aa8, 0x9be15d]
     const FRAG = `in vec2 vTextureCoord;
 out vec4 finalColor;
 uniform sampler2D uTexture;
@@ -7492,17 +7494,20 @@ void main(){
       }
       for (const side of ["p", "m"]) source.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
       layout()
-      for (const side of ["p", "m"])
-        for (const a of units[side]) {
-          const r = await (side === "p" ? loadPlayerRig(a.u) : loadRig(a.kind)).catch(e => console.warn("[动画测试] rig", a.kind, e))
-          if (run !== syncing) return
-          if (r) buildRig(a, r)
-          else if (side === "m") {
-            const f = await loadFlat(a.kind.replace(/^girl_/, ""))
-            if (run !== syncing) return
-            buildFlat(a, f)
-          }
-        }
+      await Promise.all(
+        ["p", "m"].flatMap(side =>
+          units[side].map(async a => {
+            const r = await (side === "p" ? loadPlayerRig(a.u) : loadRig(a.kind)).catch(e => console.warn("[动画测试] rig", a.kind, e))
+            if (run !== syncing || !units[side].includes(a)) return
+            if (r) buildRig(a, r)
+            else if (side === "m") {
+              const f = await loadFlat(a.kind.replace(/^girl_/, "")).catch(() => null)
+              if (run !== syncing || !units[side].includes(a)) return
+              buildFlat(a, f)
+            }
+          }),
+        ),
+      )
     }
     const DUNGEON_ZONES = new Set(["chimerical_den", "enchanted_fortress", "pirate_cove", "sinister_circus"])
     function tierOfU(u) {
@@ -7726,7 +7731,8 @@ void main(){
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
           const urls = Object.values(def.parts).map(q => Assets.url(`rig/${id}/${q.img}`))
-          for (const [k, n] of Object.keys(def.parts).entries()) tex[n] = await loadMip(urls[k], def.res)
+          const list = await Promise.all(urls.map(u => loadMip(u, def.res)))
+          Object.keys(def.parts).forEach((n, k) => (tex[n] = list[k]))
           rigUrls[id] = urls
           trimRigs()
           return { def, tex }
@@ -7749,6 +7755,7 @@ void main(){
     }
     const iconTex = {}
     let itemsSvg = null
+    let itemsSvgP = null
     const ICON_FLIP = new Set(["gobo_boomstick"])
     const ICON_CUT = { gobo_stabber: { keep: [3, 48.3, 27.5, 5, 9.7], drop: [48.7, 37, 13, 2, 8.7], core: 1.05, axis: [3, 48.3, 27.5, 5] } }
     async function gameIcon(id, unstrung = false) {
@@ -7757,7 +7764,11 @@ void main(){
       const url = Stage.sheet("items")
       if (!url) return null
       try {
-        itemsSvg = itemsSvg || new DOMParser().parseFromString(await (await fetch(url)).text(), "image/svg+xml")
+        itemsSvgP ||= fetch(url)
+          .then(r => r.text())
+          .then(t => (itemsSvg = new DOMParser().parseFromString(t, "image/svg+xml")))
+          .catch(e => ((itemsSvgP = null), Promise.reject(e)))
+        await itemsSvgP
         const sym = itemsSvg.getElementById(id)
         if (!sym) return (iconTex[key] = null)
         const N = 560
@@ -7880,6 +7891,11 @@ void main(){
       const L = n => loadMip(Assets.url(`rig/player/${n}.webp`))
       const tex = {}
       const whole = FULL_OUTFITS.has(outfit)
+      const names = []
+      const both = n => (!whole && names.push(`a_${avatar}_${n}`), outfit && names.push(`o_${outfit}_${n}`))
+      for (const part of Object.keys(base.parts)) both(part)
+      for (const arm of Object.keys(base.arms || {})) for (const seg of ["up", "lo"]) both(`${arm}_${seg}`)
+      for (const n of names) L(n).catch(() => null)
       for (const part of Object.keys(base.parts)) tex[part] = [!whole && (await L(`a_${avatar}_${part}`)), outfit && (await L(`o_${outfit}_${part}`))]
       for (let k = 0; k < 30 && !Doll.ready(); k++) await new Promise(r => setTimeout(r, 200))
       const piece = async id => {
@@ -7908,6 +7924,8 @@ void main(){
       const angle = ax => (Math.atan2(ax[2] - ax[0], ax[3] - ax[1]) * 180) / Math.PI
       const items = u.items?.main_hand || u.items?.two_hand ? u.items : { main_hand: "holy_sword" }
       const G = GRIPS[gripOf(items)]
+      const offP = piece(u.items?.off_hand || (G === GRIPS.sai && items.two_hand))
+      offP.catch(() => null)
       const w = await piece(items.main_hand || items.two_hand)
       if (w) {
         tex.weapon = w.tex
@@ -7933,7 +7951,7 @@ void main(){
         const sleeve = outfit && C["o_" + outfit]?.armf?.cover > 0.5 ? C["o_" + outfit].armf : C["a_" + avatar]?.armf
         def.armColor = sleeve || { fill: "#c8c8c8", line: "#6e6e6e" }
       }
-      const off = await piece(u.items?.off_hand || (G === GRIPS.sai && items.two_hand))
+      const off = await offP
       if (off) {
         tex.off = off.tex
         def.parts.off = base.parts.ho
@@ -8552,8 +8570,8 @@ void main(){
       const L = S.cx - S.w * 0.6
       const R = S.cx + S.w * 0.6
       const threads = Array.from({ length: 14 }, () => ({ u: Math.random(), ph: Math.random() * 6, len: 0.6 + Math.random() * 0.4 }))
-      const shrooms = feet.flatMap(a => Array.from({ length: 4 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.06), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xc8f06a : 0x8fe0a0 })))
-      light(S.cx, S.ground - S.h * 0.8, 0x7fe86a, S.w * 0.6, dur, 0.9)
+      const shrooms = feet.flatMap(a => Array.from({ length: 5 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.07), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xb46cff : 0xff6fc8 })))
+      light(S.cx, S.ground - S.h * 0.8, 0xb46cff, S.w * 0.6, dur, 0.9)
       tween(dur, p => {
         g.clear()
         caps.clear()
@@ -8567,22 +8585,23 @@ void main(){
           const x = R - (R - L) * (i / 16)
           pts.push(x, bottom - S.h * 0.08 * (1 + Math.sin(i * 1.3 + t * 0.006)))
         }
-        g.poly(pts).fill({ color: 0x4fc84a, alpha: 0.2 * al })
+        g.poly(pts).fill({ color: 0x7a3ac8, alpha: 0.22 * al })
         for (const th of threads) {
           const x = L + (R - L) * th.u
           const sway = Math.sin(t * 0.004 + th.ph) * S.h * 0.06
-          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xc8ff9a, width: 2, alpha: 0.55 * al })
+          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xe6c2ff, width: 2, alpha: 0.55 * al })
         }
         for (const m of shrooms) {
           const k = Math.min(1, Math.max(0, (p - m.t) / 0.1)) * (p > 0.85 ? (1 - p) / 0.15 : 1)
           if (k <= 0) continue
           const sz = m.s * k
-          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xf0f0d8)
+          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xeadcf5)
           caps.ellipse(m.x, m.y - sz * 1.1, sz * 0.75, sz * 0.5).fill(m.c)
+          caps.ellipse(m.x, m.y - sz * 1.1, sz * 1.1, sz * 0.8).fill({ color: m.c, alpha: 0.18 })
           caps.circle(m.x - sz * 0.25, m.y - sz * 1.25, sz * 0.12).fill(0xffffff)
           caps.circle(m.x + sz * 0.2, m.y - sz * 1.15, sz * 0.09).fill(0xffffff)
         }
-        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xd8ff9a, 0xa8f07a, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
+        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
         if (p >= 1) {
           g.destroy()
           caps.destroy()
@@ -8658,7 +8677,7 @@ void main(){
     }
     const claws = (x, y, r, dir, color) => [-1, 0, 1].forEach(k => slashArc(x + dir * k * r * 0.12, y + k * r * 0.22, r, dir, color, { tilt: 0.5, width: 0.6, dur: 280 }))
     function circle(a, element, dur) {
-      const color = ELEM_COL[element] ?? 0xffe680
+      const color = typeof element === "number" ? element : (ELEM_COL[element] ?? 0xffe680)
       const R = a.h * 0.75
       const c = new P.Container()
       c.position.set(a.x0 + (a.dash || 0), a.y0)
@@ -9142,7 +9161,7 @@ void main(){
     function hit(a, tg, src, e, isSkill, shown) {
       if (!a) return
       const el = e.element || "physical"
-      const color = COLOR[el] || COLOR.physical
+      const color = SKILL_COL[e.ab?.key] ?? (COLOR[el] || COLOR.physical)
       const m = mid(a)
       a.hp = tg.hp
       if (tg.dHP === 0) return number(a, "Miss", "#cfd6ff", false)
@@ -9650,6 +9669,38 @@ void main(){
       shake = Math.max(shake, 0.9)
     }
 
+    function toxicBubbles(x, y, w, h, dur) {
+      tween(dur, p => {
+        if (p >= 1 || Math.random() > 0.35) return
+        const bx = x + (Math.random() - 0.5) * w
+        const rise = h * (0.15 + Math.random() * 0.35)
+        const life = 500 + Math.random() * 300
+        emit(bx, y, { n: 1, color: [0xb46cff, 0x9be15d], alpha: 0.7, size: 0.28 * K(h), size1: 0.5 * K(h), speed: 1, up: (rise * 1000) / life, life, jitter: 0 })
+        later(life * 0.85, () => emit(bx, y - rise, { n: 5, color: TOXIC, size: 0.22, size1: 0.05, speed: h * 0.9, drag: 0.2, life: 380 }))
+      })
+    }
+    function toxicPuddle(x, y, r, dur = 2600) {
+      const g = new P.Graphics()
+      g.position.set(x, y)
+      for (let k = 0; k < 3; k++) g.ellipse((Math.random() - 0.5) * r * 0.3, 0, r * (1 - k * 0.25), r * 0.22 * (1 - k * 0.25)).fill({ color: k ? 0x6a2aa8 : 0x2a0e44, alpha: 0.35 })
+      const rim = new P.Graphics()
+      rim.ellipse(0, 0, r * 0.9, r * 0.2).stroke({ color: 0x9be15d, width: r * 0.05, alpha: 0.7 })
+      rim.blendMode = "add"
+      g.addChild(rim)
+      decalLayer.addChild(g)
+      tween(dur, p => {
+        g.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3
+        rim.alpha = 0.6 + 0.4 * Math.sin(p * dur * 0.008)
+        if (p >= 1 && !g.destroyed) g.destroy(GONE)
+      })
+    }
+    function drainWisps(a) {
+      flash(a, 0x3a0828, 900)
+      const m = mid(a)
+      emit(m.x, m.y, { n: 18, color: [0xc8306e, 0x8a2ad0, 0xff6a9a], color1: 0x2a0418, size: 0.4, size1: 0.08, speed: 50, up: a.h * 0.7, gravity: -a.h * 0.3, drag: 0.4, life: 1100, jitter: a.h * 0.5 })
+      emit(m.x, m.y, { n: 6, tex: "smoke", color: [0x3a0a2a, 0x4a1040], alpha: 0.5, size: 0.5, size1: 1.4, speed: 30, up: 50, drag: 0.5, life: 1200, jitter: a.h * 0.3 })
+    }
+
     const SKILL_FX = {
       fireball: {
         fly: (q, src) => {
@@ -9710,19 +9761,26 @@ void main(){
           leaves(a, false)
         }),
       },
-      life_drain: { hit: each(a => leaves(a, false)) },
+      life_drain: { hit: each(a => drainWisps(a)) },
       toxic_pollen: {
         hit: ({ tgs }) => {
           if (!tgs.length) return
           const S = spanOf(tgs)
-          cloud(S.cx, S.ground - S.h * 0.2, S.w, S.h * 0.8, 1800, [0x8fd14a, 0xb6e05a, 0x6fae3a], 0.75)
-          tgs.forEach(([a]) => emit(a.x0, a.y0 - a.h * 0.3, { n: 16, color: [0xb6ff5a, 0x6fd13a], size: 0.35, size1: 0.1, speed: 40, up: 90, gravity: -30, life: 1400, jitter: a.h * 0.6 }))
+          cloud(S.cx, S.ground - S.h * 0.15, S.w, S.h * 0.6, 1800, [0x4a1a78, 0x6a2aa8, 0x5a2a6a], 0.7)
+          tween(1600, p => p < 1 && Math.random() < 0.6 && emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.6, { n: 1, color: TOXIC, size: 0.3, size1: 0.06, speed: 15, up: 40, gravity: -20, life: 1200, fadeIn: 0.3 }))
+          light(S.cx, S.ground - S.h * 0.4, 0x8a3fd8, S.w * 0.5, 1600, 0.9)
+          tgs.forEach(([a]) => {
+            flash(a, 0xa45cff, 800)
+            toxicPuddle(a.x0, a.y0, a.h * 0.8)
+            toxicBubbles(a.x0, a.y0, a.h * 0.8, a.h, 1500)
+            emit(a.x0, a.y0 - a.h * 0.3, { n: 16, color: TOXIC, size: 0.35, size1: 0.1, speed: 40, up: 90, gravity: -30, life: 1400, jitter: a.h * 0.6 })
+          })
         },
       },
       natures_veil: {
         hit: each(a => {
-          flash(a, 0x7fe86a, 700)
-          emit(mid(a).x, mid(a).y, { n: 14, color: [0xd8ff9a, 0xa8f07a], size: 0.3, size1: 0.08, speed: 90, gravity: -20, drag: 0.4, life: 1200, jitter: a.h * 0.4 })
+          flash(a, 0xc77dff, 700)
+          emit(mid(a).x, mid(a).y, { n: 14, color: [0xe6c2ff, 0xff9ad8, 0xb46cff], size: 0.3, size1: 0.08, speed: 90, gravity: -20, drag: 0.4, life: 1200, jitter: a.h * 0.4 })
         }),
       },
       quick_shot: {
@@ -9892,8 +9950,8 @@ void main(){
       frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
       entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.75, a.h * 1.0, 1900)),
       natures_veil: () => {},
-      toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: [0xb6ff5a, 0x8fd14a, 0xe0ff8a], size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
-      life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0x62d65a)),
+      toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: TOXIC, size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
+      life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0xc8306e)),
       cleave: onEach((a, src, color) => slashArc(mid(a).x, mid(a).y, a.h * 0.75, src.dir, color, { width: 1.3, tilt: 0.3 })),
       maim: onEach((a, src) => {
         slashArc(mid(a).x, mid(a).y, a.h * 0.6, src.dir, 0xff3b3b, { tilt: -0.4 })
@@ -9925,7 +9983,7 @@ void main(){
         const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
         const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a)
         const isSkill = !!e.ab
-        const color = COLOR[e.element] || COLOR.physical
+        const color = SKILL_COL[e.ab?.key] ?? (COLOR[e.element] || COLOR.physical)
         if (e.effect === "heal" || e.effect === "regen") {
           if (src) {
             play1(src, "cast")
@@ -9962,7 +10020,7 @@ void main(){
         const name = isSkill ? (actionOf(src.kind, "skill:" + e.ab.key) ? "skill:" + e.ab.key : e.ab.target === "allEnemies" && actionOf(src.kind, "skill:all") ? "skill:all" : "skill") : sets[Math.floor(Math.random() * sets.length)] || "attack"
         const act = play1(src, name)
         const recipe = isSkill ? SKILL_FX[e.ab.key] : null
-        if (e.style === "magic") circle(src, e.element, (act?.hit ?? 300) + 300)
+        if (e.style === "magic") circle(src, SKILL_COL[e.ab?.key] ?? e.element, (act?.hit ?? 300) + 300)
         if (src.off === "relic") later(act?.hit ?? 300, () => relicGlow(src))
         const at = act?.hit ?? 300
         for (const t of act?.hits || [])
