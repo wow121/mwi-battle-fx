@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.86
+// @version      0.21.91
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -30,7 +30,7 @@
   const DEV = false
   const DEFAULTS = { lifeInfo: true, enabled: true, scale: 1, debug: false, stageH: 360, lookMode: "equip", assetBase: "", overlay: true, liveH: 300, guildOverlay: true, guildH: 460, life: true, lifeTown: true, lifeMin: false, lifePos: null, lifeW: 0.2, lifeWm: 0.62, trialOverlay: true, stageEngine: "rig", fxAlpha: 1, monGirl: false, quality: 0, shakeK: 1, camZoom: true }
   const DEFAULT_ASSET_BASE = "https://cdn.jsdelivr.net/gh/wow121/mwi-battle-fx@main"
-  const ASSET_REV = "e560b9d6de"
+  const ASSET_REV = "a80a168cc4"
   const SPIKES_LEFT = /spiked_bulwark/
   const MIRROR = "https://gh-proxy.org/https://raw.githubusercontent.com/wow121/mwi-battle-fx/"
   const MANIFEST_URLS = [
@@ -266,6 +266,8 @@
         for (const key of ["atkCounter", "dmgCounter", "critCounter"]) if (typeof e[key] === "number") u.counters[key] = e[key]
         if (e.isStunned && !c.died) u.stunned ||= Date.now()
         else u.stunned = 0
+        if (e.isBlinded && !c.died) u.blinded ||= Date.now()
+        else u.blinded = 0
         if ("abilityHrid" in e) u.ability = e.abilityHrid || null
         if (TANK_ABILITIES.has(shortId(e.abilityHrid))) u.tank = true
         const st = ABILITIES[shortId(e.abilityHrid)]?.[3]
@@ -6544,7 +6546,17 @@ void main(){
         },
       },
     }
-    ACTIONS["player:staff"]["skill:natures_veil"] = ACTIONS["player:staff"]["skill:toxic_pollen"]
+    ACTIONS["player:staff"]["skill:natures_veil"] = {
+      dur: 1150, shot: 600, hit: 950, missile: "orb",
+      keys: [
+        { t: 0, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+        { t: 220, e: "out", a: { body: -6, hm: [0.12, 0.4, 40], ho: [0.05, 0.14, 0] }, y: 0.03 },
+        { t: 520, a: { body: -7, hm: [0.1, 0.42, 48], ho: [0.05, 0.15, 0] }, y: 0.03, x: -0.02 },
+        { t: 600, e: "in", a: { body: 13, hm: [0.4, 0.22, -95], ho: [-0.04, 0, 0] }, x: 0.04 },
+        { t: 820, a: { body: 12, hm: [0.39, 0.21, -96], ho: [-0.04, 0, 0] }, x: 0.04 },
+        { t: 1150, a: { hm: [0.02, 0, 0], ho: [0.06, -0.05, 0] } },
+      ],
+    }
     const MT = {
       biped: {
         idle: { rel: true, dur: 1600, loop: true, keys: [{ t: 0, a: { arm_m: 2, arm_o: -2 } }, { t: 800, a: { torso: -2, arm_m: -3, arm_o: 3 }, y: -0.012 }, { t: 1600, a: { arm_m: 2, arm_o: -2 } }] },
@@ -7494,6 +7506,7 @@ void main(){
       }
       for (const side of ["p", "m"]) source.units[side].forEach((u, i) => units[side].push(makeUnit(side, i, u)))
       layout()
+      later(1500, () => AREA.forEach(loadArea))
       await Promise.all(
         ["p", "m"].flatMap(side =>
           units[side].map(async a => {
@@ -8561,53 +8574,6 @@ void main(){
         }
       })
     }
-    function veil(S, feet, dur = 1700) {
-      const g = new P.Graphics()
-      fxLayer.addChild(g)
-      const caps = new P.Graphics()
-      smokeLayer.addChild(caps)
-      const top = S.ground - S.h * 2
-      const L = S.cx - S.w * 0.6
-      const R = S.cx + S.w * 0.6
-      const threads = Array.from({ length: 14 }, () => ({ u: Math.random(), ph: Math.random() * 6, len: 0.6 + Math.random() * 0.4 }))
-      const shrooms = feet.flatMap(a => Array.from({ length: 5 }, () => ({ x: a.x0 + (Math.random() - 0.5) * a.h * 0.9, y: a.y0 + (Math.random() - 0.4) * a.h * 0.1, s: a.h * (0.07 + Math.random() * 0.07), t: 0.15 + Math.random() * 0.2, c: Math.random() < 0.5 ? 0xb46cff : 0xff6fc8 })))
-      light(S.cx, S.ground - S.h * 0.8, 0xb46cff, S.w * 0.6, dur, 0.9)
-      tween(dur, p => {
-        g.clear()
-        caps.clear()
-        const t = p * dur
-        const down = 1 - Math.pow(1 - Math.min(1, t / 450), 3)
-        const lift = p > 0.7 ? (p - 0.7) / 0.3 : 0
-        const bottom = top + (S.ground - S.h * 0.05 - top) * down - lift * S.h * 0.6
-        const al = 1 - lift
-        const pts = [L, top, R, top]
-        for (let i = 0; i <= 16; i++) {
-          const x = R - (R - L) * (i / 16)
-          pts.push(x, bottom - S.h * 0.08 * (1 + Math.sin(i * 1.3 + t * 0.006)))
-        }
-        g.poly(pts).fill({ color: 0x7a3ac8, alpha: 0.22 * al })
-        for (const th of threads) {
-          const x = L + (R - L) * th.u
-          const sway = Math.sin(t * 0.004 + th.ph) * S.h * 0.06
-          g.moveTo(x, top).quadraticCurveTo(x + sway, top + (bottom - top) * 0.5, x - sway * 0.5, top + (bottom - top) * th.len).stroke({ color: 0xe6c2ff, width: 2, alpha: 0.55 * al })
-        }
-        for (const m of shrooms) {
-          const k = Math.min(1, Math.max(0, (p - m.t) / 0.1)) * (p > 0.85 ? (1 - p) / 0.15 : 1)
-          if (k <= 0) continue
-          const sz = m.s * k
-          caps.rect(m.x - sz * 0.22, m.y - sz * 1.1, sz * 0.44, sz * 1.1).fill(0xeadcf5)
-          caps.ellipse(m.x, m.y - sz * 1.1, sz * 0.75, sz * 0.5).fill(m.c)
-          caps.ellipse(m.x, m.y - sz * 1.1, sz * 1.1, sz * 0.8).fill({ color: m.c, alpha: 0.18 })
-          caps.circle(m.x - sz * 0.25, m.y - sz * 1.25, sz * 0.12).fill(0xffffff)
-          caps.circle(m.x + sz * 0.2, m.y - sz * 1.15, sz * 0.09).fill(0xffffff)
-        }
-        if (p < 0.9 && Math.random() < 0.8) emit(L + Math.random() * (R - L), top + Math.random() * (bottom - top) * 0.6, { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.32, size1: 0.1, speed: 15, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1600, fadeIn: 0.2 })
-        if (p >= 1) {
-          g.destroy()
-          caps.destroy()
-        }
-      })
-    }
     function pillar(x, y, w, h, color, dur, peak = 1) {
       const s = new P.Sprite(pillarTex)
       s.anchor.set(0.5, 1)
@@ -9181,6 +9147,8 @@ void main(){
       }
       if (tg.stunned && !tg.died) a.stunUntil = now() + tg.stunned
       if (a.u.stunned) a.stunSeen = a.u.stunned
+      if (tg.blinded && !tg.died) a.blindUntil = now() + tg.blinded
+      if (a.u.blinded) a.blindSeen = a.u.blinded
       if (isSkill && !tg.died) afflict(a, e.ab)
       drawHp(a)
       if (tg.died) die(a)
@@ -9216,6 +9184,41 @@ void main(){
         s.position.set(Math.cos(an) * a.h * 0.28, -a.h * 1.02 + Math.sin(an) * a.h * 0.07)
         s.scale.set(Math.sin(an) > 0 ? 1 : 0.75)
       })
+    }
+    const BLIND_MAX = 5300
+    function isBlind(a, t) {
+      if (a.dead) return false
+      if (a.blindUntil > t) return true
+      const s = a.u.blinded
+      if (!s) return false
+      const age = Date.now() - s
+      return age < BLIND_MAX && (a.blindSeen === s || age > 1000)
+    }
+    function blindFrame(a, t) {
+      const on = isBlind(a, t)
+      if (!on && !a.mist?.visible) return
+      if (!a.mist) {
+        a.mist = new P.Container()
+        for (let k = 0; k < 6; k++) {
+          const s = new P.Sprite(smokeTex)
+          s.anchor.set(0.5)
+          s.tint = [0x7a36c0, 0xc77dff, 0x5a2a8a][k % 3]
+          s.rotation = k
+          a.mist.addChild(s)
+        }
+        a.cont.addChild(a.mist)
+        a.mist.alpha = 0
+      }
+      a.mist.visible = true
+      a.mist.alpha = Math.max(0, Math.min(0.85, a.mist.alpha + (on ? dt : -dt) * 3))
+      if (!on && a.mist.alpha <= 0) return void (a.mist.visible = false)
+      a.mist.children.forEach((s, k) => {
+        const an = (t * Math.PI) / 1400 + (k * Math.PI * 2) / 6
+        s.position.set(Math.cos(an) * a.h * 0.26, -a.h * 0.88 + Math.sin(an) * a.h * 0.07)
+        s.scale.set((a.h * 0.45) / 96)
+        s.rotation += 0.01
+      })
+      if (Math.random() < 0.15) emit(a.x0 + (a.dash || 0) + (Math.random() - 0.5) * a.h * 0.5, a.y0 - a.h * 0.9, { n: 1, color: [0xe6c2ff, 0xb46cff], size: 0.25, size1: 0.05, speed: 10, up: 20, life: 700 })
     }
     function die(a) {
       a.dead = true
@@ -9701,6 +9704,237 @@ void main(){
       emit(m.x, m.y, { n: 6, tex: "smoke", color: [0x3a0a2a, 0x4a1040], alpha: 0.5, size: 0.5, size1: 1.4, speed: 30, up: 50, drag: 0.5, life: 1200, jitter: a.h * 0.3 })
     }
 
+    function sporeStream(from, S, travel) {
+      const A = from()
+      if (!A) return
+      const B = { x: S.cx, y: S.ground - S.h * 0.45 }
+      tween(travel, p => {
+        if (p >= 1) return
+        const x = lerp(A.x, B.x, p)
+        const y = lerp(A.y, B.y, p) - Math.sin(p * Math.PI) * S.h * 0.25
+        const w = S.h * (0.1 + 0.5 * p)
+        emit(x, y, { n: 3, color: TOXIC, alpha: 0.85, size: 0.35, size1: 0.12, speed: 40, life: 650, jitter: w })
+        if (Math.random() < 0.5) emit(x, y, { n: 1, tex: "smoke", color: [0x5a2a8a, 0x6a2aa8], alpha: 0.45, size: 0.3, size1: 0.9, speed: 20, life: 700, jitter: w })
+      })
+    }
+    function poisonCloud(S, dur) {
+      const n = Math.max(7, Math.round(S.w / (S.h * 0.28)))
+      const puffs = []
+      for (let k = 0; k < n * 2; k++) {
+        const s = new P.Sprite(smokeTex)
+        s.anchor.set(0.5)
+        s.tint = k % 2 ? 0x4a1a78 : 0x7a36c0
+        s.rotation = Math.random() * 6.3
+        s.alpha = 0
+        smokeLayer.addChild(s)
+        puffs.push({ s, u: Math.random() - 0.5, v: Math.random(), r: S.h * (0.55 + Math.random() * 0.4), t: Math.random() * 0.2, ph: Math.random() * 6, spin: (Math.random() - 0.5) * 0.6, a: k % 2 ? 0.5 : 0.42 })
+      }
+      tween(dur, p => {
+        const t = p * dur
+        const out = p > 0.6 ? (p - 0.6) / 0.4 : 0
+        for (const q of puffs) {
+          if (q.s.destroyed) continue
+          const e = Math.min(1, Math.max(0, (p - q.t) / 0.25))
+          const grow = 1 - Math.pow(1 - e, 3)
+          q.s.position.set(S.cx + q.u * S.w * 0.9 + Math.sin(t * 0.002 + q.ph) * S.h * 0.1, S.ground - S.h * (0.2 + q.v * 0.6) - out * S.h * 0.5 - grow * S.h * 0.12)
+          q.s.scale.set(((q.r * (0.3 + 0.7 * grow) * (1 + 0.3 * out)) / 96) * 2)
+          q.s.rotation += q.spin * 0.016
+          q.s.alpha = q.a * grow * (1 - out)
+          if (p >= 1) q.s.destroy()
+        }
+        if (p < 0.8 && Math.random() < 0.7) emit(S.cx + (Math.random() - 0.5) * S.w * 0.9, S.ground - Math.random() * S.h * 0.9, { n: 2, color: [0xb6ff5a, 0x9be15d, 0xd8a8ff], size: 0.4, size1: 0.05, speed: 10, up: 30, life: 900, fadeIn: 0.3 })
+      })
+    }
+    let veilFrames = null
+    let veilLoading = null
+    function loadVeilSheet() {
+      if (veilFrames || veilLoading || !Assets.has("fx", "natures_veil")) return
+      veilLoading = fetch(Assets.url("fx/natures_veil.webp"))
+        .then(r => r.blob())
+        .then(b => createImageBitmap(b))
+        .then(bm => {
+          const c = document.createElement("canvas")
+          c.width = bm.width
+          c.height = bm.height
+          const x = c.getContext("2d")
+          x.drawImage(bm, 0, 0)
+          bm.close?.()
+          const im = x.getImageData(0, 0, c.width, c.height)
+          const d = im.data
+          const th = (165 * Math.PI) / 180
+          const co = Math.cos(th)
+          const si = Math.sin(th)
+          const M = [0.213 + co * 0.787 - si * 0.213, 0.715 - co * 0.715 - si * 0.715, 0.072 - co * 0.072 + si * 0.928, 0.213 - co * 0.213 + si * 0.143, 0.715 + co * 0.285 + si * 0.14, 0.072 - co * 0.072 - si * 0.283, 0.213 - co * 0.213 - si * 0.787, 0.715 - co * 0.715 + si * 0.715, 0.072 + co * 0.928 + si * 0.072]
+          for (let o = 0; o < d.length; o += 4) {
+            const r = d[o]
+            const g = d[o + 1]
+            const b = d[o + 2]
+            d[o] = M[0] * r + M[1] * g + M[2] * b
+            d[o + 1] = M[3] * r + M[4] * g + M[5] * b
+            d[o + 2] = M[6] * r + M[7] * g + M[8] * b
+          }
+          x.putImageData(im, 0, 0)
+          const base = P.Texture.from(c)
+          const fw = Math.floor(c.width / 4)
+          const fh = Math.floor(c.height / 2)
+          veilFrames = Array.from({ length: 8 }, (_, k) => new P.Texture({ source: base.source, frame: new P.Rectangle((k % 4) * fw, Math.floor(k / 4) * fh, fw, fh) }))
+        })
+        .catch(e => {
+          veilLoading = null
+          console.warn("[战斗动画] natures_veil sheet", e)
+        })
+    }
+    function sporePod(h) {
+      const c = new P.Container()
+      const halo = new P.Sprite(glow)
+      halo.anchor.set(0.5)
+      halo.tint = 0xb46cff
+      halo.width = halo.height = h * 0.7
+      halo.blendMode = "add"
+      const g = new P.Graphics()
+      const w = h * 0.12
+      g.ellipse(0, 0, w, w * 1.25).fill(0x6a2aa8)
+      g.ellipse(-w * 0.25, -w * 0.35, w * 0.55, w * 0.7).fill({ color: 0xb46cff, alpha: 0.8 })
+      for (const [u, v, r] of [[0.3, -0.3, 0.16], [-0.35, 0.3, 0.13], [0.25, 0.45, 0.11], [-0.1, -0.7, 0.1]]) g.circle(u * w, v * w, r * w).fill(0xf0d8ff)
+      g.moveTo(0, -w * 1.25).lineTo(0, -w * 1.6).stroke({ color: 0x4a1a78, width: w * 0.18, cap: "round" })
+      c.addChild(halo, g)
+      shotLayer.addChild(c)
+      return c
+    }
+    function sporeFog(S, at, dur = 2300) {
+      light(at.x, at.y, 0xd8a8ff, S.h * 2, 320, 1.5)
+      shockRing(at.x, at.y, S.h * 1.6, 0xd8a8ff)
+      emit(at.x, at.y, { n: 40, color: [0xe6c2ff, 0xff9ad8, 0xb46cff, 0xffffff], size: 0.4, size1: 0.1, speed: S.h * 3, drag: 0.12, gravity: S.h * 0.8, life: 1300 })
+      zoomBlur(at.x, at.y, 220, 0.04)
+      const n = Math.max(10, Math.round(S.w / (S.h * 0.2)))
+      const puffs = []
+      for (let k = 0; k < n; k++) {
+        const lit = k % 4 === 3
+        const s = new P.Sprite(lit ? glow : smokeTex)
+        s.anchor.set(0.5)
+        s.tint = lit ? 0xb46cff : [0x5a2490, 0x7a36c0, 0x8a3fa8][k % 3]
+        if (lit) s.blendMode = "add"
+        s.alpha = 0
+        s.rotation = Math.random() * 6.3
+        ;(lit ? fxLayer : smokeLayer).addChild(s)
+        puffs.push({ s, lit, tx: S.cx + ((k + 0.5) / n - 0.5) * S.w * 0.95 + (Math.random() - 0.5) * S.h * 0.2, ty: S.ground - S.h * (0.15 + Math.random() * 1.05), r: S.h * (0.5 + Math.random() * 0.35), ph: Math.random() * 6, spin: (Math.random() - 0.5) * 0.8, t: Math.random() * 0.06 })
+      }
+      tween(dur, p => {
+        const t = p * dur
+        const out = p > 0.6 ? (p - 0.6) / 0.4 : 0
+        for (const q of puffs) {
+          if (q.s.destroyed) continue
+          const e = Math.min(1, Math.max(0, (t / dur - q.t) / 0.2))
+          const k = 1 - Math.pow(1 - e, 3)
+          q.s.position.set(lerp(at.x, q.tx, k) + Math.sin(t * 0.002 + q.ph) * S.h * 0.08, lerp(at.y, q.ty, k) - out * S.h * 0.3)
+          q.s.scale.set(((q.r * (0.25 + 0.75 * k) * (1 + 0.25 * out)) / (q.lit ? 256 : 96)) * (q.lit ? 2.6 : 2))
+          q.s.rotation += q.spin * 0.016
+          q.s.alpha = (q.lit ? 0.14 : 0.5) * k * (1 - out)
+          if (p >= 1) q.s.destroy()
+        }
+        if (p > 0.1 && p < 0.85 && Math.random() < 0.8) emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - S.h * (0.3 + Math.random() * 1.1), { n: 1, color: [0xe6c2ff, 0xff9ad8, 0xffffff], size: 0.3, size1: 0.06, speed: 12, angle: Math.PI / 2, spread: 1, gravity: 25, life: 1400, fadeIn: 0.2 })
+      })
+    }
+    function mushroomClump(a, dur = 1500) {
+      if (!veilFrames) return
+      const s = new P.Sprite(veilFrames[0])
+      s.anchor.set(0.5, 0.9)
+      const h = a.h * 1.55
+      s.scale.set(h / veilFrames[0].height)
+      s.position.set(a.x0 + (Math.random() - 0.5) * a.h * 0.15, a.y0 + a.h * 0.04)
+      s.blendMode = "add"
+      s.alpha = 0.9
+      smokeLayer.addChild(s)
+      tween(dur, p => {
+        if (s.destroyed) return
+        s.texture = veilFrames[Math.min(7, Math.floor(p * 8))]
+        if (p >= 1) s.destroy()
+      })
+    }
+    function drainTether(a, src, dur = 900) {
+      const g = new P.Graphics()
+      fxLayer.addChild(g)
+      const beads = Array.from({ length: 6 }, (_, k) => ({ t0: 0.15 + k * 0.09 }))
+      const ph = Math.random() * 6
+      tween(dur, p => {
+        g.clear()
+        if (p >= 1) return g.destroy()
+        const A = mid(a)
+        const B = mid(src)
+        const t = p * dur
+        const reach = Math.min(1, p / 0.18)
+        const fade = p > 0.8 ? (1 - p) / 0.2 : 1
+        const dx = B.x - A.x
+        const pt = u => ({ x: A.x + dx * u, y: A.y + (B.y - A.y) * u - Math.sin(u * Math.PI) * a.h * 0.35 + Math.sin(u * 9 + t * 0.02 + ph) * a.h * 0.05 * Math.sin(u * Math.PI) })
+        const N = 24
+        const end = Math.max(1, Math.round(N * reach))
+        const wd = a.h * (0.05 + 0.03 * Math.sin(t * 0.03))
+        for (const [color, w, al] of [[0x5a0420, 4, 0.45], [0xc8306e, 2, 0.85], [0xffc0d8, 0.6, 0.95]]) {
+          const q0 = pt(0)
+          g.moveTo(q0.x, q0.y)
+          for (let i = 1; i <= end; i++) {
+            const q = pt(i / N)
+            g.lineTo(q.x, q.y)
+          }
+          g.stroke({ color, width: wd * w, alpha: al * fade, cap: "round", join: "round" })
+        }
+        for (const b of beads) {
+          const u = (p - b.t0) / 0.45
+          if (u <= 0 || u >= 1) continue
+          const q = pt(u)
+          g.circle(q.x, q.y, a.h * 0.07).fill({ color: 0xff4a7a, alpha: fade })
+          g.circle(q.x, q.y, a.h * 0.02).fill({ color: 0xffffff, alpha: fade })
+          if (u > 0.92) {
+            light(B.x, B.y, 0xff3a6a, src.h * 0.6, 300, 1.1)
+            emit(B.x, B.y, { n: 4, color: [0xff4a7a, 0xffc0d8], size: 0.3, size1: 0.05, speed: 90, life: 380 })
+          }
+        }
+      })
+      ripple(a.x0, a.y0, a.h * 1.1, 0xc8306e, { n: 3, dur: 700, gap: 200 })
+    }
+
+    const AREA = new Set(["natures_veil", "toxic_pollen", "firestorm", "flame_blast", "frost_surge", "mana_spring", "rain_of_arrows", "crippling_slash", "sweep", "fracturing_impact"])
+    const AREA_TURN = new Set(["rain_of_arrows", "crippling_slash", "sweep"])
+    const AREA_LEFT = new Set(["rain_of_arrows"])
+    const AREA_DUR = 1500
+    const AREA_LEAD = 560
+    const areaLoad = {}
+    const areaFrames = {}
+    function loadArea(key) {
+      const n = "area_" + key
+      if (!AREA.has(key) || !Assets.has("fx", n)) return
+      areaLoad[key] ||= loadMip(Assets.url(`fx/${n}.webp`))
+        .then(t => {
+          const fw = t.width / 2
+          const fh = t.height / 4
+          areaFrames[key] = Array.from({ length: 8 }, (_, k) => new P.Texture({ source: t.source, frame: new P.Rectangle((k % 2) * fw, Math.floor(k / 2) * fh, fw, fh) }))
+        })
+        .catch(e => {
+          delete areaLoad[key]
+          console.warn("[战斗动画] area", key, e)
+        })
+    }
+    function areaFx(key, list, dir) {
+      const fr = areaFrames[key]
+      if (!fr || !list.length) return
+      const S = span(list)
+      const w = S.w * 1.05
+      const s = new P.Sprite(fr[0])
+      s.anchor.set(0.5, 0.85)
+      s.position.set(S.cx, S.ground + S.h * 0.04)
+      const k = w / fr[0].width
+      const flip = AREA_TURN.has(key) && (AREA_LEFT.has(key) ? dir > 0 : dir < 0)
+      s.scale.set(flip ? -k : k, k)
+      s.blendMode = "add"
+      s.alpha = 0.95
+      smokeLayer.addChild(s)
+      tween(AREA_DUR, p => {
+        if (s.destroyed) return
+        s.texture = fr[Math.min(7, Math.floor(p * 8))]
+        if (p >= 1) s.destroy()
+      })
+    }
+
     const SKILL_FX = {
       fireball: {
         fly: (q, src) => {
@@ -9716,12 +9950,12 @@ void main(){
       flame_blast: { hit: blaze },
       firestorm: { hit: blaze },
       cleave: {
-        hit: ({ src, tgs, color }) => {
+        hit: ({ src, tgs, color, area }) => {
           if (!tgs.length) return
           const list = tgs.map(([a]) => a)
           const far = list.reduce((b, a) => (Math.abs(a.x0 - src.x0) > Math.abs(b.x0 - src.x0) ? a : b))
           const from = mid(src)
-          crescent(from, src.dir, color, src.h * 1.3, Math.abs(far.x0 - from.x) + far.h * 0.8, 380)
+          if (!area) crescent(from, src.dir, color, src.h * 1.3, Math.abs(far.x0 - from.x) + far.h * 0.8, 380)
           const m = mid(list[0])
           slow(240, 0.22)
           focusOn(m.x, m.y, 0.1, 700)
@@ -9761,12 +9995,13 @@ void main(){
           leaves(a, false)
         }),
       },
-      life_drain: { hit: each(a => drainWisps(a)) },
+      life_drain: { hit: each((a, src) => (drainWisps(a), drainTether(a, src, 1000))) },
       toxic_pollen: {
-        hit: ({ tgs }) => {
+        hit: ({ tgs, area }) => {
           if (!tgs.length) return
           const S = spanOf(tgs)
-          cloud(S.cx, S.ground - S.h * 0.15, S.w, S.h * 0.6, 1800, [0x4a1a78, 0x6a2aa8, 0x5a2a6a], 0.7)
+          if (!area) poisonCloud(S, 2000)
+          zoomBlur(S.cx, S.ground - S.h * 0.5, 220, 0.04)
           tween(1600, p => p < 1 && Math.random() < 0.6 && emit(S.cx + (Math.random() - 0.5) * S.w, S.ground - Math.random() * S.h * 0.6, { n: 1, color: TOXIC, size: 0.3, size1: 0.06, speed: 15, up: 40, gravity: -20, life: 1200, fadeIn: 0.3 }))
           light(S.cx, S.ground - S.h * 0.4, 0x8a3fd8, S.w * 0.5, 1600, 0.9)
           tgs.forEach(([a]) => {
@@ -9949,7 +10184,12 @@ void main(){
       ice_spear: onEach(a => iceSpikes(a.x0, a.y0, a.h * 0.5, a.h * 0.6, { n: 4, dur: 900 })),
       frost_surge: onEach(a => iceSpikes(a.x0, a.y0, a.h * 1.1, a.h * 1.2, { n: 8 })),
       entangle: onEach(a => vinesGrow(a.x0, a.y0, a.h * 0.75, a.h * 1.0, 1900)),
-      natures_veil: () => {},
+      natures_veil: ({ all }) => {
+        if (!all.length) return
+        const S = span(all)
+        sporeFog(S, podAt(S))
+        all.forEach((a, k) => later(80 + k * 70, () => mushroomClump(a)))
+      },
       toxic_pollen: onEach(a => emit(mid(a).x, mid(a).y, { n: 30, color: TOXIC, size: 0.4, size1: 0.1, speed: 220, drag: 0.1, gravity: -40, life: 900 })),
       life_drain: onEach(a => impactStar(mid(a).x, mid(a).y, a.h * 0.35, 0xc8306e)),
       cleave: onEach((a, src, color) => slashArc(mid(a).x, mid(a).y, a.h * 0.75, src.dir, color, { width: 1.3, tilt: 0.3 })),
@@ -9961,7 +10201,42 @@ void main(){
       scratch: onEach((a, src) => claws(mid(a).x, mid(a).y, a.h * 0.5, src.dir, 0xffe3a3)),
     }
     for (const [k, f] of Object.entries(MAIN)) (SKILL_FX[k] ||= {}).main = f
-    SKILL_FX.natures_veil.pre = [450, ({ all }) => all.length && veil(span(all), all)]
+    SKILL_FX.natures_veil.pre = [5000, () => Assets.has("fx", "area_natures_veil") || loadVeilSheet()]
+    SKILL_FX.natures_veil.charge = ({ src, from, until }) => {
+      const o = (src.pod = sporePod(src.h))
+      tween(until, p => {
+        const T = from()
+        if (o.destroyed) return
+        if (T) o.position.set(T.x, T.y)
+        o.scale.set(0.15 + 0.85 * ease(p))
+        o.rotation = Math.sin(p * 12) * 0.2
+        if (T && p < 1 && Math.random() < 0.6) {
+          const an = Math.random() * Math.PI * 2
+          const r = src.h * (0.35 + Math.random() * 0.25)
+          emit(T.x + Math.cos(an) * r, T.y + Math.sin(an) * r, { n: 1, color: [0xe6c2ff, 0xb46cff], size: 0.3, speed: 1, life: 300, to: from, pull: 40, drag: 0.02, fadeIn: 0.3 })
+        }
+      })
+    }
+    const podAt = S => ({ x: S.cx, y: S.ground - S.h * 1.35 })
+    SKILL_FX.natures_veil.release = ({ src, all, flight, from }) => {
+      const o = src.pod || sporePod(src.h)
+      src.pod = null
+      if (!all.length) return o.destroyed || o.destroy(GONE)
+      const A = from()
+      const B = podAt(span(all))
+      const top = Math.min(A.y, B.y) - src.h * 1.1
+      tween(flight, p => {
+        if (o.destroyed) return
+        const x = lerp(A.x, B.x, p)
+        const y = (1 - p) * (1 - p) * A.y + 2 * (1 - p) * p * top + p * p * B.y
+        o.position.set(x, y)
+        o.rotation += 0.25
+        o.scale.set(1)
+        if (Math.random() < 0.8) emit(x, y, { n: 1, color: [0xe6c2ff, 0xb46cff, 0xff9ad8], size: 0.3, size1: 0.05, speed: 30, life: 500 })
+        if (p >= 1) o.destroy(GONE)
+      })
+    }
+    SKILL_FX.toxic_pollen.pre = [380, ({ src, all }) => all.length && sporeStream(() => tipOf(src) || mid(src), span(all), 380)]
     SKILL_FX.fireball.charge = ({ src, from, until }) => (src.fireOrb = fireCharge(from, src.h, until))
     SKILL_FX.fireball.release = ({ src, all, flight, from }) => {
       const o = src.fireOrb || fireOrb(src.h)
@@ -10023,6 +10298,9 @@ void main(){
         if (e.style === "magic") circle(src, SKILL_COL[e.ab?.key] ?? e.element, (act?.hit ?? 300) + 300)
         if (src.off === "relic") later(act?.hit ?? 300, () => relicGlow(src))
         const at = act?.hit ?? 300
+        if (isSkill) loadArea(e.ab.key)
+        const areaOn = isSkill && !!areaFrames[e.ab.key] && tgs.length > 0
+        if (areaOn) later(Math.max(0, at - AREA_LEAD), () => areaFx(e.ab.key, tgs.map(([a]) => a), src.dir))
         for (const t of act?.hits || [])
           if (t < at)
             later(t, () => {
@@ -10086,6 +10364,7 @@ void main(){
               for (let n = 0; n < 14; n++)
                 later(Math.max(0, flight - 140 - n * 35), () => {
                   const ground = n % 2 === 0
+                  if (areaOn && !ground) return
                   const x = a.x0 + (Math.random() - 0.5) * a.h * (ground ? 1.3 : 0.6)
                   const y = ground ? a.y0 + (Math.random() - 0.3) * a.h * 0.12 : a.y0 - a.h * (0.15 + Math.random() * 0.45)
                   shoot(kind, { x: x - src.dir * a.h * 0.5, y: y - a.h * 2.4 }, { x, y }, 260, {
@@ -10113,8 +10392,8 @@ void main(){
           later(act.dur, () => (src.cont.zIndex = src.y0))
         }
         later(at, () => {
-          const shown = !!recipe?.main
-          if (shown) recipe.main({ src, all: tgs.map(([a]) => a), color: tcol })
+          const shown = !!recipe?.main || areaOn
+          if (recipe?.main && !areaOn) recipe.main({ src, all: tgs.map(([a]) => a), color: tcol })
           tgs.forEach(([a, tg]) => hit(a, tg, src, e, isSkill, shown))
           if (isSpear(src) && act?.shot == null) spearBlow(src, tgs.filter(([, tg]) => tg.dHP), isSkill ? tcol : SPEAR_COL, isSkill, name)
           if (isSkill)
@@ -10128,7 +10407,7 @@ void main(){
                 decal("crack", a.x0, a.y0, a.h * 0.7)
               }
             })
-          recipe?.hit?.({ src, tgs: tgs.filter(([, tg]) => tg.dHP), color: tcol })
+          recipe?.hit?.({ src, tgs: tgs.filter(([, tg]) => tg.dHP), color: tcol, area: areaOn })
           if (isSkill && !many) {
             for (const u of [src, ...tgs.map(([a]) => a)]) if (u.act) u.act.t0 += 90
             punch = Math.max(punch, 0.7)
@@ -10290,6 +10569,7 @@ void main(){
           } else if (a.flat) flatFrame(a, t)
           statusFrame(a, t)
           stunFrame(a, t)
+          blindFrame(a, t)
         }
       trails(t)
       shake *= Math.pow(0.004, dt)
