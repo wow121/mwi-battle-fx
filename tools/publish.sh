@@ -14,13 +14,14 @@ TRAILER=$'\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
 python3 -I tools/build-release.py
 git add -A
 if ! git diff --cached --quiet; then git commit -q -m "$MSG$TRAILER"; fi
-REV=$(git rev-parse --short=10 HEAD)
+# the full commit hash: jsDelivr serves files at a full hash as immutable for a year, at a short one for 7 days only
+REV=$(git rev-parse HEAD)
 python3 -I tools/pin-manifest.py "$REV"
 # the scripts carry the art commit too (their fallback manifest when raw.githubusercontent.com is out of reach)
 sed -i "s/^  const ASSET_REV = \".*\"$/  const ASSET_REV = \"$REV\"/" mwi-battle-fx.user.js
 python3 -I tools/build-release.py
 git add assets/manifest.json mwi-battle-fx.user.js release/mwi-battle-fx.user.js
-git commit -q -m "Pin assets to $REV$TRAILER"
+git commit -q -m "Pin assets to ${REV:0:10}$TRAILER"
 git push -q
 # The userscript reads its manifest (and updates itself) from raw.githubusercontent.com, which follows the
 # push within ~5 min; art is fetched from jsDelivr at the pinned commit, so no CDN purge is needed.

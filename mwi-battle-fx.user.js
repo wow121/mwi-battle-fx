@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.92
+// @version      0.21.93
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -559,6 +559,7 @@
               loading = false
               GM_setValue("battle_fx_manifest_v1", manifest)
               GM_setValue("battle_fx_manifest_at_v1", fetchedAt)
+              index()
               listeners.forEach(f => f())
             } catch (e) {
               if (cfg.debug) console.warn("[战斗动画] manifest", urls[k], e) // #dev
@@ -651,8 +652,106 @@
       return revOf.get(path) || manifest?.rev
     }
     const root = r => (custom() ? base() : mirror ? MIRROR + (r || "main") : r ? JSD + r : base())
-    const url = path => root(fileRev(path)) + "/assets/" + path
-    return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "", mirror }), refresh, probe, failed, has, url, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
+    const netUrl = path => root(fileRev(path)) + "/assets/" + path
+    // ----- the art cache: every file kept in the page's Cache Storage, keyed by its commit and path -----
+    // The browser's own HTTP cache didn't hold the art on phones: it is small and cleared often, the mirror marks its
+    // files fresh for only 60 s (every one was asked for again on each visit) and jsDelivr at a short commit for 7 days.
+    // A file at a commit never changes, so a copy is good for ever, whichever host it came from; files the manifest no
+    // longer points at are dropped. Copies are handed out as blob: urls (read from disk, not held in memory).
+    const STORE = "bfx-art-v1"
+    const KEY = "https://bfx-art.invalid/"
+    const blobs = new Map() // "<rev>/<path>" -> blob: url
+    const pending = new Map()
+    let store = null
+    // used only where a blob: url made here shows in the page (a script manager's sandbox can make urls the page
+    // can't load: then everything comes over the network as before)
+    const blobShows = () =>
+      new Promise(ok => {
+        const gif = Uint8Array.from(atob("R0lGODlhAQABAAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="), c => c.charCodeAt(0))
+        const im = new Image()
+        im.onload = () => ok(true)
+        im.onerror = () => ok(false)
+        setTimeout(() => ok(false), 5000)
+        im.src = URL.createObjectURL(new Blob([gif], { type: "image/gif" }))
+      })
+    const openStore = () => (store ||= (async () => (globalThis.caches && (await blobShows()) ? await caches.open(STORE) : null))().catch(() => null))
+    const keyOf = path => (!custom() && manifest ? fileRev(path) + "/" + path : null)
+    // what is stored: blob: urls for this manifest's files, the rest deleted; once per manifest
+    let indexed = null
+    let indexedFor = null
+    function index() {
+      if (custom() || !manifest) return Promise.resolve()
+      if (indexedFor !== manifest) {
+        indexedFor = manifest
+        indexed = (async () => {
+          const c = await openStore()
+          if (!c) return
+          const keep = []
+          for (const req of await c.keys()) {
+            const k = req.url.slice(KEY.length)
+            const path = k.slice(k.indexOf("/") + 1)
+            if (keyOf(path) !== k) c.delete(req).catch(() => {})
+            else if (!blobs.has(k)) keep.push([k, req])
+          }
+          await Promise.all(keep.map(async ([k, req]) => {
+            const r = await c.match(req)
+            if (r && !blobs.has(k)) blobs.set(k, URL.createObjectURL(await r.blob()))
+          }))
+        })().catch(e => {
+          if (cfg.debug) console.warn("[战斗动画] art cache", e) // #dev
+        })
+      }
+      return indexed
+    }
+    // a file's url, from the cache when it is there: downloaded (and stored) on a miss; the plain url when it fails
+    function src(path) {
+      const k = keyOf(path)
+      if (!k) return Promise.resolve(netUrl(path))
+      if (blobs.has(k)) return Promise.resolve(blobs.get(k))
+      if (!pending.has(k))
+        pending.set(
+          k,
+          (async () => {
+            await index()
+            if (blobs.has(k)) return blobs.get(k)
+            const net = netUrl(path)
+            const c = await openStore()
+            if (!c) return net
+            // (the art is pinned to its commit: whatever the browser already has of that url is right)
+            const r = await fetch(net, { cache: "force-cache" })
+            if (!r.ok) throw new Error(r.status + " " + net)
+            const b = await r.blob()
+            let u = null
+            try {
+              await c.put(KEY + k, new Response(b, { headers: { "content-type": r.headers.get("content-type") || b.type } }))
+              // the stored copy (on disk) stands in for the downloaded one (in memory)
+              const back = await c.match(KEY + k)
+              if (back) u = URL.createObjectURL(await back.blob())
+            } catch (e) {
+              if (cfg.debug) console.warn("[战斗动画] art cache put", path, e) // #dev
+            }
+            u ||= URL.createObjectURL(b)
+            blobs.set(k, u)
+            return u
+          })().finally(() => pending.delete(k)),
+        )
+      return pending.get(k).catch(() => (failed(netUrl(path)), netUrl(path)))
+    }
+    // the url to use right away (an <img>, a css background): the stored copy once it is known, else the plain url,
+    // and the file is put in the cache shortly after (by then mostly from the browser's cache of that very url)
+    const warming = new Set()
+    function url(path) {
+      const k = keyOf(path)
+      if (k && blobs.has(k)) return blobs.get(k)
+      if (k && !warming.has(k)) {
+        warming.add(k)
+        setTimeout(() => src(path).catch(() => {}), 3000)
+      }
+      return netUrl(path)
+    }
+    const fetchArt = path => src(path).then(u => fetch(u).catch(e => (u.startsWith("blob:") ? fetch(netUrl(path)) : Promise.reject(e))))
+    index()
+    return { info: () => ({ rev: manifest?.rev, source, fetchedAt, base: cfg.assetBase || "", mirror, cached: blobs.size }), refresh, probe, failed, has, url, net: netUrl, src, fetch: fetchArt, ready: index, list: kind => manifest?.[kind] || [], get: k => manifest?.[k], onChange: f => listeners.push(f) }
   })()
 
   // ---------- player looks: by equipment or by avatar + outfit (per-viewer setting) ----------
@@ -826,22 +925,17 @@
     function load() {
       if (index || loading || !Assets.get("doll")) return
       loading = true
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: Assets.url("doll/index.json"),
-        timeout: 20000,
-        onload: r => {
+      Assets.fetch("doll/index.json")
+        .then(r => r.json())
+        .then(j => {
           loading = false
-          try {
-            index = JSON.parse(r.responseText)
-            listeners.forEach(f => f())
-          } catch (e) {
-            if (cfg.debug) console.warn("[战斗动画] doll index", e) // #dev
-          }
-        },
-        onerror: () => (loading = false),
-        ontimeout: () => (loading = false),
-      })
+          index = j
+          listeners.forEach(f => f())
+        })
+        .catch(e => {
+          loading = false
+          if (cfg.debug) console.warn("[战斗动画] doll index", e) // #dev
+        })
     }
     Assets.onChange(load)
     const ready = () => (load(), !!index)
@@ -858,7 +952,7 @@
       const grip = rects.weapon ? [fist[0] / 2 - dx, fist[1] / 2 - dy] : [w / 2, h * 0.6]
       const W = Math.max(...Object.values(rects).map(x => x[0] + x[2])) + 2
       const H = Math.max(...Object.values(rects).map(x => x[1] + x[3]))
-      return { url: Assets.url("doll/" + k + ".webp"), rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1], dir: index.dirs?.[k]?.[0] }
+      return { url: Assets.url("doll/" + k + ".webp"), path: "doll/" + k + ".webp", rect: [sx, sy, w, h], grip, W, H, mid: !!index.dirs?.[k]?.[1], dir: index.dirs?.[k]?.[0] }
     }
     const list = prefix => (index ? Object.keys(index.layers).filter(k => (prefix ? k.startsWith(prefix) : !/^[ao]_/.test(k))) : [])
     return { ready, held, onLoad: f => listeners.push(f), list, slotOf: id => index?.slots?.[id], nameOf: id => index?.names?.[id] || id }
@@ -1867,8 +1961,11 @@
     }
     // every sheet the manifest lists: an effect that is still downloading falls back to the generic look,
     // and long-cooldown skills would otherwise show that fallback on nearly every cast
+    // (once the art cache is read: asked for before, they all came over the network)
     function preloadFx() {
-      for (const n of Assets.list("fx")) fxImg(n)
+      Assets.ready().then(() => {
+        for (const n of Assets.list("fx")) fxImg(n)
+      })
     }
     function drawFrame(c, im, f, w, h, anchor) {
       const fw = im.naturalWidth / 4
@@ -6458,7 +6555,7 @@
     // the avatars and outfits drawn for the rig so far (rig/player/rig.json), to dress 1号 in
     let looks = null
     const loadLooks = () =>
-      (looks ||= fetch(Assets.url("rig/player/rig.json"))
+      (looks ||= Assets.fetch("rig/player/rig.json")
         .then(r => r.json())
         .then(j => ((looks = { avatars: j.avatars, outfits: j.outfits }), draw()))
         .catch(() => {}))
@@ -8440,7 +8537,17 @@ void main(){
     // a body part or a held piece is drawn big and shown small (a 280 px weapon at 40 px on a phone): with mipmaps (the
     // GPU's own smaller copies) it stays clean instead of breaking up into a few picked pixels; not for the effects'
     // own textures and buffers, which are drawn near their size or redrawn every frame
-    const loadMip = (url, res = 1) => P.Assets.load({ src: url, data: { autoGenerateMipmaps: true, resolution: res } })
+    // (art comes as blob: urls from the art cache, which carry no file extension: the texture loader is named)
+    const loadTex = (url, data) => P.Assets.load({ src: url, parser: "texture", data })
+    // an art file as a texture, and the url it was loaded from (a cached copy that won't load: the file itself)
+    const loadArt = (path, data) =>
+      Assets.src(path).then(u =>
+        loadTex(u, data).then(
+          t => [t, u],
+          e => (u.startsWith("blob:") ? loadTex(Assets.net(path), data).then(t => [t, Assets.net(path)]) : Promise.reject(e)),
+        ),
+      )
+    const loadMip = (path, res = 1) => loadArt(path, { autoGenerateMipmaps: true, resolution: res }).then(([t]) => t)
     const mipTex = c => new P.Texture({ source: new P.CanvasSource({ resource: c, autoGenerateMipmaps: true }) })
     // what it shows: { units, loc(), tier(), live } (the lab's sandbox, or the real battle laid over the game's cards)
     let source = null
@@ -8774,7 +8881,8 @@ void main(){
       const t = source.tier()
       const band = t >= 4 ? "__nightmare" : t >= 2 ? "__elite" : ""
       const name = Assets.has("bg", loc + band) ? loc + band : Assets.has("bg", loc) ? loc : null
-      if (name) P.Assets.load(Assets.url("bg/" + name + ".webp")).then(tex => ((bg.texture = tex), layout()))
+      if (name)
+        loadArt("bg/" + name + ".webp").then(([tex]) => ((bg.texture = tex), layout()))
     }
     let syncing = 0
     // a unit taken down with its GPU filters (its body shader, buff glows, enhancement glows): left behind, every
@@ -9082,12 +9190,13 @@ void main(){
       rigOrder = [...rigOrder.filter(k => k !== id), id]
       if (!rigs[id])
         rigs[id] = (async () => {
-          const def = await (await fetch(Assets.url(`rig/${id}/rig.json`))).json()
+          const def = await (await Assets.fetch(`rig/${id}/rig.json`)).json()
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
-          const urls = Object.values(def.parts).map(q => Assets.url(`rig/${id}/${q.img}`))
           // (all parts asked for at once: one after another, each a round trip to the CDN, a monster took seconds)
-          const list = await Promise.all(urls.map(u => loadMip(u, def.res)))
+          const got = await Promise.all(Object.values(def.parts).map(q => loadArt(`rig/${id}/${q.img}`, { autoGenerateMipmaps: true, resolution: def.res })))
+          const list = got.map(x => x[0])
+          const urls = got.map(x => x[1])
           Object.keys(def.parts).forEach((n, k) => (tex[n] = list[k]))
           rigUrls[id] = urls
           trimRigs()
@@ -9257,14 +9366,14 @@ void main(){
     async function loadPlayerRig(u) {
       if (!Assets.has("rig", "player")) return null
       if (!playerBase)
-        playerBase = fetch(Assets.url("rig/player/rig.json"))
+        playerBase = Assets.fetch("rig/player/rig.json")
           .then(r => r.json())
           .catch(e => ((playerBase = null), Promise.reject(e)))
       const base = await playerBase
       const avatar = base.avatars.includes(u.avatar) ? u.avatar : base.avatars[0]
       const outfit = base.outfits.includes(u.outfit) ? u.outfit : base.outfits[0]
       const def = { ...base, parts: { ...base.parts } }
-      const L = n => loadMip(Assets.url(`rig/player/${n}.webp`))
+      const L = n => loadMip(`rig/player/${n}.webp`)
       const tex = {}
       // (an outfit that covers the whole figure, the ghost sheet, is drawn alone: no hair, skin or limbs of the avatar
       // under it to show through)
@@ -9299,13 +9408,13 @@ void main(){
         // read by the character, painted over a parallel-projection layout: RIG_GRIP)
         const k = String(id || "").replace(/_refined$/, "")
         if (k && Assets.list("weapons").includes(k)) {
-          const t = await loadMip(Assets.url(`rig/weapons/${k}.webp`))
+          const t = await loadMip(`rig/weapons/${k}.webp`)
           const axis = WEAPON_AXIS["rig:" + k]
           return { tex: t, grip: RIG_GRIP["rig:" + k] || [t.width / 2, t.height / 2], axis }
         }
         const h = id && Doll.held(id)
         if (!h) return null
-        const t = await loadMip(h.url)
+        const t = await loadMip(h.path)
         return { tex: new P.Texture({ source: t.source, frame: new P.Rectangle(...h.rect) }), grip: h.grip, axis: WEAPON_AXIS[String(id).replace(/_refined$/, "")] }
       }
       // a point along the weapon's axis (0 butt … 1 head) and the axis's angle (degrees from straight down, + forward)
@@ -9456,7 +9565,7 @@ void main(){
     const flats = {}
     function loadFlat(id) {
       if (!Assets.has("m", id)) return Promise.resolve(null)
-      flats[id] ||= Promise.all(FLAT_POSES.map(n => loadMip(Assets.url(`m/${id}/${n}.webp`)).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
+      flats[id] ||= Promise.all(FLAT_POSES.map(n => loadMip(`m/${id}/${n}.webp`).catch(() => null))).then(list => (list[0] ? Object.fromEntries(FLAT_POSES.map((n, k) => [n, list[k] || list[0]])) : null))
       return flats[id]
     }
     function buildFlat(a, tex) {
@@ -11336,7 +11445,7 @@ void main(){
     let veilLoading = null
     function loadVeilSheet() {
       if (veilFrames || veilLoading || !Assets.has("fx", "natures_veil")) return
-      veilLoading = fetch(Assets.url("fx/natures_veil.webp"))
+      veilLoading = Assets.fetch("fx/natures_veil.webp")
         .then(r => r.blob())
         .then(b => createImageBitmap(b))
         .then(bm => {
@@ -11505,7 +11614,7 @@ void main(){
     function loadArea(key) {
       const n = "area_" + key
       if (!AREA.has(key) || !Assets.has("fx", n)) return
-      areaLoad[key] ||= loadMip(Assets.url(`fx/${n}.webp`))
+      areaLoad[key] ||= loadMip(`fx/${n}.webp`)
         .then(t => {
           const fw = t.width / 2
           const fh = t.height / 4
@@ -12452,7 +12561,7 @@ void main(){
         Assets.refresh(true)
         const n = ["fx", "m", "bg"].map(k => `${k}:${Assets.list(k).length}`).join(" ") + ` 纸娃娃:${Assets.get("doll") || 0}`
         const i = Assets.info()
-        alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}\n清单版本 ${i.rev || "?"}（${i.source || "本地缓存"}，${i.fetchedAt ? new Date(i.fetchedAt).toLocaleString() : "-"}）\n素材地址 ${i.base || (i.mirror ? "默认（jsDelivr 连不上，走 gh-proxy 镜像）" : "默认")}\n（正在重新拉取清单，几秒后再点一次可看新结果）`)
+        alert(`脚本 v${GM_info?.script?.version || "?"}\n素材清单 ${n}\n清单版本 ${i.rev || "?"}（${i.source || "本地缓存"}，${i.fetchedAt ? new Date(i.fetchedAt).toLocaleString() : "-"}）\n素材地址 ${i.base || (i.mirror ? "默认（jsDelivr 连不上，走 gh-proxy 镜像）" : "默认")}\n本地已缓存 ${i.cached} 个素材文件\n（正在重新拉取清单，几秒后再点一次可看新结果）`)
       }),
       // #dev-end
       // #release-start
@@ -12569,5 +12678,5 @@ void main(){
   }
   for (const msg of earlyWs.splice(0)) onWsMessage(msg)
 
-  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life, Arena } // #dev
+  W.__mwiBattleFx = { demo, units, cfg, Stage, Doll, Recorder, Life, Arena, Assets } // #dev
 })()

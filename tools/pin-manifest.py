@@ -17,7 +17,7 @@ tracked = set(subprocess.run(["git", "ls-files", "assets"], capture_output=True,
 seen, revs, cur = set(), {}, None
 for line in log.splitlines():
     if line.startswith("@"):
-        cur = line[1:11]
+        cur = line[1:]
     elif line and line not in seen and line in tracked and line != p:
         seen.add(line)
         revs.setdefault(cur, []).append(line[len("assets/"):])
