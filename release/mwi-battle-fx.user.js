@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.94
+// @version      0.21.95
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -7647,7 +7647,7 @@ void main(){
       a.hud = new P.Container()
       a.label = new P.Text({ text: nameOf(side, u), style: { fontFamily: "sans-serif", fontSize: 11, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
       a.label.anchor.set(0.5, 0)
-      const tier = side === "m" ? tierOfU(u) : null
+      const tier = side === "m" && !source?.guild ? tierOfU(u) : null
       a.tierT = new P.Text({ text: tier != null ? " T" + tier : "", style: { fontFamily: "sans-serif", fontSize: 11, fontWeight: "700", fill: tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff", stroke: { color: "#000", width: 3 } } })
       a.tierT.anchor.set(0, 0)
       const numStyle = { fontFamily: "sans-serif", fontSize: 8, fontWeight: "700", fill: "#ffffff", stroke: { color: "#000", width: 2.5 } }
@@ -7692,8 +7692,10 @@ void main(){
           a.shadow.width = a.h * 0.6
           a.shadow.height = a.h * 0.12
           a.box = box
-          a.label.position.set(-a.tierT.width / 2, 2)
-          a.tierT.position.set(a.label.x + a.label.width / 2, 2)
+          const row = n > 1 && !(side === "p" && formed)
+          a.hudW = row ? Math.max(30, step * 0.94) : Infinity
+          a.hud.y = row ? ground - a.y0 : 0
+          fitLabel(a)
           a.hudKey = ""
           drawHp(a)
           if (a.rig) rigScale(a)
@@ -7724,12 +7726,26 @@ void main(){
       }
       return { box: s * 0.8, at }
     }
+    function fitLabel(a) {
+      a.name0 ??= a.label.text
+      if (a.label.text !== a.name0) a.label.text = a.name0
+      a.label.scale.set(1)
+      a.tierT.visible = !!a.tierT.text && a.label.width + a.tierT.width <= a.hudW
+      const w = a.label.width + (a.tierT.visible ? a.tierT.width : 0)
+      const k = Math.max(0.7, Math.min(1, a.hudW / w))
+      a.label.scale.set(k)
+      for (let n = a.name0.length - 1; n > 1 && a.label.width > a.hudW; n--) a.label.text = a.name0.slice(0, n) + "…"
+      a.label.position.set(a.tierT.visible ? -a.tierT.width / 2 : 0, 2)
+      a.tierT.position.set(a.label.x + a.label.width / 2, 2)
+    }
     const crowd = () => !!source?.guild && units.p.length > 12
     function hudSize() {
       const many = crowd()
       for (const a of units.p) {
         a.hpT.visible = a.mpT.visible = !many
-        a.label.visible = !many || (a.box || 0) * view.z >= 60
+        a.label.scale.set(many ? 1 / view.z : 1)
+        a.label.visible = !many || a.i === 0 || a.label.width <= (a.box || 0) * 0.85
+        drawHp(a)
       }
     }
     const view = { z: 1, x: 0, y: 0 }
@@ -7813,24 +7829,36 @@ void main(){
     function drawHp(a) {
       const mp = a.u.mp ?? 0
       const maxMp = a.u.maxMp || 1
-      const key = [a.dead, a.hp, a.maxHp, mp, maxMp, a.box].join()
+      const thin = a.side === "p" && crowd()
+      const key = [a.dead, a.hp, a.maxHp, thin ? 0 : mp, maxMp, a.box, a.label.visible && Math.round(a.label.height), thin].join()
       if (key === a.hudKey) return
       a.hudKey = key
       a.hud.visible = !a.dead
-      const w = Math.min((a.box || a.h) * 0.84, 140)
       const g = a.hpBar
       g.clear()
+      const hpF = Math.max(0, a.hp) / (a.maxHp || 1)
+      if (thin) {
+        const me = a.i === 0
+        const w = (a.box || a.h) * (me ? 0.8 : 0.55)
+        const y = a.label.visible ? 3 + a.label.height : 3
+        g.rect(-w / 2 - 1, y - 1, w + 2, me ? 5 : 4).fill(me ? 0xffd75a : { color: 0x000000, alpha: 0.6 })
+        g.rect(-w / 2, y, w, me ? 3 : 2).fill({ color: 0x000000, alpha: 0.8 })
+        if (hpF > 0) g.rect(-w / 2, y, w * Math.min(1, hpF), me ? 3 : 2).fill(hpF < 0.3 ? 0xff5a3a : 0xd93b3b)
+        return
+      }
+      const w = Math.min((a.box || a.h) * 0.84, 140, a.hudW || Infinity)
       const bar = (y, f, c1) => {
         g.roundRect(-w / 2 - 1, y - 1, w + 2, 9, 2).fill({ color: 0x000000, alpha: 0.6 })
         if (f > 0) g.roundRect(-w / 2, y, w * Math.min(1, f), 7, 2).fill(c1)
       }
-      bar(16, Math.max(0, a.hp) / (a.maxHp || 1), 0xd93b3b)
+      bar(16, hpF, 0xd93b3b)
       bar(25, mp / maxMp, 0x2f6fd9)
       if (!a.hpT.visible) return
       a.hpT.text = `${fmt(Math.max(0, a.hp))}/${fmt(a.maxHp)}`
       a.hpT.position.set(0, 19.5)
       a.mpT.text = `${fmt(mp)}/${fmt(maxMp)}`
       a.mpT.position.set(0, 28.5)
+      a.hpT.alpha = a.mpT.alpha = a.hpT.width <= w + 6 ? 1 : 0
     }
 
     const rigs = {} // monster id -> Promise<{ def, tex }>
@@ -7845,7 +7873,7 @@ void main(){
           const def = await (await Assets.fetch(`rig/${id}/rig.json`)).json()
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
-          const got = await Promise.all(Object.values(def.parts).map(q => loadArt(`rig/${id}/${q.img}`, { autoGenerateMipmaps: true, resolution: def.res })))
+          const got = await Promise.all(Object.values(def.parts).map(q => loadArt(`rig/${id}/${q.img}`, { autoGenerateMipmaps: true, resolution: def.res || 1 })))
           const list = got.map(x => x[0])
           const urls = got.map(x => x[1])
           Object.keys(def.parts).forEach((n, k) => (tex[n] = list[k]))
@@ -9234,12 +9262,18 @@ void main(){
       const color = SKILL_COL[e.ab?.key] ?? (COLOR[el] || COLOR.physical)
       const m = mid(a)
       a.hp = tg.hp
-      if (tg.dHP === 0) return number(a, "Miss", "#cfd6ff", false)
-      if (!shown) hitFx(a, src, e.style || "smash", el, isSkill, tg.crit)
-      sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
+      if (tg.quiet) {
+        a.jig = Math.max(a.jig, 0.6)
+        return drawHp(a)
+      }
+      const told = !many || a === units.p[0] || src === units.p[0]
+      if (tg.dHP === 0) return told ? number(a, "Miss", "#cfd6ff", false) : undefined
+      const small = many && a.side === "p" && a !== units.p[0]
+      if (!shown && !small) hitFx(a, src, e.style || "smash", el, isSkill, tg.crit)
+      if (!small) sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
       flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
       a.jig = tg.crit ? 1.3 : 0.9
-      number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
+      if (told) number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
       if (tg.crit) {
         crit(a)
         slow(160, 0.3)
@@ -9373,7 +9407,7 @@ void main(){
       flash(a, COLOR.heal, 380)
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.7, 700, 0.8)
       sparks(a.x0, a.y0 - a.h * 0.2, COLOR.heal, 24, { speed: 60, up: 140, gravity: -80, life: 900, size: 0.4 })
-      if (tg.dHP > 0) number(a, "+" + tg.dHP, "#6cff9a", false)
+      if (tg.dHP > 0 && (!many || a === units.p[0])) number(a, "+" + Math.round(tg.dHP), "#6cff9a", false)
     }
 
     const fireBurst = (a, big) => {
@@ -10030,7 +10064,7 @@ void main(){
       const flip = AREA_TURN.has(key) && (AREA_LEFT.has(key) ? dir > 0 : dir < 0)
       s.scale.set(flip ? -k : k, k)
       s.blendMode = "add"
-      s.alpha = 0.95
+      s.alpha = many && list[0].side === "p" ? 0.45 : 0.95
       smokeLayer.addChild(s)
       tween(AREA_DUR, p => {
         if (s.destroyed) return
@@ -10356,11 +10390,50 @@ void main(){
       all.forEach(a => waveCrash(a, src.dir, { from, travel: flight }))
     }
 
+    function playLite(e, src, tgs) {
+      const heal = e.effect === "heal" || e.effect === "regen"
+      const act = src ? play1(src, heal || e.effect !== "damage" ? "cast" : e.ab && actionOf(src.kind, "skill") ? "skill" : "attack") : null
+      if (e.effect !== "damage" && !heal) return
+      later(src ? act?.hit ?? 300 : 0, () =>
+        tgs.forEach(([a, tg]) => {
+          if (heal) {
+            if (tg.revived) return revive(a, tg)
+            a.hp = tg.hp
+            return drawHp(a)
+          }
+          a.hp = tg.hp
+          if (tg.dHP && !tg.quiet) {
+            const m = mid(a)
+            sparks(m.x, m.y, SKILL_COL[e.ab?.key] ?? (COLOR[e.element] || COLOR.physical), 8, { speed: 200, size: 0.4 })
+            a.jig = Math.max(a.jig, 0.6)
+          }
+          drawHp(a)
+          if (tg.died) die(a)
+        }),
+      )
+    }
+    const CROWD_SHOW_MS = 1000
+    let crowdShowAt = 0
+    function liteOf(e, src, tgs) {
+      if (!many) return false
+      const me = units.p[0]
+      if (src === me || tgs.some(([a]) => a === me) || e.actor?.side === "m") return false
+      if (!e.ab || e.effect !== "damage") return true
+      const t = now()
+      if (t - crowdShowAt < CROWD_SHOW_MS) return true
+      crowdShowAt = t
+      return false
+    }
     function play(evs) {
       if (!app) return
       for (const e of evs) {
         const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
         const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a)
+        const lite = liteOf(e, src, tgs)
+        if (lite) {
+          playLite(e, src, tgs)
+          continue
+        }
         const isSkill = !!e.ab
         const color = SKILL_COL[e.ab?.key] ?? (COLOR[e.element] || COLOR.physical)
         if (e.effect === "heal" || e.effect === "regen") {
@@ -10502,7 +10575,7 @@ void main(){
           if (isSpear(src) && act?.shot == null) spearBlow(src, tgs.filter(([, tg]) => tg.dHP), isSkill ? tcol : SPEAR_COL, isSkill, name)
           if (isSkill)
             tgs.forEach(([a, tg]) => {
-              if (!tg.dHP) return
+              if (!tg.dHP || (many && a.side === "p" && a !== units.p[0])) return
               const m = mid(a)
               rays(m.x, m.y, tcol, a.h * 1.1)
               emit(m.x, m.y, { n: 16, tex: "streak", color: [tcol, 0xffffff], size: 0.5, speed: 520, angle: src.dir > 0 ? 0 : Math.PI, spread: 2.2, gravity: 700, drag: 0.08, life: 380 })
@@ -10667,6 +10740,7 @@ void main(){
           a.jig *= Math.pow(0.02, dt)
           if (a.jig < 0.01) a.jig = 0
           a.cont.x = a.x0 + (a.dash || 0)
+          if (a.hudW < Infinity) a.hud.x = -(a.dash || 0)
           if (a.rig) {
             rigFrame(a, t)
             if (a.rig.arms.length) rigArms(a)
