@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.94
+// @version      0.21.95
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -8988,7 +8988,8 @@ void main(){
       a.hud = new P.Container()
       a.label = new P.Text({ text: nameOf(side, u), style: { fontFamily: "sans-serif", fontSize: 11, fontWeight: "700", fill: "#eef2ff", stroke: { color: "#000", width: 3 } } })
       a.label.anchor.set(0.5, 0)
-      const tier = side === "m" ? tierOfU(u) : null
+      // (a guild trial's tier is in the corner badge, not repeated on each of its monsters)
+      const tier = side === "m" && !source?.guild ? tierOfU(u) : null
       a.tierT = new P.Text({ text: tier != null ? " T" + tier : "", style: { fontFamily: "sans-serif", fontSize: 11, fontWeight: "700", fill: tier >= 4 ? "#ff6a5a" : tier >= 2 ? "#ffcf5a" : "#cfe0ff", stroke: { color: "#000", width: 3 } } })
       a.tierT.anchor.set(0, 0)
       const numStyle = { fontFamily: "sans-serif", fontSize: 8, fontWeight: "700", fill: "#ffffff", stroke: { color: "#000", width: 2.5 } }
@@ -9037,8 +9038,12 @@ void main(){
           a.shadow.width = a.h * 0.6
           a.shadow.height = a.h * 0.12
           a.box = box
-          a.label.position.set(-a.tierT.width / 2, 2)
-          a.tierT.position.set(a.label.x + a.label.width / 2, 2)
+          // (a side of several: each HUD no wider than the room to its neighbour, or names and bars run into each other)
+          const row = n > 1 && !(side === "p" && formed)
+          a.hudW = row ? Math.max(30, step * 0.94) : Infinity
+          // (and all on one line: the every-other-one step back put a name on its neighbour's bar)
+          a.hud.y = row ? ground - a.y0 : 0
+          fitLabel(a)
           a.hudKey = ""
           drawHp(a)
           if (a.rig) rigScale(a)
@@ -9072,6 +9077,20 @@ void main(){
       }
       return { box: s * 0.8, at }
     }
+    // the name (with a monster's tier) shrunk to fit its HUD's width, down to 70 %; the tier dropped first
+    // (still too wide at that: cut short with an ellipsis)
+    function fitLabel(a) {
+      a.name0 ??= a.label.text
+      if (a.label.text !== a.name0) a.label.text = a.name0
+      a.label.scale.set(1)
+      a.tierT.visible = !!a.tierT.text && a.label.width + a.tierT.width <= a.hudW
+      const w = a.label.width + (a.tierT.visible ? a.tierT.width : 0)
+      const k = Math.max(0.7, Math.min(1, a.hudW / w))
+      a.label.scale.set(k)
+      for (let n = a.name0.length - 1; n > 1 && a.label.width > a.hudW; n--) a.label.text = a.name0.slice(0, n) + "…"
+      a.label.position.set(a.tierT.visible ? -a.tierT.width / 2 : 0, 2)
+      a.tierT.position.set(a.label.x + a.label.width / 2, 2)
+    }
     // a crowd (a guild trial of more than 12): fewer particles, no slow motion, camera moves, dimming, screen
     // ripples, skill names or weapon glows, and no HP / MP numbers on the players
     const crowd = () => !!source?.guild && units.p.length > 12
@@ -9080,7 +9099,11 @@ void main(){
       const many = crowd()
       for (const a of units.p) {
         a.hpT.visible = a.mpT.visible = !many
-        a.label.visible = !many || (a.box || 0) * view.z >= 60
+        // a crowd's names keep their size on the screen as the camera zooms (grown with it they ran into each other),
+        // shown once they fit their column; the viewer's always
+        a.label.scale.set(many ? 1 / view.z : 1)
+        a.label.visible = !many || a.i === 0 || a.label.width <= (a.box || 0) * 0.85
+        drawHp(a)
       }
     }
     // ----- the guild trial's camera: the wheel zooms about the cursor, a drag pans, a double click (or ⟲) resets -----
@@ -9167,19 +9190,32 @@ void main(){
       // (redrawn only when something on it changed: the MP is read from the battle's unit each frame)
       const mp = a.u.mp ?? 0
       const maxMp = a.u.maxMp || 1
-      const key = [a.dead, a.hp, a.maxHp, mp, maxMp, a.box].join()
+      const thin = a.side === "p" && crowd()
+      const key = [a.dead, a.hp, a.maxHp, thin ? 0 : mp, maxMp, a.box, a.label.visible && Math.round(a.label.height), thin].join()
       if (key === a.hudKey) return
       a.hudKey = key
       a.hud.visible = !a.dead
-      const w = Math.min((a.box || a.h) * 0.84, 140)
       const g = a.hpBar
       g.clear()
+      const hpF = Math.max(0, a.hp) / (a.maxHp || 1)
+      // a crowd's players: one thin HP bar, no MP (forty pairs of full bars made a wall of red and blue bricks); the
+      // viewer's a little wider, gold-rimmed, to be found in the crowd
+      if (thin) {
+        const me = a.i === 0
+        const w = (a.box || a.h) * (me ? 0.8 : 0.55)
+        const y = a.label.visible ? 3 + a.label.height : 3
+        g.rect(-w / 2 - 1, y - 1, w + 2, me ? 5 : 4).fill(me ? 0xffd75a : { color: 0x000000, alpha: 0.6 })
+        g.rect(-w / 2, y, w, me ? 3 : 2).fill({ color: 0x000000, alpha: 0.8 })
+        if (hpF > 0) g.rect(-w / 2, y, w * Math.min(1, hpF), me ? 3 : 2).fill(hpF < 0.3 ? 0xff5a3a : 0xd93b3b)
+        return
+      }
+      const w = Math.min((a.box || a.h) * 0.84, 140, a.hudW || Infinity)
       // (tall enough to carry their numbers)
       const bar = (y, f, c1) => {
         g.roundRect(-w / 2 - 1, y - 1, w + 2, 9, 2).fill({ color: 0x000000, alpha: 0.6 })
         if (f > 0) g.roundRect(-w / 2, y, w * Math.min(1, f), 7, 2).fill(c1)
       }
-      bar(16, Math.max(0, a.hp) / (a.maxHp || 1), 0xd93b3b)
+      bar(16, hpF, 0xd93b3b)
       bar(25, mp / maxMp, 0x2f6fd9)
       // (a crowd's players carry none: a number redrawn is a new texture)
       if (!a.hpT.visible) return
@@ -9187,6 +9223,8 @@ void main(){
       a.hpT.position.set(0, 19.5)
       a.mpT.text = `${fmt(mp)}/${fmt(maxMp)}`
       a.mpT.position.set(0, 28.5)
+      // (numbers wider than their bar would run into the next unit's: left out, the bar still shows)
+      a.hpT.alpha = a.mpT.alpha = a.hpT.width <= w + 6 ? 1 : 0
     }
 
     // ----- rigs (assets/rig/<id>/rig.json): parts on joints -----
@@ -9208,7 +9246,7 @@ void main(){
           if (def.tmpl) monsterActions(id, def)
           const tex = {}
           // (all parts asked for at once: one after another, each a round trip to the CDN, a monster took seconds)
-          const got = await Promise.all(Object.values(def.parts).map(q => loadArt(`rig/${id}/${q.img}`, { autoGenerateMipmaps: true, resolution: def.res })))
+          const got = await Promise.all(Object.values(def.parts).map(q => loadArt(`rig/${id}/${q.img}`, { autoGenerateMipmaps: true, resolution: def.res || 1 })))
           const list = got.map(x => x[0])
           const urls = got.map(x => x[1])
           Object.keys(def.parts).forEach((n, k) => (tex[n] = list[k]))
@@ -10777,13 +10815,23 @@ void main(){
       const color = SKILL_COL[e.ab?.key] ?? (COLOR[el] || COLOR.physical)
       const m = mid(a)
       a.hp = tg.hp
-      if (tg.dHP === 0) return number(a, "Miss", "#cfd6ff", false)
+      // (an extra swinger of a crowd's update: the blow is the first one's, already shown with its number)
+      if (tg.quiet) {
+        a.jig = Math.max(a.jig, 0.6)
+        return drawHp(a)
+      }
+      // a crowd shows only the viewer's numbers: those it deals and those it takes
+      const told = !many || a === units.p[0] || src === units.p[0]
+      if (tg.dHP === 0) return told ? number(a, "Miss", "#cfd6ff", false) : undefined
+      // (a crowd's tiny players other than the viewer: a monster's sweep over a dozen of them burst a dozen times over
+      // them, a white blot over the whole formation; they flinch and flash only)
+      const small = many && a.side === "p" && a !== units.p[0]
       // the skill's own body was drawn already (shown); else its element's burst and its style's cut
-      if (!shown) hitFx(a, src, e.style || "smash", el, isSkill, tg.crit)
-      sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
+      if (!shown && !small) hitFx(a, src, e.style || "smash", el, isSkill, tg.crit)
+      if (!small) sparks(m.x, m.y, color, tg.crit ? 70 : 18, { speed: tg.crit ? 420 : 240, size: tg.crit ? 0.7 : 0.45 })
       flash(a, tg.crit ? 0xfff2a0 : 0xffffff)
       a.jig = tg.crit ? 1.3 : 0.9
-      number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
+      if (told) number(a, String(-tg.dHP), tg.crit ? "#ffd84a" : "#ffffff", tg.crit)
       if (tg.crit) {
         crit(a)
         slow(160, 0.3)
@@ -10928,7 +10976,7 @@ void main(){
       flash(a, COLOR.heal, 380)
       light(a.x0, a.y0 - a.h * 0.4, COLOR.heal, a.h * 0.7, 700, 0.8)
       sparks(a.x0, a.y0 - a.h * 0.2, COLOR.heal, 24, { speed: 60, up: 140, gravity: -80, life: 900, size: 0.4 })
-      if (tg.dHP > 0) number(a, "+" + tg.dHP, "#6cff9a", false)
+      if (tg.dHP > 0 && (!many || a === units.p[0])) number(a, "+" + Math.round(tg.dHP), "#6cff9a", false)
     }
 
     // ----- skills with their own effects on top (fly: each frame of the missile; hit: as the blow lands) -----
@@ -11651,7 +11699,8 @@ void main(){
       const flip = AREA_TURN.has(key) && (AREA_LEFT.has(key) ? dir > 0 : dir < 0)
       s.scale.set(flip ? -k : k, k)
       s.blendMode = "add"
-      s.alpha = 0.95
+      // (over a crowd's whole formation, added on dozens of small bodies, it burnt the formation white: dimmer there)
+      s.alpha = many && list[0].side === "p" ? 0.45 : 0.95
       smokeLayer.addChild(s)
       tween(AREA_DUR, p => {
         if (s.destroyed) return
@@ -12029,11 +12078,55 @@ void main(){
       all.forEach(a => waveCrash(a, src.dir, { from, travel: flight }))
     }
 
+    // a crowd member's action, cheap: the swing (or the cast), the blow's flinch and a few sparks, the bars brought up to
+    // date; no missiles, areas, numbers or skill bodies
+    function playLite(e, src, tgs) {
+      const heal = e.effect === "heal" || e.effect === "regen"
+      const act = src ? play1(src, heal || e.effect !== "damage" ? "cast" : e.ab && actionOf(src.kind, "skill") ? "skill" : "attack") : null
+      if (e.effect !== "damage" && !heal) return
+      later(src ? act?.hit ?? 300 : 0, () =>
+        tgs.forEach(([a, tg]) => {
+          if (heal) {
+            if (tg.revived) return revive(a, tg)
+            a.hp = tg.hp
+            return drawHp(a)
+          }
+          a.hp = tg.hp
+          if (tg.dHP && !tg.quiet) {
+            const m = mid(a)
+            sparks(m.x, m.y, SKILL_COL[e.ab?.key] ?? (COLOR[e.element] || COLOR.physical), 8, { speed: 200, size: 0.4 })
+            a.jig = Math.max(a.jig, 0.6)
+          }
+          drawHp(a)
+          if (tg.died) die(a)
+        }),
+      )
+    }
+    // a crowd (crowd()): the full show only for what the viewer (slot 0) does or takes, the monsters' blows and one
+    // other member's skill now and then (CROWD_SHOW_MS apart); every other member's blow is a plain swing, a small
+    // spark and a flinch, with no number (dozens of skills at once burnt the monsters' side white and stalled a phone)
+    const CROWD_SHOW_MS = 1000
+    let crowdShowAt = 0
+    function liteOf(e, src, tgs) {
+      if (!many) return false
+      const me = units.p[0]
+      if (src === me || tgs.some(([a]) => a === me) || e.actor?.side === "m") return false
+      if (!e.ab || e.effect !== "damage") return true
+      const t = now()
+      if (t - crowdShowAt < CROWD_SHOW_MS) return true
+      crowdShowAt = t
+      return false
+    }
     function play(evs) {
       if (!app) return
       for (const e of evs) {
         const src = e.actor ? units[e.actor.side]?.[e.actor.i] : null
         const tgs = (e.targets || []).map(tg => [units[tg.side]?.[tg.i], tg]).filter(([a]) => a)
+        const lite = liteOf(e, src, tgs)
+        if (lite) {
+          playLite(e, src, tgs)
+          continue
+        }
         const isSkill = !!e.ab
         const color = SKILL_COL[e.ab?.key] ?? (COLOR[e.element] || COLOR.physical)
         if (e.effect === "heal" || e.effect === "regen") {
@@ -12202,7 +12295,7 @@ void main(){
           // a skill's blow: light rays and white-hot sparks out of each foe it lands on, dust and a crack under a smash
           if (isSkill)
             tgs.forEach(([a, tg]) => {
-              if (!tg.dHP) return
+              if (!tg.dHP || (many && a.side === "p" && a !== units.p[0])) return
               const m = mid(a)
               rays(m.x, m.y, tcol, a.h * 1.1)
               emit(m.x, m.y, { n: 16, tex: "streak", color: [tcol, 0xffffff], size: 0.5, speed: 520, angle: src.dir > 0 ? 0 : Math.PI, spread: 2.2, gravity: 700, drag: 0.08, life: 380 })
@@ -12387,6 +12480,8 @@ void main(){
           a.jig *= Math.pow(0.02, dt)
           if (a.jig < 0.01) a.jig = 0
           a.cont.x = a.x0 + (a.dash || 0)
+          // (a row of HUDs side by side stays put while its unit runs in: carried along, it covered the others')
+          if (a.hudW < Infinity) a.hud.x = -(a.dash || 0)
           if (a.rig) {
             rigFrame(a, t)
             if (a.rig.arms.length) rigArms(a)
