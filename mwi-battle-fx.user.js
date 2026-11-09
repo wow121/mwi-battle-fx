@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         牛牛动起来（开发版）
 // @namespace    mwi-battle-fx
-// @version      0.21.93
+// @version      0.21.94
 // @license      MIT
 // @description  银河奶牛放置（开发版，带动画测试、生活测试面板和录制工具）：战斗换成杀戮尖塔式侧视舞台；生活技能浮动小窗动画；公会生活试炼与迷宫生活房间专属动画。只读游戏消息，不改游戏数据；立绘从素材 CDN 加载。
 // @match        https://www.milkywayidle.com/*
@@ -217,6 +217,16 @@
   // their places in a guild trial's formation, front to back
   const ROLE_ORDER = ["tank", "melee", "ranged", "magic"]
   const roleOf = u => (u?.tank ? "tank" : u?.style === "ranged" ? "ranged" : u?.style === "magic" ? "magic" : "melee")
+  // a normal party's line, front to back: melee, then ranged, then magic (the game's order within each); by the combat
+  // style only, which is known from the start, so nobody changes places mid-fight. Returns each unit's place.
+  const LINE_RANK = { ranged: 1, magic: 2 }
+  function lineOrder(us) {
+    const place = []
+    us.map((u, i) => i)
+      .sort((x, y) => (LINE_RANK[us[x]?.style] || 0) - (LINE_RANK[us[y]?.style] || 0) || x - y)
+      .forEach((i, k) => (place[i] = k))
+    return place
+  }
   function onNewGuildBattle(obj) {
     gunits.tier = obj.tier ?? gunits.tier
     gunits.p = (obj.players || []).map(unitFrom)
@@ -1770,7 +1780,9 @@
         const s = unitSize(SW, SH, n) * cfg.scale * (side === "p" ? PLAYER_SCALE : 1)
         const room = SW * 0.44 - s
         const step = n > 1 ? Math.min(s * 0.78, room / (n - 1)) : 0
-        list.forEach((a, k) => {
+        const place = side === "p" ? lineOrder(list.map(a => shown.p[a.i])) : null
+        list.forEach((a, j) => {
+          const k = place ? place[j] : j
           a.s = s
           const back = k % 2 ? 1 : 0
           a.y = ground - back * SH * 0.035
@@ -9005,11 +9017,13 @@ void main(){
       }
       // sized and placed as on the old stage: a box per unit by the head count (unitSize), a monster's 400 px pose frame
       // drawn at 1.375 boxes (its 512 px cell fills the box), a player's box three quarters of that and filled by the
-      // figure; each side in a row on one ground line, the first nearest the middle, every other one a step back
+      // figure; each side in a row on one ground line, the first nearest the middle (players melee first, ranged, then magic: lineOrder), every other one a step back
       const ground = Math.min(H * 0.84, H - 40) // (the HUD, with its MP numbers, fits under it)
       const formed = source?.guild ? formation(W2, H, ground) : null
+      const place = formed ? null : lineOrder(units.p.map(a => a.u))
       for (const side of ["p", "m"])
-        units[side].forEach((a, i, all) => {
+        units[side].forEach((a, j, all) => {
+          const i = side === "p" && place ? place[j] : j
           const n = all.length
           const box = side === "p" && formed ? formed.box : unitSize(W2, H, n) * cfg.scale * (side === "p" ? 0.75 : 1)
           const step = n > 1 ? Math.min(box * 0.78, (W2 * 0.44 - box) / (n - 1)) : 0
