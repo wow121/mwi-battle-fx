@@ -2,7 +2,7 @@
 // @name         牛牛动起来
 // @name:en      MWI Alive
 // @namespace    mwi-battle-fx-release
-// @version      0.21.93
+// @version      0.21.94
 // @license      MIT
 // @description  银河奶牛放置：把战斗区域换成杀戮尖塔式的侧视舞台（游戏原版角色形象、AI 生成的怪物立绘与地点背景，攻击、技能特效、弹道、受击、暴击、阵亡），支持普通战斗、地下城、迷宫和公会试炼（全员阵型，可缩放）。右上角按钮随时切回原版。生活技能有浮动小窗动画（采集、生产、强化、炼金，仓库取料、稀有掉落、加成信息），公会生活试炼与迷宫生活房间也有专属动画。不改游戏数据，只读游戏消息；立绘从素材 CDN 加载。
 // @description:en  Milky Way Idle: turns the battle area into a Slay-the-Spire-style side-view stage (your in-game look, AI-drawn monsters and zone backdrops; attacks, skill effects, projectiles, hits, crits, deaths) for ordinary zones, dungeons, the Labyrinth and Guild Trials (whole roster in formation, zoomable). A corner button switches back to the original view. Skilling gets a floating animated window (gathering, crafting, enhancing, alchemy; storage, rare drops, bonus info) and its own scenes for guild skilling trials and labyrinth skilling rooms. Read-only: it only listens to game messages and never changes game data; art loads from a CDN.
@@ -189,6 +189,14 @@
   const TANK_ABILITIES = new Set(["provoke", "taunt", "toughness", "spike_shell", "retribution", "guardian_aura", "invincible"])
   const ROLE_ORDER = ["tank", "melee", "ranged", "magic"]
   const roleOf = u => (u?.tank ? "tank" : u?.style === "ranged" ? "ranged" : u?.style === "magic" ? "magic" : "melee")
+  const LINE_RANK = { ranged: 1, magic: 2 }
+  function lineOrder(us) {
+    const place = []
+    us.map((u, i) => i)
+      .sort((x, y) => (LINE_RANK[us[x]?.style] || 0) - (LINE_RANK[us[y]?.style] || 0) || x - y)
+      .forEach((i, k) => (place[i] = k))
+    return place
+  }
   function onNewGuildBattle(obj) {
     gunits.tier = obj.tier ?? gunits.tier
     gunits.p = (obj.players || []).map(unitFrom)
@@ -1552,7 +1560,9 @@
         const s = unitSize(SW, SH, n) * cfg.scale * (side === "p" ? PLAYER_SCALE : 1)
         const room = SW * 0.44 - s
         const step = n > 1 ? Math.min(s * 0.78, room / (n - 1)) : 0
-        list.forEach((a, k) => {
+        const place = side === "p" ? lineOrder(list.map(a => shown.p[a.i])) : null
+        list.forEach((a, j) => {
+          const k = place ? place[j] : j
           a.s = s
           const back = k % 2 ? 1 : 0
           a.y = ground - back * SH * 0.035
@@ -7665,8 +7675,10 @@ void main(){
       }
       const ground = Math.min(H * 0.84, H - 40) // (the HUD, with its MP numbers, fits under it)
       const formed = source?.guild ? formation(W2, H, ground) : null
+      const place = formed ? null : lineOrder(units.p.map(a => a.u))
       for (const side of ["p", "m"])
-        units[side].forEach((a, i, all) => {
+        units[side].forEach((a, j, all) => {
+          const i = side === "p" && place ? place[j] : j
           const n = all.length
           const box = side === "p" && formed ? formed.box : unitSize(W2, H, n) * cfg.scale * (side === "p" ? 0.75 : 1)
           const step = n > 1 ? Math.min(box * 0.78, (W2 * 0.44 - box) / (n - 1)) : 0
