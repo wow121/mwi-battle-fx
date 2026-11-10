@@ -9,7 +9,9 @@ Markers in mwi-battle-fx.user.js, as `//` or `/* */` comments:
   #release-start / #release-end
                               the lines between are commented out in the dev copy ("// ..."); the release
                               copy uncomments them
-`const DEV = true` becomes false. The header gets the release name and namespace, and loses the update URLs
+`const DEV = true` becomes false. The header gets the release name (the namespace stays the dev one's,
+mwi-battle-fx: Greasy Fork script 601762 was the dev copy before it synced this file, and managers tell scripts
+apart by name + namespace, so its installs update in place), and loses the update URLs
 (Greasy Fork rules) and the grants / connects only developer features use.
 """
 import re
@@ -63,7 +65,6 @@ def build(src: str) -> str:
 
     head, sep, body = text.partition("// ==/UserScript==")
     head = re.sub(r"^// @name .*$", "// @name         牛牛动起来", head, flags=re.M)
-    head = re.sub(r"^// @namespace .*$", "// @namespace    mwi-battle-fx-release", head, flags=re.M)
     head = re.sub(r"^// @description .*$", "// @description  " + DESC + "\n// @description:en  " + DESC_EN, head, flags=re.M)
     head = re.sub(r"^(// @name +.*)$", r"\1\n// @name:en      MWI Alive", head, count=1, flags=re.M)
     # no update URLs: Greasy Fork (which syncs this file) serves its own and forbids pointing users elsewhere;

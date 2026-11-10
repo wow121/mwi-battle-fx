@@ -48,7 +48,8 @@
 ——只有战斗画面，不带"动画测试"标签和调试菜单。
 
 Greasy Fork 上的版本用"从网址同步"跟随 `release/mwi-battle-fx.user.js`（发布版不带 `@updateURL` / `@downloadURL`，
-按油叉规则由各自的安装来源负责更新）。许可证：MIT（见 `LICENSE`）。
+按油叉规则由各自的安装来源负责更新）。油叉脚本 601762 原先同步的是开发版，所以发布版沿用开发版的
+`@namespace mwi-battle-fx`，已安装的用户原地升级。油叉页面的附加信息用 `greasyfork.md`（可设为从网址同步）。许可证：MIT（见 `LICENSE`）。
 
 开发版：[mwi-battle-fx.user.js](https://raw.githubusercontent.com/wow121/mwi-battle-fx/main/mwi-battle-fx.user.js)，多一个"动画测试"沙盒标签和调试菜单。
 两个版本不要同时启用。发布版由 `tools/build-release.py` 从开发版生成（`publish.sh` 每次自动运行），不要直接改。
