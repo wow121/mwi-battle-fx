@@ -1,42 +1,42 @@
-# 牛牛动起来
+# MWI Alive
 
-把银河奶牛放置（Milky Way Idle）的战斗区域换成杀戮尖塔风格的侧视舞台：我方在左、怪物在右，攻击、技能、弹道、受击、暴击、阵亡都有动画；生活技能在一个浮动小窗里播放。右上角的「切换到原版」按钮可以随时切回游戏原来的画面。
+Turns the battle area of Milky Way Idle into a Slay-the-Spire-style side-view stage: your party on the left, the monsters on the right, with animated attacks, skills, projectiles, hits, crits and deaths. Skilling plays in a small floating window. The "Original view" button in the top-right corner switches back to the game's own screen at any time.
 
-## 战斗舞台
+## Battle stage
 
-- **两种舞台**：默认是新版骨骼动画舞台（PixiJS，角色和怪物分部件做动作，带镜头拉近、技能聚焦、重击冲击）；舞台上的按钮或菜单可以换回老版（整张姿势立绘）。
-- **角色**：用游戏原版的头像和服装，手持侧视武器和副手，近战分斩、刺、钝三种动作，远程有箭矢尾迹，法术有施法动作；武器按强化等级带光晕（+5 蓝、+8 紫、+10 橙、+12 红金、+15 起彩虹）。95 级武器特效（炽焰、绽放、涟漪、混沌、裂空、咒怨、狂怒、君王、狮鹫）触发时武器会闪光。
-- **怪物**：95 种怪物都有专属立绘；名字显示官方中文名和难度（T0~T5）。菜单可开「怪物娘化」，怪物换成娘化形象（形象参考 LaoTY 的「娘化怪物换皮」）。
-- **技能特效**：每个技能都有专属特效；范围技能是一整片覆盖全排的区域特效；暴击显示金色大号数字。
-- **场景**：每张地图都有背景，精英、噩梦难度换成更危险的版本；地下城、迷宫、公会试炼有专属背景。左上角显示当前地图和难度。
-- **站位**：普通组队按近战在前、远程居中、法师在后排列。
-- **公会试炼**：公会页「进行中」里的试炼画面也换成舞台，全员按阵型站位（坦克在前，然后近战、远程，法师在最后），支持滚轮缩放、拖动平移，双击复位。人多（超过 12 人）时只给自己、怪物和每秒一名队友的技能放完整特效，其余队员简化，手机上也流畅；名字和血条排成一行互不遮挡。
-- **点击**：点舞台上的角色或怪物，等于点它下面的游戏战斗卡片，弹出游戏自己的单位窗口。
-- **画质**：舞台上的「画质」按钮可在高 / 中 / 低 / 最低之间切换，卡顿时调低。
+- **Two stages**: the default is the new rigged stage (PixiJS; characters and monsters move part by part, with camera zoom, skill close-ups and heavy-hit impacts). A button on the stage or the menu switches to the old stage (whole pose pictures).
+- **Characters**: drawn with your in-game avatar and outfit, holding side-view weapons and off-hands. Melee has slash, stab and smash moves, ranged attacks leave arrow trails, spells have a casting pose. Weapons glow by enhancement level (+5 blue, +8 purple, +10 orange, +12 red-gold, +15 and up rainbow), and the special effects of level-95 weapons flash on the weapon when they trigger.
+- **Monsters**: all 95 monsters have their own art, with their name and tier (T0–T5). The "Monster girls" menu option swaps them for monster-girl designs (after LaoTY's 娘化怪物换皮).
+- **Skill effects**: every skill has its own effect; area skills cover the whole row with one large area effect; crits show big gold numbers.
+- **Scenes**: every zone has its own backdrop, with more dangerous versions for elite and nightmare tiers; dungeons, the Labyrinth and Guild Trials have their own backdrops. The top-left corner shows the zone and tier.
+- **Formation**: a normal party lines up melee in front, ranged in the middle and magic at the back.
+- **Guild Trials**: the trial in the guild's "In Progress" tab is shown on the stage too, with the whole roster in formation (tanks in front, then melee, ranged and magic); scroll to zoom, drag to pan, double-click to reset. With more than 12 players the full effects are kept for you, the monsters and one other member's skill a second, so it stays smooth on a phone; names and HP bars sit on one line without covering each other.
+- **Click**: clicking a character or monster on the stage clicks the game's battle card under it and opens the game's own unit window.
+- **Quality**: the "Quality" button on the stage switches between high / medium / low / lowest; lower it if the stage stutters.
 
-## 生活技能动画
+## Skilling animations
 
-- 生活技能在一个可拖动、可缩放、可收成图标的浮动小窗里播放：每个技能有自己的场景、工作台和按档次画的工具（带强化光效）；采集把产物搬进仓库，生产 / 强化 / 炼金从仓库取料，仓库显示背包里的实际数量。
-- 稀有掉落、贤者之石、强化升档、福气各有专属动画；小窗下方显示和游戏动作面板一致的加成信息。
-- **公会生活试炼**：全员围着一个按进度分阶段成形的公会大工程演出。**迷宫生活房间**：技能场景加一枚随进度点亮的房间封印。
-- **牛牛小镇**：空闲或战斗时小窗显示小镇，镇上的工坊就是游戏里的房屋，按实际等级挂牌；换动作时角色沿街走到新工坊。干活时也可以点标题栏的 🏘 切到小镇看。频道里说话的玩家会来镇上逛一会儿。
+- Skilling plays in a floating window you can drag, resize or collapse to an icon. Each skill has its own scene, workstation and tier-drawn tools (with enhancement glow); gathering carries the products into storage, crafting / enhancing / alchemy take materials from it, and storage shows your actual inventory counts.
+- Rare drops, the Philosopher's Stone, enhancement milestones and blessed enhancements have their own animations; the window shows the same bonuses as the game's action panel.
+- **Guild skilling trials**: the whole guild works on a big guild project that takes shape in stages as progress is made. **Labyrinth skilling rooms**: the skill scene gets a room seal that lights up with progress.
+- **Town**: when you are idle or fighting, the window shows a small town whose workshops are your in-game houses, labelled with their real levels; switching actions, your character walks down the street to the new workshop. While working you can open the town with the 🏘 button in the title bar. Players who talk in chat drop by the town for a while.
 
-## 使用说明
+## How to use
 
-- 安装后刷新游戏页面，进入战斗就能看到舞台；点右上角按钮可以在动画和原版之间切换。
-- 油猴菜单里可以：开关战斗动画 / 怪物娘化 / 生活小窗 / 小镇，切换新老舞台，调整技能特效透明度、屏幕震动强度、镜头拉近、动画大小；菜单里的版本号可点击检查素材。
-- 队友的武器和强化等级要你点开过一次对方的资料卡才能读到，读到后会一直记住；没读到时只显示头像和服装。
-- 立绘素材首次加载要稍等片刻，之后存在浏览器缓存里，再次打开不用重新下载。
+- After installing, reload the game page and start a battle to see the stage; the top-right button switches between the animation and the original view.
+- The userscript manager's menu lets you toggle the battle animation / monster girls / skilling window / town, switch between the new and old stage, and set skill effect opacity, screen shake, camera zoom and animation size; clicking the version line checks the art.
+- A party member's weapons and enhancement levels are read once you have opened their profile card, and are remembered after that; until then only their avatar and outfit are shown.
+- The art takes a moment to load the first time; after that it is kept in the browser cache and not downloaded again.
 
-## 安全与隐私
+## Safety and privacy
 
-- 只读游戏的 WebSocket 消息，不向游戏发送任何请求、不修改游戏数据，不影响战斗本身。
-- 不改动游戏原有界面，只把画面叠在战斗 / 公会 / 迷宫区域上方。
-- 立绘和特效素材从 jsDelivr / GitHub 加载。
-- 不收集任何个人信息。
+- It only reads the game's WebSocket messages; it never sends anything to the game, never changes game data and does not affect the battle itself.
+- It does not change the game's own interface; it only lays its picture over the battle / guild / labyrinth area.
+- Art and effects are loaded from jsDelivr / GitHub.
+- No personal information is collected.
 
-## 反馈
+## Feedback
 
-源码和问题反馈：https://github.com/wow121/mwi-battle-fx
+Source code and issues: https://github.com/wow121/mwi-battle-fx
 
-许可证：MIT
+License: MIT
